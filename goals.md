@@ -35,6 +35,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G115 | 15 | Agent operating instructions (inspect → summarise → plan → verify → build smallest step) | `[x]` |
 | G116 | 16 | Public read-only repository: proprietary licence, no external contributions | `[x]` |
 | G117 | 17 | Presentation-grade README: screenshot, status, quick start, licence block | `[x]` |
+| G118 | 18 | External UI hand-off brief (`antigravityUI.md`) for Antigravity | `[x]` |
 
 ---
 
@@ -320,6 +321,19 @@ legitimate, relevant, realistically attainable scholarships.
   mock-up of features that do not exist.
 - The README states the current milestone's limits in plain language, so nobody
   can mistake the shell for a working scholarship engine.
+
+## 18. External UI hand-off (G118)
+
+- `antigravityUI.md` is the brief handed to the Antigravity coding agent to rebuild
+  the presentation layer. It restates the M1 inventory, design tokens (palette,
+  type scale, spacing), screen-by-screen states, copy rules, accessibility, and an
+  acceptance checklist.
+- It is a **derivative** of this specification. If the two ever disagree, this file
+  wins and the brief is corrected.
+- The brief's hard constraints are non-negotiable: no fabricated scholarships, no
+  simulated work, no new runtime dependencies, no web view (Essentials only).
+- UI work delivered against the brief is accepted only when its §8 checklist is
+  satisfied **and** `pytest` stays green; then it is logged here as an `An` entry.
 
 ---
 

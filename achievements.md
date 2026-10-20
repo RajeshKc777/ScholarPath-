@@ -27,6 +27,28 @@ is finished, not when it is started. Each entry names the goal it satisfies
 
 ## Log (newest first)
 
+### 2026-10-20 — A5 · UI hand-off brief for Antigravity
+
+**Satisfies:** G118
+
+- `antigravityUI.md` — self-contained brief for an external agent to rebuild the
+  presentation layer without breaking the project's honesty rules.
+- Contents: read-first list, exact M1 inventory (files, signals, `Turn` fields),
+  8 hard constraints, design tokens (palette, type scale, spacing, radius, motion),
+  layout measurements, six screens/states, copy rules, accessibility, suggested
+  module split, acceptance checklist, deliverables, explicit out-of-scope list.
+- Key guardrail: no fabricated scholarships, no simulated progress, no dead
+  controls, no QtWebEngine/QML, no new dependencies.
+
+Verified: file exists in the repo root; every referenced path and symbol matches
+the current source (`ChatController` signals, `Turn` fields, `config_path()`,
+`scholarpath.__version__`).
+
+Known limit: it is a document, not an implementation. The UI it describes does not
+exist until Antigravity (or this agent) builds and verifies it.
+
+---
+
 ### 2026-10-20 — A4 · Public presentation + proprietary licence
 
 **Satisfies:** G116, G117
