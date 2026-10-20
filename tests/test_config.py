@@ -62,6 +62,19 @@ def test_unknown_key_is_rejected(tmp_path: Path) -> None:
     assert "bogus_setting" in str(excinfo.value)
 
 
+def test_init_config_writes_a_loadable_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression: log_level must sit before any [table] or the template fails TOML."""
+
+    monkeypatch.setenv("SCHOLARPATH_HOME", str(tmp_path))
+    written = init_config()
+    config = load_config(written)
+
+    assert config.log_level == "INFO"
+    assert config.gateway.provider == "stub"
+
+
 def test_unknown_provider_is_rejected(tmp_path: Path) -> None:
     path = tmp_path / "config.toml"
     path.write_text('[gateway]\nprovider = "magic"\n', encoding="utf-8")

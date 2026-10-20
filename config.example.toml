@@ -9,29 +9,45 @@
 #
 # This template never contains real credentials. Secrets belong in the
 # environment or in the local config file, never in source control.
+#
+# NOTE: top-level keys (such as log_level) must appear before the first
+# [table] header - that is how TOML parsing works.
+
+# --- Diagnostics ---------------------------------------------------------------
+# DEBUG | INFO | WARNING | ERROR
+log_level = "INFO"
 
 # --- Model gateway -----------------------------------------------------------
 [gateway]
-# "stub"     = offline placeholder used by Milestone 1 (no network)
-# "opencode" = real gateway, available from Milestone 2 onward
+# "stub"     = offline placeholder, no network (Milestone 1 behaviour)
+# "opencode" = real model replies through a running OpenCode service (Milestone 2)
 provider = "stub"
 
-# Model identifier passed to the gateway when it is implemented.
-# Example: "opencode/glm-5.3-flash-free"
+# Model identifier. Use "provider/model" (for example
+# "opencode/minimax-m3.1-flash-free") or a bare model id. Empty = the default
+# model that OpenCode reports.
 model = ""
 
-# Per-request timeout in seconds.
+# Per-request timeout in seconds. Also bounds how long a reply may take.
 timeout_seconds = 30.0
 
 # Retry attempts for transient failures (rate limits, timeouts).
 retries = 1
+
+# --- OpenCode adapter (only used when provider = "opencode") -----------------
+# By default the running background service is discovered from its registration
+# file (~/.local/state/opencode/service.json). No secret goes in this file: the
+# service password is read from that registration.
+base_url = ""
+
+# Optional explicit registration file, if discovery cannot find it.
+service_file = ""
+
+# Working directory attached to OpenCode sessions. Empty = the app's directory.
+location_dir = ""
 
 # --- Interface ---------------------------------------------------------------
 [ui]
 theme = "dark"          # dark | light | system
 window_width = 1100
 window_height = 720
-
-# --- Diagnostics -------------------------------------------------------------
-# DEBUG | INFO | WARNING | ERROR
-log_level = "INFO"

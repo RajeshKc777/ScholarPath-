@@ -38,6 +38,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G118 | 18 | External UI hand-off brief (`antigravityUI.md`) for Antigravity | `[x]` |
 | G119 | 19 | Stitch design prompt + rendered reference screens | `[x]` |
 | G120 | 19a | Light dashboard UI shell implemented (then Reddit-orange colour-only recolour) | `[x]` |
+| G202 | 13 | M2 OpenCode gateway adapter: discovery, session inference, registry, routing, error handling | `[x]` |
 
 ---
 
@@ -261,7 +262,7 @@ replace working components or add unnecessary dependencies without justification
 | ID | Milestone | Scope | Acceptance criterion | Status |
 | -- | --------- | ----- | -------------------- | ------ |
 | G201 | M1 | Repository, project config, desktop shell, configuration handling, basic chat | App launches from a clean checkout; config validates; chat round-trips against a stubbed gateway; tests pass | `[x]` |
-| G202 | M2 | OpenCode gateway adapter, model registration, task routing, error handling | Registry loads; routing picks model per task; unavailable model/rate limit/timeout handled without crash | `[ ]` |
+| G202 | M2 | OpenCode gateway adapter, model registration, task routing, error handling | Registry loads; routing picks model per task; unavailable model/rate limit/timeout handled without crash | `[x]` |
 | G203 | M3 | Profiles, document ingestion, OCR, user-confirmed extraction | Profile persisted; marksheet parsed; low-confidence fields flagged; user corrections saved | `[ ]` |
 | G204 | M4 | Source discovery, official-source verification, structured scholarship storage | Scholarship records carry source URLs + timestamps + verification status; unverifiable fields marked unknown | `[ ]` |
 | G205 | M5 | Deterministic eligibility, explainable ranking, cited recommendations | Eligibility states correct on fixtures; ranking reproducible; every claim cites a source | `[ ]` |
@@ -370,6 +371,33 @@ legitimate, relevant, realistically attainable scholarships.
   no invented "80% profile complete", no notification badge, no search bar that
   searches nothing.
 
+## 19b. OpenCode gateway adapter (G202, 2026-10-20)
+
+- `src/scholarpath/gateway/opencode.py` talks to the **local OpenCode background
+  service**: endpoint + password read from its registration file
+  (`~/.local/state/opencode/service.json`), `Authorization: Basic
+  base64("opencode:<password>")`. One completion = one short-lived session:
+  create → prompt → wait → read newest assistant message → delete.
+- The `/api/experimental/generate` one-shot endpoint **rejects free-tier calls
+  from outside OpenCode**; the session path is the one that works and is what the
+  official client uses.
+- `registry.py` holds the model catalogue (`ModelRegistry`, `ModelEntry`) and the
+  task router: chat (configured/first enabled), classify (cheapest), extract
+  (vision → largest context), research (tools → largest context). Deterministic,
+  ties broken by model id.
+- Every failure is a typed `GatewayError` (NotConfigured / RateLimited /
+  Timeout / Unavailable / ProtocolError). The UI surfaces the message; nothing
+  is retried blindly or replaced with a fabricated answer.
+- Config: `[gateway] base_url / service_file / location_dir` optional overrides;
+  when `base_url` is set the password must come from `OPENCODE_SERVICE_PASSWORD`
+  (never stored in config.toml or source control).
+- UI honesty: header pill turns green "Live · opencode" when the gateway is live,
+  stays orange "Offline · stub" otherwise; subtitle and composer hint state that
+  replies are live but research is still not built.
+- Evidence: fake-server test suite (`tests/test_registry.py`,
+  `tests/test_opencode_gateway.py`); live round-trip against the real service —
+  model replied "gateway live" (usage + finish recorded), 56 tests passing.
+
 ---
 
 ## Decisions (architectural)
@@ -381,9 +409,16 @@ legitimate, relevant, realistically attainable scholarships.
   with pydantic (`extra="forbid"`). `SCHOLARPATH_HOME` overrides the folder;
   `--config` overrides the file. A missing file is fine, an invalid one is fatal
   (exit code 2).
-- **2026-10-20 — Gateway behind the `ModelGateway` protocol.** M1 ships the stub
-  only. Selecting `provider = "opencode"` exits with code 3 and an explicit
-  message — no silent downgrade to the stub.
+- **2026-10-20 — Gateway behind the `ModelGateway` protocol.** M1 shipped the stub
+  only. From M2, `provider = "opencode"` builds the real adapter: the local
+  service is discovered from its registration file, and one completion is a
+  short-lived session against the verified 2.0.29 session API. Auth problems map
+  to `GatewayNotConfigured`, reachability to `GatewayUnavailable` — still no
+  silent downgrade to the stub.
+- **2026-10-20 — No auto-retry of completions in M2.** `gateway.retries` exists in
+  config but is not acted on yet: retrying a paid completion can double-charge,
+  and an orphaned session is worse than one honest error. Revisit only with
+  idempotent request tracking.
 - **2026-10-20 — Chat UI re-renders one document per turn.** `insertHtml` merges
   adjacent block elements in Qt, collapsing speaker labels into body text;
   rebuilding the document is cheap at chat scale and renders correctly.
@@ -404,8 +439,10 @@ legitimate, relevant, realistically attainable scholarships.
 
 ## Dependencies to verify before building (open)
 
-- [ ] OpenCode gateway: which interface the app calls (local server API vs inference
-      endpoint), auth model, rate limits, free-tier constraints.
+- [x] OpenCode gateway: **verified 2026-10-20** — local server API (session
+      flow), Basic auth from the service registration file, free-tier one-shot
+      endpoint rejected, model catalogue at `/api/model`. (`goals.md` §19b,
+      [[A8]].)
 - [~] PySide6 deployment: Qt 6.12.0 works, `QPlainTextEdit.setPlaceholderText`
       exists (no workaround needed), Essentials-only venv is 260 MB. PyInstaller
       bundling still unproven.
@@ -419,7 +456,8 @@ legitimate, relevant, realistically attainable scholarships.
 
 ## Open questions
 
-1. Model gateway: use the local OpenCode HTTP API, or call the inference endpoint
-   directly with the stored key?
+1. ~~Model gateway: use the local OpenCode HTTP API, or call the inference endpoint
+   directly with the stored key?~~ **Resolved 2026-10-20:** local OpenCode HTTP
+   API (session flow); the direct inference endpoint refuses free-tier callers.
 2. Research breadth target for the prototype: global, or a fixed set of countries?
 3. Should the first build ship a seeded scholarship dataset for offline testing?

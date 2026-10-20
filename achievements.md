@@ -18,16 +18,68 @@ is finished, not when it is started. Each entry names the goal it satisfies
 
 - Repository: populated and pushed to `https://github.com/RajeshKc777/ScholarPath-`
   (`main`).
-- Working app: **yes** — M1 launches with the new light Reddit-orange dashboard,
-  chats through the offline stub, reports errors.
+- Working app: **yes** — M1 launches with the new light Reddit-orange dashboard;
+  from M2 the chat runs **live through the local OpenCode service** (adapter +
+  registry + routing), falls back to the stub with honest copy when selected.
 - Licence: proprietary, source-available, view-only (`LICENSE`).
-- Tests: **25 passing** (`pytest`, 0.12 s).
-- Next milestone: **M2** (G202) — OpenCode gateway adapter.
+- Tests: **56 passing** (`pytest`, ~9 s) — 25 original, 31 new for the gateway.
+- Next milestone: **M3** (G203) — profiles, document ingestion, OCR.
 
 ---
 
 ## Log (newest first)
 
+### 2026-10-20 — A8 · Milestone 2 complete — OpenCode gateway adapter
+
+**Satisfies:** G202, G104 (partially — model registry + task routing), G103
+
+- `src/scholarpath/gateway/opencode.py` — the real adapter against the local
+  OpenCode background service, protocol verified beforehand:
+  - discovery: registration file `~/.local/state/opencode/service.json`
+    (`XDG_STATE_HOME` / `LOCALAPPDATA` / explicit override),
+  - auth: `Basic base64("opencode:<password>")`,
+  - one completion = one session: `POST /api/session` → `POST .../prompt` →
+    `POST /api/experimental/session/.../wait` → `GET .../message` (newest
+    assistant message after the prompt timestamp) → `DELETE` best-effort,
+  - honest failures: `GatewayNotConfigured` (no registration / bad password),
+    `GatewayRateLimited` (429), `GatewayUnavailable` (503 / unreachable),
+    `GatewayTimeout` (deadline or no assistant reply), `GatewayProtocolError`
+    (unknown shape / unparseable reply).
+- `src/scholarpath/gateway/registry.py` — `ModelRegistry`/`ModelEntry` loaded
+  from `GET /api/model`, with deterministic task routing: chat (configured then
+  first enabled), classify (cheapest), extract (vision-capable then largest
+  context), research (tool-capable then largest context).
+- `src/scholarpath/config.py` + `config.example.toml` — new `[gateway]`
+  `base_url` / `service_file` / `location_dir` (empty = auto-discovery);
+  `base_url` requires the password via `OPENCODE_SERVICE_PASSWORD`. No secrets
+  in source control.
+- `src/scholarpath/ui/` — status pill turns green "Live · opencode" with the
+  subtitle "Model replies are live … research still to come"; stub stays honest
+  "Offline · stub".
+- Factory dispatches `provider = "opencode"` — the M1 "arrives in Milestone 2"
+  exit-code path is replaced by the real adapter.
+
+Verified, not assumed:
+
+- Fake OpenCode server on loopback: full session round-trip (auth checked,
+  system rules + history in the prompt, session deleted exactly once), and
+  every error class mapped without crashing (wrong password, 429, 503, 404,
+  500, corrupt JSON, unreachable port, wait timeout, missing assistant reply).
+- Live check against the real service: `python -c … complete(...)` → model
+  replied **"gateway live"**, `opencode/beam-free`, finish `stop`, usage
+  recorded; catalogue read and routed.
+- `pytest` → **56 passed** (25 original unchanged, 31 new).
+
+Known limits:
+
+- `gateway.retries` accepted but not acted on (recorded as a decision — no blind
+  retry of billable completions).
+- No streaming: the reply appears once, after the wait completes (~seconds on
+  the free model).
+- Free-tier one-shot endpoint (`/api/experimental/generate`) is refused from
+  outside OpenCode; the session path is what works.
+
+---
 ### 2026-10-20 — A7 · Light dashboard UI implemented + Reddit-orange recolour
 
 **Satisfies:** G108 (partially — chat UX), G120 (new)
@@ -205,5 +257,5 @@ pydantic 2.14.1, pytest 9.1.1 — all import-tested.
 
 ## Not yet achieved
 
-- G101, G102, G104–G111, G114 — product capabilities beyond the M1 shell.
-- Milestones G202–G207.
+- G101, G102, G104–G111, G114 — product capabilities beyond the M2 gateway.
+- Milestones G203–G207.

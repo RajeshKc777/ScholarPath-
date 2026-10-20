@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from scholarpath.config import GatewayConfig
 from scholarpath.gateway.base import GatewayNotConfigured, ModelGateway
+from scholarpath.gateway.opencode import OpenCodeGateway
 from scholarpath.gateway.stub import StubGateway
 
 
@@ -17,9 +18,6 @@ def build_gateway(config: GatewayConfig) -> ModelGateway:
         return StubGateway(model=config.model or "stub/deterministic")
 
     if config.provider == "opencode":
-        raise GatewayNotConfigured(
-            "The OpenCode gateway is not implemented yet - it arrives in Milestone 2. "
-            'Set gateway.provider = "stub" in config.toml to use the offline build.'
-        )
+        return OpenCodeGateway(config)
 
     raise GatewayNotConfigured(f"Unknown gateway provider: {config.provider!r}.")

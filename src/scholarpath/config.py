@@ -29,6 +29,13 @@ class GatewayConfig(BaseModel):
     timeout_seconds: float = Field(default=30.0, gt=0, le=600)
     retries: int = Field(default=1, ge=0, le=5)
 
+    # OpenCode adapter options. Leave base_url empty to discover the running
+    # background service from its registration file. When base_url is set, the
+    # service password must come from OPENCODE_SERVICE_PASSWORD.
+    base_url: str = ""
+    service_file: str = ""
+    location_dir: str = ""
+
 
 class UIConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")

@@ -9,7 +9,7 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 
 <br>
 
-![Status](https://img.shields.io/badge/status-Milestone%201-4f8cff?style=flat-square)
+![Status](https://img.shields.io/badge/status-Milestone%202-4f8cff?style=flat-square)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Qt](https://img.shields.io/badge/Qt-6.12-41CD52?style=flat-square&logo=qt&logoColor=white)
 ![Tests](https://img.shields.io/badge/tests-25%20passing-2ea043?style=flat-square)
@@ -45,16 +45,15 @@ built on the opposite rule set.
 
 ## Status
 
-> **Milestone 1 of 7 is complete.** The desktop shell, configuration, and chat
-> pipeline work end to end against an **offline stub gateway**. There is no
-> network access, no model, and no research in this build — and the interface
-> says so on every reply.
+> **Milestone 2 of 7 is complete.** Chat now runs **live through the local
+> OpenCode service** (adapter, model registry, task routing). Scholarship
+> research is still not built — the interface says what works and what doesn't.
 
 | # | Milestone | Status |
 | - | --------- | :----: |
 | M1 | Repository, config, desktop shell, chat loop | **Done** |
-| M2 | OpenCode gateway adapter, model registry, task routing | Next |
-| M3 | Profiles, document ingestion, OCR, confirmed extraction | Planned |
+| M2 | OpenCode gateway adapter, model registry, task routing | **Done** |
+| M3 | Profiles, document ingestion, OCR, confirmed extraction | Next |
 | M4 | Source discovery, official-source verification, storage | Planned |
 | M5 | Deterministic eligibility, explainable ranking | Planned |
 | M6 | MCP tools, comparison, saved opportunities, checklists | Planned |
@@ -67,6 +66,10 @@ Full specification: [`goals.md`](goals.md) · Build log: [`achievements.md`](ach
 ## What works today
 
 - Native Qt window with a real chat loop (Enter to send, Shift+Enter for newline).
+- **Live model replies** through the local OpenCode service (stub still available
+  and switchable in config).
+- Model registry + deterministic task routing (chat/classify/research/extract
+  rules) built on the provider's advertised capabilities.
 - Strict configuration: unknown keys and bad values are rejected, not ignored.
 - Typed gateway contract — one seam for every model provider.
 - Background execution so the window never freezes.
@@ -75,12 +78,12 @@ Full specification: [`goals.md`](goals.md) · Build log: [`achievements.md`](ach
 
 ## What it deliberately does not do yet
 
-- No scholarship search, no eligibility checks, no recommendations.
-- No model calls of any kind.
+- No scholarship search, no eligibility checks, no recommendations — replies are
+  general conversation, never presented as verified scholarship data.
 - No storage of profiles or documents.
 
-The stub gateway states this in every response. That is the point: a smaller,
-truthful assistant beats an impressive one that invents scholarships.
+That is the point: a smaller, truthful assistant beats an impressive one that
+invents scholarships.
 
 ---
 
@@ -105,7 +108,7 @@ scholarpath --init-config   # write the configuration template, then exit
 scholarpath --config path\to\config.toml
 scholarpath --version
 python -m scholarpath       # equivalent to the console script
-pytest                      # 25 tests, no network, no Qt event loop required
+pytest                      # 56 tests, no network required (a fake server runs on loopback)
 ```
 
 </details>
@@ -123,10 +126,15 @@ Config lives outside the package so it survives upgrades:
 
 ```toml
 [gateway]
-provider = "stub"     # "opencode" arrives in Milestone 2
-model = ""
+provider = "stub"     # or "opencode" (Milestone 2) - talks to a running OpenCode service
+model = ""            # "provider/model" or bare id; empty = OpenCode's default
 timeout_seconds = 30.0
 retries = 1
+
+# opencode adapter overrides (empty = discover the running service automatically)
+base_url = ""
+service_file = ""
+location_dir = ""
 
 [ui]
 theme = "dark"
@@ -141,6 +149,9 @@ log_level = "INFO"
   (exit `2`) and names the offending field.
 - Asking for a provider that is not implemented exits `3` with an explanation —
   it never silently downgrades to the stub.
+- With `provider = "opencode"`, no secret goes in the config: the service
+  password is read from OpenCode's registration file, or from the
+  `OPENCODE_SERVICE_PASSWORD` environment variable when `base_url` is set.
 - Template: [`config.example.toml`](config.example.toml) — contains no credentials.
 
 ---
@@ -155,6 +166,8 @@ src/scholarpath/
 ├── gateway/
 │   ├── base.py            Message, ChatRequest/Response, typed errors, Protocol
 │   ├── stub.py            offline, deterministic, self-describing
+│   ├── registry.py        model catalogue, deterministic task routing
+│   ├── opencode.py        adapter for the local OpenCode HTTP service
 │   └── factory.py         config → provider, explicit selection
 └── ui/
     ├── chat_controller.py conversation state, busy handling, worker threads
@@ -171,7 +184,7 @@ the same discipline — business logic stays testable without a network or a mod
 
 | Gate | How it is enforced |
 | ---- | ------------------ |
-| Tests | `pytest` — config validation, gateway contract, chat turns, failure paths |
+| Tests | `pytest` — config validation, gateway contract, model routing, adapter round-trips against a fake server, chat turns, failure paths |
 | Secrets | Never in source or config templates; config is local + git-ignored |
 | Types | Type hints on public interfaces; frozen dataclasses for shared data |
 | Errors | Typed gateway exceptions surfaced to the user, never swallowed |

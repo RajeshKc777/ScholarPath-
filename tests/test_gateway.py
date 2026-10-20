@@ -11,6 +11,7 @@ from scholarpath.gateway import (
     GatewayNotConfigured,
     Message,
     ModelGateway,
+    OpenCodeGateway,
     StubGateway,
     build_gateway,
 )
@@ -67,8 +68,24 @@ def test_factory_builds_the_stub() -> None:
     assert isinstance(gateway, StubGateway)
 
 
-def test_factory_refuses_unimplemented_provider() -> None:
-    with pytest.raises(GatewayNotConfigured) as excinfo:
-        build_gateway(GatewayConfig(provider="opencode"))
+def test_factory_builds_opencode_gateway_when_service_known(tmp_path) -> None:
+    registration = tmp_path / "service.json"
+    registration.write_text(
+        '{"url": "http://127.0.0.1:4096", "password": "pw"}', encoding="utf-8"
+    )
 
-    assert "Milestone 2" in str(excinfo.value)
+    gateway = build_gateway(
+        GatewayConfig(provider="opencode", service_file=str(registration))
+    )
+
+    assert isinstance(gateway, OpenCodeGateway)
+    assert gateway.base_url == "http://127.0.0.1:4096"
+
+
+def test_factory_opencode_fails_loudly_without_a_service(tmp_path) -> None:
+    with pytest.raises(GatewayNotConfigured) as excinfo:
+        build_gateway(
+            GatewayConfig(provider="opencode", service_file=str(tmp_path / "absent.json"))
+        )
+
+    assert "OpenCode" in str(excinfo.value)

@@ -13,6 +13,8 @@ from scholarpath.gateway.base import (
     ModelGateway,
 )
 from scholarpath.gateway.factory import build_gateway
+from scholarpath.gateway.opencode import OpenCodeGateway
+from scholarpath.gateway.registry import ModelEntry, ModelRef, ModelRegistry
 from scholarpath.gateway.stub import StubGateway
 
 __all__ = [
@@ -25,7 +27,11 @@ __all__ = [
     "GatewayTimeout",
     "GatewayUnavailable",
     "Message",
+    "ModelEntry",
     "ModelGateway",
+    "ModelRef",
+    "ModelRegistry",
+    "OpenCodeGateway",
     "StubGateway",
     "build_gateway",
 ]

@@ -541,8 +541,9 @@ class MainWindow(QMainWindow):
         row.addLayout(titles)
         row.addStretch(1)
 
-        pill = QLabel("\u25cf  Offline \u00b7 stub", bar)
+        pill = QLabel("\u25cf  \u2026", bar)
         pill.setObjectName("StatusPill")
+        self.pill = pill
         row.addWidget(pill)
 
         avatar = QLabel("S", bar)
@@ -686,12 +687,9 @@ class MainWindow(QMainWindow):
         row.addWidget(self.send_button, 0, Qt.AlignVCenter)
         column.addWidget(self.composer)
 
-        hint = QLabel(
-            "Offline stub \u2014 no network, no model, no scholarship data in this build.",
-            panel,
-        )
-        hint.setObjectName("Hint")
-        column.addWidget(hint)
+        self.hint = QLabel(panel)
+        self.hint.setObjectName("Hint")
+        column.addWidget(self.hint)
         return panel
 
     # -- right panel ------------------------------------------------------
@@ -968,11 +966,40 @@ class MainWindow(QMainWindow):
         self.status.style().unpolish(self.status)
         self.status.style().polish(self.status)
 
-        self.subtitle.setText(
-            "Milestone 1 \u00b7 offline stub, no research"
-            if not busy
-            else "Working on your message\u2026"
-        )
+        live = self._controller.gateway_name != "stub"
+        if live:
+            pill_name = "StatusLive"
+            pill_text = f"\u25cf  Live \u00b7 {self._controller.gateway_name}"
+        else:
+            pill_name = "StatusPill"
+            pill_text = "\u25cf  Offline \u00b7 stub"
+        if busy:
+            pill_text += " \u00b7 working"
+        if self.pill.objectName() != pill_name:
+            self.pill.setObjectName(pill_name)
+        self.pill.setText(pill_text)
+        self.pill.style().unpolish(self.pill)
+        self.pill.style().polish(self.pill)
+
+        if busy:
+            self.subtitle.setText("Working on your message\u2026")
+        elif live:
+            self.subtitle.setText(
+                f"Model replies are live ({self._controller.gateway_name}). "
+                "Scholarship research is still to come."
+            )
+        else:
+            self.subtitle.setText("Milestone edition \u00b7 offline stub, no research")
+
+        if live:
+            self.hint.setText(
+                "Model replies are live through OpenCode. "
+                "Research, eligibility and documents are not built yet."
+            )
+        else:
+            self.hint.setText(
+                "Offline stub \u2014 no network, no model, no scholarship data in this build."
+            )
 
     @staticmethod
     def _elided_path(text: str) -> str:
