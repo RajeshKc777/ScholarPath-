@@ -33,6 +33,8 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G113 | 13 | Milestones M1–M7, each with acceptance criteria | `[~]` |
 | G114 | 14 | Definition of success (10-step student journey) | `[ ]` |
 | G115 | 15 | Agent operating instructions (inspect → summarise → plan → verify → build smallest step) | `[x]` |
+| G116 | 16 | Public read-only repository: proprietary licence, no external contributions | `[x]` |
+| G117 | 17 | Presentation-grade README: screenshot, status, quick start, licence block | `[x]` |
 
 ---
 
@@ -297,6 +299,28 @@ Do not build all planned features at once. Keep the architecture extensible, the
 implementation practical, and the objective unchanged: helping students find
 legitimate, relevant, realistically attainable scholarships.
 
+## 16. Licensing and repository access (G116)
+
+- The repository is **public and read-only**: the owner pushes, nobody else does.
+  External contributions and pull requests are not accepted.
+- Code is **source-available but proprietary** — `LICENSE` grants viewing and
+  personal non-commercial evaluation only; copying, modification, redistribution,
+  sublicensing, and derivative works require written permission.
+- A licence governs legal reuse. It cannot prevent GitHub forking of a public
+  repository, and write access is controlled by collaborator settings, not by the
+  licence. Keeping the repo public therefore means: visible to all, editable by
+  nobody but the owner, reusable by nobody without permission.
+- Copyright holder line must be reviewed by the owner (currently "Rajesh Kc").
+
+## 17. Public presentation (G117)
+
+- `README.md` is the shopfront: badge row, screenshot, honest status table,
+  quick start, architecture, quality gates, privacy, and the licence block.
+- Screenshot lives at `docs/screenshot.png` and must show the real UI, never a
+  mock-up of features that do not exist.
+- The README states the current milestone's limits in plain language, so nobody
+  can mistake the shell for a working scholarship engine.
+
 ---
 
 ## Decisions (architectural)
@@ -317,6 +341,9 @@ legitimate, relevant, realistically attainable scholarships.
 - **2026-10-20 — Repository:** `https://github.com/RajeshKc777/ScholarPath-.git`,
   branch `main`, local `.venv` (note: this folder is inside OneDrive, so the venv
   syncs — move it out or exclude it if sync cost matters).
+- **2026-10-20 — Proprietary source-available licence, not MIT/Apache/CC.** The
+  owner wants the work visible but not reusable. MIT or GPL would grant exactly
+  the rights being withheld, so `LICENSE` is a custom all-rights-reserved notice.
 
 ## Dependencies to verify before building (open)
 

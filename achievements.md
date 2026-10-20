@@ -16,15 +16,42 @@ is finished, not when it is started. Each entry names the goal it satisfies
 
 ## Current state
 
-- Repository: populated, pushed to `https://github.com/RajeshKc777/ScholarPath-`
-  (`main`, commit `ff6ee27`).
+- Repository: populated and pushed to `https://github.com/RajeshKc777/ScholarPath-`
+  (`main`).
 - Working app: **yes** — M1 launches, chats through the offline stub, reports errors.
+- Licence: proprietary, source-available, view-only (`LICENSE`).
 - Tests: **25 passing** (`pytest`, 0.12 s).
 - Next milestone: **M2** (G202) — OpenCode gateway adapter.
 
 ---
 
 ## Log (newest first)
+
+### 2026-10-20 — A4 · Public presentation + proprietary licence
+
+**Satisfies:** G116, G117
+
+- `LICENSE` — custom all-rights-reserved, source-available notice. Grants viewing
+  and personal non-commercial evaluation only; forbids copying, modification,
+  redistribution, sublicensing, and derivative works; states that contributions
+  and pull requests are not accepted.
+- `README.md` — rebuilt: badge row (status, Python, Qt, tests, licence),
+  full-width screenshot, "why this exists" principle table, milestone status
+  table, what-works / what-it-refuses-to-do split, collapsible quick start,
+  configuration reference, architecture map, quality-gate table, privacy section,
+  licence block, non-affiliation disclaimer.
+- `docs/screenshot.png` — real capture of the running window (1550 × 1025) with a
+  two-turn conversation. Not a mock-up.
+
+Verified: screenshot rendered from the live app, image committed, README links
+resolve to files that exist (`LICENSE`, `docs/screenshot.png`, `goals.md`,
+`achievements.md`, `config.example.toml`).
+
+Known limit: a licence controls legal reuse, not GitHub mechanics. A public repo
+can still be forked by others; push access is controlled by collaborator
+settings. Visibility ≠ writability — that is recorded in `goals.md` §16.
+
+---
 
 ### 2026-10-20 — A3 · Milestone 1 complete
 
