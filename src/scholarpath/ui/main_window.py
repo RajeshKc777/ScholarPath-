@@ -29,14 +29,18 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QStackedWidget,
     QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from scholarpath.config import AppConfig, config_path
+from scholarpath.profiles import Profile
+from scholarpath.storage import Database, database_path
 from scholarpath.ui import theme
 from scholarpath.ui.chat_controller import ChatController, Turn
+from scholarpath.ui.profile_page import DEGREE_LABELS
 
 GLYPH_EDUCATION = "\uE7BE"
 GLYPH_CHAT = "\uE8BD"
@@ -50,9 +54,9 @@ GLYPH_GLOBE = "\uE774"
 GLYPH_CHECK = "\uE73E"
 
 ACTION_TILES = (
-    ("Find Scholarships", "From your profile", "M4", GLYPH_STAR, "#FFF1E8", "#FF4500"),
-    ("Check Eligibility", "For a programme", "M5", GLYPH_CHECK, "#EAF9F0", "#10B981"),
-    ("Explore Countries", "Where to study?", "M4", GLYPH_GLOBE, "#EAF2FF", "#3B82F6"),
+    ("Find Scholarships", "Official pages you paste", "M4", GLYPH_STAR, "#FFF1E8", "#FF4500"),
+    ("Check Eligibility", "Rule-based, no gaps", "M5", GLYPH_CHECK, "#EAF9F0", "#10B981"),
+    ("Explore Countries", "Where to study?", "M6", GLYPH_GLOBE, "#EAF2FF", "#3B82F6"),
     ("Upload Documents", "Marksheets, IDs", "M3", GLYPH_DOCUMENT, "#F3EEFF", "#8B5CF6"),
 )
 
@@ -182,20 +186,36 @@ class NavButton(QPushButton):
         row.setContentsMargins(13, 0, 11, 0)
         row.setSpacing(11)
 
-        color = "#FFFFFF" if active else "#9AA6BC"
-        icon = glyph_label(glyph, 15, color, self)
+        icon = QLabel(glyph, self)
         icon.setFixedWidth(18)
+        icon.setAlignment(Qt.AlignCenter)
+        icon.setObjectName("NavIconActive" if active else "NavIcon")
+        icon.setStyleSheet(
+            "background: transparent;"
+            "font-family: 'Segoe MDL2 Assets'; font-size: 15px;"
+        )
         row.addWidget(icon)
+        self._icon = icon
 
         label = QLabel(text, self)
         label.setObjectName("NavTextActive" if active else "NavText")
         row.addWidget(label)
         row.addStretch(1)
+        self._label = label
 
         if badge:
             tag = QLabel(badge, self)
             tag.setObjectName("NavBadge")
             row.addWidget(tag)
+
+    def set_active(self, active: bool) -> None:
+        """Flip selection styling; the icon colour follows the object name."""
+        self.setProperty("active", "true" if active else "false")
+        self._icon.setObjectName("NavIconActive" if active else "NavIcon")
+        self._label.setObjectName("NavTextActive" if active else "NavText")
+        for widget in (self, self._icon, self._label):
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
 
 
 class ActionTile(QPushButton):
@@ -206,7 +226,7 @@ class ActionTile(QPushButton):
         glyph: str,
         title: str,
         subtitle: str,
-        badge: str,
+        badge: str | None,
         tint: str,
         accent: str,
         parent: QWidget | None = None,
@@ -241,9 +261,10 @@ class ActionTile(QPushButton):
         text.addWidget(detail)
         row.addLayout(text, 1)
 
-        tag = QLabel(badge, self)
-        tag.setObjectName("TileBadge")
-        row.addWidget(tag, 0, Qt.AlignTop)
+        if badge:
+            tag = QLabel(badge, self)
+            tag.setObjectName("TileBadge")
+            row.addWidget(tag, 0, Qt.AlignTop)
 
 
 class ChatInput(QPlainTextEdit):
@@ -412,6 +433,8 @@ class MainWindow(QMainWindow):
         self._error_text: str | None = None
         self._notice: str | None = None
         self._turns = 0
+        self._page_name = "chat"
+        self._database = Database(database_path())
 
         self.setWindowTitle("ScholarPath AI")
         self.resize(config.ui.window_width, config.ui.window_height)
@@ -468,14 +491,51 @@ class MainWindow(QMainWindow):
         section.setObjectName("RailSection")
         column.addWidget(section)
 
+        self._nav_buttons: dict[str, NavButton] = {}
+
         chat_item = NavButton(GLYPH_CHAT, "Chat Assistant", active=True, parent=side)
+        chat_item.clicked.connect(lambda: self.select_page("chat"))
         column.addWidget(chat_item)
+        self._nav_buttons["chat"] = chat_item
+
+        profile_item = NavButton(GLYPH_PERSON, "My Profile", parent=side)
+        profile_item.setToolTip(
+            "Your academic details - local-only, filled by you or confirmed "
+            "from your documents."
+        )
+        profile_item.clicked.connect(lambda: self.select_page("profile"))
+        column.addWidget(profile_item)
+        self._nav_buttons["profile"] = profile_item
+
+        documents_item = NavButton(GLYPH_DOCUMENT, "Documents", parent=side)
+        documents_item.setToolTip(
+            "Upload a transcript or marksheet; extracted values are confirmed "
+            "by you before they are saved."
+        )
+        documents_item.clicked.connect(lambda: self.select_page("documents"))
+        column.addWidget(documents_item)
+        self._nav_buttons["documents"] = documents_item
+
+        research_item = NavButton(GLYPH_EDUCATION, "Scholarships", parent=side)
+        research_item.setToolTip(
+            "Paste an official scholarship page URL; values are verified against "
+            "the page text before anything is saved. Search comes later."
+        )
+        research_item.clicked.connect(lambda: self.select_page("research"))
+        column.addWidget(research_item)
+        self._nav_buttons["research"] = research_item
+
+        eligibility_item = NavButton(GLYPH_CHECK, "Eligibility", parent=side)
+        eligibility_item.setToolTip(
+            "Rule-based checks of your saved records against your profile - "
+            "no model, no probabilities, honest unknowns."
+        )
+        eligibility_item.clicked.connect(lambda: self.select_page("eligibility"))
+        column.addWidget(eligibility_item)
+        self._nav_buttons["eligibility"] = eligibility_item
 
         inactive = (
-            (GLYPH_PERSON, "My Profile", 3),
-            (GLYPH_EDUCATION, "Scholarships", 4),
             (GLYPH_STAR, "Saved Opportunities", 6),
-            (GLYPH_DOCUMENT, "Documents", 3),
         )
         for glyph, label, number in inactive:
             item = NavButton(glyph, label, badge="Soon", parent=side)
@@ -533,6 +593,7 @@ class MainWindow(QMainWindow):
         titles.setSpacing(2)
         title = QLabel("Chat Assistant", bar)
         title.setObjectName("PageTitle")
+        self._page_title = title
         self.subtitle = QLabel("Starting\u2026", bar)
         self.subtitle.setObjectName("PageSub")
         titles.addWidget(title)
@@ -556,13 +617,58 @@ class MainWindow(QMainWindow):
 
     # -- body -------------------------------------------------------------
     def _build_body(self) -> QWidget:
-        body = QWidget(self)
-        row = QHBoxLayout(body)
+        holder = QWidget(self)
+        row = QHBoxLayout(holder)
         row.setContentsMargins(24, 20, 24, 14)
         row.setSpacing(18)
-        row.addWidget(self._build_chat_column(), 1)
-        row.addWidget(self._build_right_panel())
-        return body
+
+        self._pages = QStackedWidget(holder)
+
+        from scholarpath.ui.documents_page import DocumentsPage
+        from scholarpath.ui.profile_page import ProfilePage
+
+        chat_body = QWidget(self)
+        chat_row = QHBoxLayout(chat_body)
+        chat_row.setContentsMargins(0, 0, 0, 0)
+        chat_row.setSpacing(18)
+        chat_row.addWidget(self._build_chat_column(), 1)
+        chat_row.addWidget(self._build_right_panel())
+        self._pages.addWidget(chat_body)
+
+        self._profile_page = ProfilePage(
+            self._database, on_saved=self._on_profile_saved, parent=self
+        )
+        self._pages.addWidget(self._profile_page)
+
+        self._documents_page = DocumentsPage(
+            self._database,
+            self._controller.gateway,
+            self._config.gateway.model or None,
+            on_profile_changed=self._on_profile_saved,
+            parent=self,
+        )
+        self._pages.addWidget(self._documents_page)
+
+        from scholarpath.ui.research_page import ResearchPage
+
+        self._research_page = ResearchPage(
+            self._database,
+            self._controller.gateway,
+            self._config.gateway.model or None,
+            on_saved=self._on_profile_saved,
+            parent=self,
+        )
+        self._pages.addWidget(self._research_page)
+
+        from scholarpath.ui.eligibility_page import EligibilityPage
+
+        self._eligibility_page = EligibilityPage(
+            self._database, on_open_profile=lambda: self.select_page("profile"), parent=self
+        )
+        self._pages.addWidget(self._eligibility_page)
+
+        row.addWidget(self._pages, 1)
+        return holder
 
     def _build_chat_column(self) -> QWidget:
         column_widget = QWidget(self)
@@ -617,9 +723,9 @@ class MainWindow(QMainWindow):
         title = QLabel("Hello.", hero)
         title.setObjectName("HeroTitle")
         sub = QLabel(
-            "I'm your scholarship assistant. This build can talk with you, but it "
-            "cannot search or verify scholarships yet \u2014 research and eligibility "
-            "arrive in later milestones.",
+            "I can chat with you, build your academic profile from documents, "
+            "verify scholarship pages you paste here, and run rule-based "
+            "eligibility checks. Automatic search and saved lists arrive later.",
             hero,
         )
         sub.setObjectName("HeroSub")
@@ -632,16 +738,43 @@ class MainWindow(QMainWindow):
         tiles = QWidget(holder)
         flow = FlowLayout(tiles, spacing=10)
         for title_text, subtitle, milestone, glyph, tint, accent in ACTION_TILES:
-            tile = ActionTile(glyph, title_text, subtitle, "Soon", tint, accent, tiles)
-            tile.setToolTip(
-                f"{title_text} arrives in Milestone {milestone[1:]}. "
-                "Not available in this build."
+            working = title_text in (
+                "Upload Documents", "Find Scholarships", "Check Eligibility",
             )
-            tile.clicked.connect(
-                lambda _checked=False, name=title_text, m=milestone: self._not_available(
-                    name, m
+            tile = ActionTile(
+                glyph,
+                title_text,
+                subtitle,
+                None if working else "Soon",
+                tint,
+                accent,
+                tiles,
+            )
+            if title_text == "Upload Documents":
+                tile.setToolTip("Open the documents page to upload and extract.")
+                tile.clicked.connect(lambda _checked=False: self.select_page("documents"))
+            elif title_text == "Find Scholarships":
+                tile.setToolTip(
+                    "Paste an official scholarship page URL. No automatic search yet."
                 )
-            )
+                tile.clicked.connect(lambda _checked=False: self.select_page("research"))
+            elif title_text == "Check Eligibility":
+                tile.setToolTip(
+                    "Deterministic checks of your saved records against your profile."
+                )
+                tile.clicked.connect(
+                    lambda _checked=False: self.select_page("eligibility")
+                )
+            else:
+                tile.setToolTip(
+                    f"{title_text} arrives in Milestone {milestone[1:]}. "
+                    "Not available in this build."
+                )
+                tile.clicked.connect(
+                    lambda _checked=False, name=title_text, m=milestone: self._not_available(
+                        name, m
+                    )
+                )
             flow.addWidget(tile)
         column.addWidget(tiles)
         column.addStretch(1)
@@ -665,9 +798,9 @@ class MainWindow(QMainWindow):
         self.attach.setText(GLYPH_ATTACH)
         self.attach.setFixedSize(36, 36)
         self.attach.setCursor(Qt.PointingHandCursor)
-        self.attach.setToolTip("Document upload arrives in Milestone 3")
+        self.attach.setToolTip("Upload a document (transcript, marksheet, test report)")
         self.attach.setStyleSheet("font-family: 'Segoe MDL2 Assets'; font-size: 15px;")
-        self.attach.clicked.connect(lambda: self._not_available("Document upload", "M3"))
+        self.attach.clicked.connect(lambda: self.select_page("documents"))
 
         self.input = ChatInput(self.composer)
         self.input.setObjectName("Input")
@@ -728,10 +861,10 @@ class MainWindow(QMainWindow):
         title.setObjectName("CardTitle")
         header.addWidget(title)
         header.addStretch(1)
-        tag = QLabel("Soon", card)
-        tag.setObjectName("CapSoon")
-        tag.setToolTip("Profile setup arrives in Milestone 3.")
-        header.addWidget(tag)
+        self._profile_tag = QLabel("Local", card)
+        self._profile_tag.setObjectName("CapSoon")
+        self._profile_tag.setToolTip("Profile data is local; it exists as soon as you save it.")
+        header.addWidget(self._profile_tag)
         column.addLayout(header)
 
         identity = QHBoxLayout()
@@ -747,12 +880,12 @@ class MainWindow(QMainWindow):
 
         naming = QVBoxLayout()
         naming.setSpacing(1)
-        name = QLabel("Not set up yet", card)
-        name.setObjectName("ProfileName")
-        detail = QLabel("Local profile \u00b7 Milestone 3", card)
-        detail.setObjectName("ProfileSub")
-        naming.addWidget(name)
-        naming.addWidget(detail)
+        self._profile_name = QLabel("Not set up yet", card)
+        self._profile_name.setObjectName("ProfileName")
+        self._profile_detail = QLabel("Local profile \u00b7 nothing saved yet", card)
+        self._profile_detail.setObjectName("ProfileSub")
+        naming.addWidget(self._profile_name)
+        naming.addWidget(self._profile_detail)
         identity.addLayout(naming, 1)
         column.addLayout(identity)
 
@@ -761,17 +894,18 @@ class MainWindow(QMainWindow):
         track.setFixedHeight(6)
         column.addWidget(track)
 
-        progress = QLabel("0% complete \u2014 no profile data yet", card)
-        progress.setObjectName("TrackLabel")
-        column.addWidget(progress)
+        self._profile_progress = QLabel("0% complete \u2014 no profile data yet", card)
+        self._profile_progress.setObjectName("TrackLabel")
+        column.addWidget(self._profile_progress)
 
         rows = (
-            ("D", "Current degree", "\u2014"),
-            ("G", "GPA", "\u2014"),
-            ("I", "IELTS", "\u2014"),
-            ("C", "Preferred countries", "\u2014"),
+            ("degree", "D", "Current degree", "\u2014"),
+            ("gpa", "G", "GPA", "\u2014"),
+            ("ielts", "I", "IELTS", "\u2014"),
+            ("countries", "C", "Preferred countries", "\u2014"),
         )
-        for letter, label_text, value_text in rows:
+        self._profile_values: dict[str, QLabel] = {}
+        for key, letter, label_text, value_text in rows:
             row = QHBoxLayout()
             row.setSpacing(9)
             badge = QLabel(letter, card)
@@ -788,8 +922,10 @@ class MainWindow(QMainWindow):
             value.setObjectName("RowValue")
             words.addWidget(label)
             words.addWidget(value)
+            self._profile_values[key] = value
             row.addLayout(words, 1)
             column.addLayout(row)
+        self._refresh_profile_panel()
         return card
 
     def _build_info_card(self, parent: QWidget) -> QWidget:
@@ -809,8 +945,8 @@ class MainWindow(QMainWindow):
         row.addWidget(mark, 0, Qt.AlignTop)
 
         text = QLabel(
-            "ScholarPath will not invent profile details. Profile setup and "
-            "document import arrive in Milestone 3.",
+            "Document text is read on this device and sent to your model service "
+            "only to propose values. Every value needs your tick before it is saved.",
             card,
         )
         text.setObjectName("InfoText")
@@ -831,9 +967,10 @@ class MainWindow(QMainWindow):
 
         rows = (
             ("Conversation", "LIVE", True, "Chat replies run through the model gateway."),
-            ("Documents", "Soon", False, "Arrives in Milestone 3 - profile, upload, extraction."),
-            ("Research", "Soon", False, "Arrives in Milestone 4 - source-verified discovery."),
-            ("Eligibility", "Soon", False, "Arrives in Milestone 5 - deterministic checks."),
+            ("Profile", "LIVE", True, "Local form + confirmed document values."),
+            ("Documents", "LIVE", True, "Upload, read locally, confirm every value."),
+            ("Research", "LIVE", True, "Official pages you paste; search is not built yet."),
+            ("Eligibility", "LIVE", True, "Rule-based checks of records vs your profile."),
             ("Saved list", "Soon", False, "Arrives in Milestone 6 - comparison and bookmarks."),
         )
         for name, tag_text, live, tip in rows:
@@ -871,6 +1008,80 @@ class MainWindow(QMainWindow):
         row.addWidget(path_label)
         return strip
 
+    # -- page selection -------------------------------------------------------
+    def select_page(self, name: str) -> None:
+        """Switch the centre stack and keep sidebar + header copy in step."""
+        index = {
+            "chat": 0,
+            "profile": 1,
+            "documents": 2,
+            "research": 3,
+            "eligibility": 4,
+        }.get(name, 0)
+        self._pages.setCurrentIndex(index)
+        self._page_name = name
+        titles = {
+            "chat": "Chat Assistant",
+            "profile": "My Profile",
+            "documents": "Documents",
+            "research": "Scholarship Pages",
+            "eligibility": "Eligibility",
+        }
+        self._page_title.setText(titles.get(name, titles["chat"]))
+        self._notice = None  # a switch clears stale "not available" notices
+        for key, button in self._nav_buttons.items():
+            button.set_active(key == name)
+        self._refresh_status()
+
+    def _on_profile_saved(self) -> None:
+        """Callback after the profile form or a document apply changed data."""
+        self._profile_page.refresh()
+        self._refresh_profile_panel()
+        if getattr(self, "_eligibility_page", None) is not None:
+            self._eligibility_page.reload()
+        self._refresh_status()
+
+    def _refresh_profile_panel(self) -> None:
+        """Right-panel mini card mirrors what is really stored locally."""
+        record = self._database.load_profile()
+        profile, _dropped = Profile.from_payload(record["data"] if record else {})
+
+        self._profile_name.setText(profile.student_name or "Not set up yet")
+        self._profile_detail.setText(
+            "Local profile \u00b7 stored in this app's data folder"
+        )
+        self._profile_tag.setText("LIVE" if record else "Local")
+        self._profile_tag.setObjectName("CapLive" if record else "CapSoon")
+        for widget in (self._profile_tag, self._profile_tag):
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
+
+        complete = profile.completion()
+        if complete == 0:
+            progress_text = "0% complete \u2014 no profile data yet"
+        else:
+            progress_text = f"{complete}% complete \u2014 stored locally"
+        self._profile_progress.setText(progress_text)
+
+        degree_text = "\u2014"
+        if profile.degree_level:
+            degree_text = DEGREE_LABELS.get(
+                profile.degree_level, profile.degree_level
+            )
+        gpa_text = "\u2014"
+        if profile.gpa:
+            gpa_text = profile.gpa
+            if profile.gpa_scale and profile.gpa_scale != "unknown":
+                gpa_text += f" (scale {profile.gpa_scale})"
+        values = {
+            "degree": degree_text,
+            "gpa": gpa_text,
+            "ielts": profile.ielts or "\u2014",
+            "countries": profile.preferred_countries or "\u2014",
+        }
+        for key, label in self._profile_values.items():
+            label.setText(values.get(key, "\u2014"))
+
     # -- wiring -----------------------------------------------------------
     def _connect(self) -> None:
         self.send_button.clicked.connect(self._submit)
@@ -880,6 +1091,14 @@ class MainWindow(QMainWindow):
         self._controller.busy_changed.connect(self._on_busy_changed)
         self._controller.failed.connect(self._on_failed)
 
+    def closeEvent(self, event) -> None:  # noqa: N802 - Qt API
+        """Flush and release the local database; stop ingest threads."""
+        if self._documents_page is not None:
+            self._documents_page.cancel_worker()
+        if self._research_page is not None:
+            self._research_page.cancel_worker()
+        self._database.close()
+        super().closeEvent(event)
     def _submit(self) -> None:
         text = self.input.toPlainText().strip()
         if not text:
@@ -957,10 +1176,21 @@ class MainWindow(QMainWindow):
             state = "Working\u2026" if busy else "Ready"
             count = self._turns
             noun = "message" if count == 1 else "messages"
-            text = (
-                f"{state}  \u00b7  chat: {self._controller.chat_mode}  \u00b7  "
-                f"{count} {noun}  \u00b7  no research performed"
-            )
+            if self._page_name == "profile":
+                text = f"{state}  \u00b7  profile  \u00b7  stored locally, nothing leaves this device"
+            elif self._page_name == "documents":
+                text = f"{state}  \u00b7  documents  \u00b7  parsed locally, confirmed by you"
+            elif self._page_name == "research":
+                text = f"{state}  \u00b7  research  \u00b7  official pages only  \u00b7  no automatic search"
+            elif self._page_name == "eligibility":
+                text = (
+                    f"{state}  \u00b7  eligibility  \u00b7  rule-based  \u00b7  no probabilities"
+                )
+            else:
+                text = (
+                    f"{state}  \u00b7  chat: {self._controller.chat_mode}  \u00b7  "
+                    f"{count} {noun}  \u00b7  no research performed"
+                )
 
         if self.status.objectName() != name:
             self.status.setObjectName(name)
@@ -986,9 +1216,26 @@ class MainWindow(QMainWindow):
 
         if busy:
             self.subtitle.setText("Working on your message\u2026")
+        elif self._page_name == "profile":
+            self.subtitle.setText(
+                "Academic profile \u2014 local-only, private by design."
+            )
+        elif self._page_name == "documents":
+            self.subtitle.setText(
+                "Documents \u2014 parsed locally, every value confirmed by you."
+            )
+        elif self._page_name == "research":
+            self.subtitle.setText(
+                "Scholarship pages \u2014 you paste the official URL; every value is verified."
+            )
+        elif self._page_name == "eligibility":
+            self.subtitle.setText(
+                "Eligibility \u2014 deterministic checks with honest unknowns."
+            )
         elif live:
             self.subtitle.setText(
-                "Model replies are live. Scholarship research is still to come."
+                "Model replies are live. Scholarship pages can be verified; "
+                "automatic search is still to come."
             )
         else:
             self.subtitle.setText(
@@ -997,7 +1244,8 @@ class MainWindow(QMainWindow):
 
         if live:
             self.hint.setText(
-                "Model replies are live. Research, eligibility and documents are not built yet."
+                "Model replies, page verification and eligibility checks are "
+                "live; automatic search and saved lists are still to come."
             )
         else:
             self.hint.setText(

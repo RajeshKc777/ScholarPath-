@@ -231,7 +231,8 @@ QToolButton#Copy {{
 QToolButton#Copy:hover {{ color: {p['orange_deep']}; background: {p['tint_orange']}; }}
 
 /* ---------------- right panel ---------------- */
-QScrollArea#RightScroll, QWidget#RightBody {{
+QScrollArea#RightScroll, QWidget#RightBody,
+QScrollArea#DocScroll, QWidget#DocBody {{
     background: {p['page']};
     border: none;
 }}
@@ -277,6 +278,49 @@ QLabel#CapSoon {{
     padding: 1px 7px;
     font-size: 9px;
 }}
+QLabel#CapFail {{
+    color: #B91C1C;
+    background: #FEE2E2;
+    border-radius: 8px;
+    padding: 1px 7px;
+    font-size: 9px;
+    font-weight: 700;
+}}
+QLabel#CapAmber {{
+    color: #B45309;
+    background: #FEF3C7;
+    border-radius: 8px;
+    padding: 1px 7px;
+    font-size: 9px;
+    font-weight: 700;
+}}
+QLabel#CapGrey {{
+    color: #475569;
+    background: #EEF1F5;
+    border-radius: 8px;
+    padding: 1px 7px;
+    font-size: 9px;
+    font-weight: 700;
+}}
+QLabel#StateWhy {{
+    color: {p['text_secondary']};
+    font-size: 11px;
+    background: transparent;
+}}
+QLabel#StateWhat {{
+    color: {p['text_muted']};
+    font-size: 10px;
+    background: transparent;
+}}
+QPushButton#LinkButton {{
+    color: {p['orange']};
+    background: transparent;
+    border: none;
+    font-size: 11px;
+    text-align: left;
+    padding: 0;
+}}
+QPushButton#LinkButton:hover {{ text-decoration: underline; }}
 
 /* ---------------- composer ---------------- */
 QFrame#Composer {{
@@ -333,6 +377,85 @@ QScrollBar::handle:vertical {{
 QScrollBar::handle:vertical:hover {{ background: #B6C0CE; }}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
 QScrollBar:horizontal {{ height: 0; }}
+
+/* ---------------- profile & documents pages ---------------- */
+QLabel#PageTitle2 {{
+    color: {p['text']};
+    font-size: 20px;
+    font-weight: 700;
+}}
+QLabel#PageLead {{ color: {p['text_muted']}; font-size: 12px; }}
+QLabel#FieldLabel {{ color: {p['text_muted']}; font-size: 10px; }}
+QLineEdit#PField, QComboBox#PCombo {{
+    background: {p['surface']};
+    border: 1px solid {p['border']};
+    border-radius: 9px;
+    padding: 7px 10px;
+    font-size: 12px;
+    color: {p['text']};
+}}
+QLineEdit#PField:focus, QComboBox#PCombo:focus {{ border: 1px solid #FFC6A8; }}
+QLineEdit#PField:disabled {{
+    background: #F4F1EE;
+    color: #A5AEBC;
+}}
+QComboBox#PCombo::drop-down {{ border: none; width: 18px; }}
+QComboBox#PCombo::down-arrow {{
+    image: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid {p['text_muted']};
+}}
+QComboBox QAbstractItemView {{
+    background: {p['surface']};
+    color: {p['text']};
+    selection-background-color: {p['tint_orange']};
+    selection-color: {p['text']};
+    border: 1px solid {p['border_strong']};
+}}
+QPushButton#PrimaryButton {{
+    background: {GRADIENT_SEND};
+    color: #FFFFFF;
+    border: none;
+    border-radius: 11px;
+    padding: 9px 20px;
+    font-size: 12px;
+    font-weight: 600;
+}}
+QPushButton#PrimaryButton:hover {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #FF7A3D, stop:1 #E03F0C);
+}}
+QPushButton#PrimaryButton:disabled {{ background: #DBD5D0; color: #FFFFFF; }}
+QPushButton#GhostButton {{
+    background: {p['tint_orange']};
+    color: {p['orange']};
+    border: 1px solid {p['border_orange']};
+    border-radius: 11px;
+    padding: 9px 18px;
+    font-size: 12px;
+    font-weight: 600;
+}}
+QPushButton#GhostButton:hover {{ background: #FFE3D4; }}
+QPushButton#GhostButton:disabled {{ color: #A5AEBC; border-color: {p['border']}; }}
+QLabel#VerifyOK {{ color: #15803D; font-size: 10px; }}
+QLabel#VerifyWarn {{ color: #C2410C; font-size: 10px; }}
+QLabel#VerifySkip {{ color: {p['text_muted']}; font-size: 10px; }}
+QFrame#DocCard {{
+    background: {p['surface']};
+    border: 1px solid {p['border']};
+    border-radius: 12px;
+}}
+QLabel#DocName {{ color: {p['text']}; font-size: 12px; font-weight: 600; }}
+QLabel#DocMeta {{ color: {p['text_muted']}; font-size: 10px; }}
+QPlainTextEdit#SourcePreview {{
+    background: {p['surface']};
+    border: 1px solid {p['border']};
+    border-radius: 10px;
+    font-family: {FONT_MONO};
+    font-size: 10px;
+    color: {p['text']};
+}}
 
 QToolTip {{
     background: {p['surface']};

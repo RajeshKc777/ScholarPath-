@@ -9,10 +9,10 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 
 <br>
 
-![Status](https://img.shields.io/badge/status-Milestone%202-4f8cff?style=flat-square)
+![Status](https://img.shields.io/badge/status-Milestone%204-4f8cff?style=flat-square)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Qt](https://img.shields.io/badge/Qt-6.12-41CD52?style=flat-square&logo=qt&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-25%20passing-2ea043?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-134%20passing-2ea043?style=flat-square)
 ![License](https://img.shields.io/badge/license-view--only%20%C2%B7%20all%20rights%20reserved-b3261e?style=flat-square)
 
 </div>
@@ -20,9 +20,9 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 <br>
 
 <div align="center">
-  <img src="docs/screenshot.png" alt="ScholarPath AI desktop window showing the Reddit-orange dashboard with a conversation with the offline stub gateway" width="880">
+  <img src="docs/screenshot.png" alt="ScholarPath AI desktop window showing the Reddit-orange dashboard" width="880">
   <br>
-  <sub><em>Milestone 1 shell — an honest offline build, in the new dashboard look: it says what it does not do.</em></sub>
+  <sub><em>Milestone 4 — documents and scholarship pages: local parsing and verbatim verification, no invented fields.</em></sub>
 </div>
 
 ---
@@ -45,17 +45,20 @@ built on the opposite rule set.
 
 ## Status
 
-> **Milestone 2 of 7 is complete.** Chat now runs **live through the local
-> OpenCode service** (adapter, model registry, task routing). Scholarship
-> research is still not built — the interface says what works and what doesn't.
+> **Milestone 4 of 7 is complete.** Chat runs **live through the local OpenCode
+> service**, profiles/documents work locally, and you can **verify a scholarship
+> page**: paste the official URL, and only values that literally appear in the
+> page text are offered — every saved record carries its source URL, retrieval
+> time and page hash. There is **no automatic search yet**: you pick the pages.
+> Eligibility checks are next.
 
 | # | Milestone | Status |
 | - | --------- | :----: |
 | M1 | Repository, config, desktop shell, chat loop | **Done** |
 | M2 | OpenCode gateway adapter, model registry, task routing | **Done** |
-| M3 | Profiles, document ingestion, OCR, confirmed extraction | Next |
-| M4 | Source discovery, official-source verification, storage | Planned |
-| M5 | Deterministic eligibility, explainable ranking | Planned |
+| M3 | Profiles, document ingestion, OCR, confirmed extraction | **Done** |
+| M4 | Source discovery, official-source verification, storage | **Done** |
+| M5 | Deterministic eligibility, explainable ranking | **Done** |
 | M6 | MCP tools, comparison, saved opportunities, checklists | Planned |
 | M7 | Security review, performance, Windows packaging | Planned |
 
@@ -68,6 +71,24 @@ Full specification: [`goals.md`](goals.md) · Build log: [`achievements.md`](ach
 - Native Qt window with a real chat loop (Enter to send, Shift+Enter for newline).
 - **Live model replies** through the local OpenCode service (stub still available
   and switchable in config).
+- **My Profile page** — a local-only form (degree, GPA + scale, IELTS/TOEFL,
+  countries, funding need) with completion tracking and no invented values.
+- **Documents page** — upload a PDF, text file or image; text is read locally
+  (PDF text layer, or Windows OCR for pictures); the model proposes fields; each
+  proposal is checked **verbatim** against the document text and shown with a
+  found / not-found marker; only rows you tick (and may edit) are merged.
+- **Scholarship pages page** — paste the official scholarship URL: the page is
+  fetched with strict guardrails (http/https only, HTML only, 2 MB cap,
+  redirect-aware provenance, sha256 + retrieval timestamp), fields are proposed
+  and must be **verbatim** in the page text; untick the ones you distrust. There
+  is no automatic search in this build — by design, you choose the sources.
+- **Eligibility page** — every saved record is checked by pure rule-based code
+  against your local profile (nationality, degree level, language thresholds,
+  grade average on a matching scale only, unambiguous deadlines). Results are
+  satisfied / not satisfied / unknown / needs checking, each with the page text
+  it was read from, ranked deterministically — **no model, no probabilities,
+  and the word "eligible" is never claimed**; it only reports conflicts, gaps
+  and "confirm on the official page".
 - Model registry + deterministic task routing (chat/classify/research/extract
   rules) built on the provider's advertised capabilities.
 - Strict configuration: unknown keys and bad values are rejected, not ignored.
@@ -78,9 +99,14 @@ Full specification: [`goals.md`](goals.md) · Build log: [`achievements.md`](ach
 
 ## What it deliberately does not do yet
 
-- No scholarship search, no eligibility checks, no recommendations — replies are
-  general conversation, never presented as verified scholarship data.
-- No storage of profiles or documents.
+- No scholarship search, no recommendations — there is no topic search in this
+  build; you supply official pages. Eligibility checks read only what a page
+  literally states; anything else is unknown or flagged for manual checking,
+  and nothing is presented as verified advice beyond the page text.
+- GPA scale conversion, funding-type ranking, and deadline-reminder features
+  are intentionally deferred until there is a documented, honest policy for them.
+- Extraction is a proposal engine, not an authority: a value the source does not
+  literally contain is flagged and never applied without you typing it yourself.
 
 That is the point: a smaller, truthful assistant beats an impressive one that
 invents scholarships.
@@ -89,7 +115,8 @@ invents scholarships.
 
 ## Quick start
 
-**Requirements:** Windows 10/11 · Python 3.11+ · no network needed for this build.
+**Requirements:** Windows 10/11 · Python 3.11+ · a running OpenCode service for
+live replies (the stub provider and the test suite work offline).
 
 ```powershell
 git clone https://github.com/RajeshKc777/ScholarPath-.git
@@ -108,7 +135,7 @@ scholarpath --init-config   # write the configuration template, then exit
 scholarpath --config path\to\config.toml
 scholarpath --version
 python -m scholarpath       # equivalent to the console script
-pytest                      # 56 tests, no network required (a fake server runs on loopback)
+pytest                      # 134 tests, no network required (fake server on loopback)
 ```
 
 </details>
@@ -163,6 +190,13 @@ src/scholarpath/
 ├── app.py                 entry point, startup checks, exit codes
 ├── config.py              TOML + pydantic models, strict validation
 ├── logging_setup.py       rotating logs, no payloads
+├── storage.py             SQLite: profiles, documents, extraction records
+├── profiles.py            strict Profile model, merge_confirmed, completion
+├── documents.py           PDF text layer (pypdf), plain text, Windows OCR images
+├── extraction.py          prompt, JSON parsing, verbatim-verification against source
+├── sources.py             guarded http(s) fetch: caps, content-type, sha256, redirects
+├── research.py            official-page pipeline: propose → verbatim verify → draft
+├── eligibility.py         rule-based checks, honest verdicts, deterministic ranking
 ├── gateway/
 │   ├── base.py            Message, ChatRequest/Response, typed errors, Protocol
 │   ├── stub.py            offline, deterministic, self-describing
@@ -171,7 +205,13 @@ src/scholarpath/
 │   └── factory.py         config → provider, explicit selection
 └── ui/
     ├── chat_controller.py conversation state, busy handling, worker threads
-    └── main_window.py     Qt window, transcript, input, status
+    ├── profile_page.py    local-only academic profile form
+    ├── documents_page.py  upload → parse → propose → confirm → apply
+    ├── research_page.py   official-page verification: URL → fields → save with provenance
+    ├── eligibility_page.py ranked rule-based eligibility reports with cited evidence
+    ├── confirm_row.py     shared per-value confirm row (tick, edit, marker)
+    ├── theme.py           light Reddit-orange palette and widget styles
+    └── main_window.py     stacked pages, sidebar, transcript, status strip
 ```
 
 **Layering rule:** nothing outside `gateway/` may know which model provider is in
@@ -184,7 +224,9 @@ the same discipline — business logic stays testable without a network or a mod
 
 | Gate | How it is enforced |
 | ---- | ------------------ |
-| Tests | `pytest` — config validation, gateway contract, model routing, adapter round-trips against a fake server, chat turns, failure paths |
+| Tests | `pytest` — config validation, gateway contract, model routing, adapter round-trips against a fake server, chat turns, failure paths, verbatim extraction checks, SQLite profile/document/scholarship round-trips, fetch guardrails against a fake HTTP server |
+| Honesty | Extraction values must appear verbatim in the source (document or fetched page); unverified proposals are visibly flagged and never auto-applied |
+| Untrusted input | Fetched page content is data only, wrapped in markers with an explicit ignore-instructions instruction |
 | Secrets | Never in source or config templates; config is local + git-ignored |
 | Types | Type hints on public interfaces; frozen dataclasses for shared data |
 | Errors | Typed gateway exceptions surfaced to the user, never swallowed |
@@ -195,10 +237,17 @@ the same discipline — business logic stays testable without a network or a mod
 
 ## Privacy
 
-- Student profiles, academic documents, and research history are stored locally.
-- Nothing is sent to an external provider by this build.
-- Deletion controls and an explicit "this leaves your device" indicator are
-  required before any network-backed milestone ships.
+- Profiles, documents, and verified scholarship records are stored locally in
+  `%APPDATA%\ScholarPath\scholarpath.db`; uploaded files are parsed on this
+  device (PDF text layer or Windows OCR).
+- Chat messages are sent to the configured model service to produce a reply.
+  When you extract fields, the document's **text** is sent to the service for a
+  proposal. When you verify a scholarship page, that page's **text** is sent the
+  same way. Files and the fetching of pages happen model-free on your machine.
+- Fetching a page is a normal web visit by this app (its User-Agent is
+  `ScholarPath-AI/0.1`); the site sees it like any other visitor.
+- Nothing is uploaded to a ScholarPath server — there isn't one. Deletion
+  controls live on the profile, documents, and research pages.
 
 ---
 

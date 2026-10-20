@@ -24,7 +24,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G104 | 4 | AI orchestration: 6 modular agents, model registry, task-based routing, failure handling | `[ ]` |
 | G105 | 5 | Conversational onboarding, academic profiles, document upload + confirmed extraction | `[ ]` |
 | G106 | 6 | Scholarship research with source-verification hierarchy and structured records | `[ ]` |
-| G107 | 7 | Deterministic eligibility engine and explainable ranking | `[ ]` |
+| G107 | 7 | Deterministic eligibility engine and explainable ranking | `[x]` |
 | G108 | 8 | Desktop chat UI: onboarding, results, filters, comparison, saved list, settings | `[ ]` |
 | G109 | 9 | MCP + tool integration with untrusted-input handling and read-only research default | `[ ]` |
 | G110 | 10 | SQLite data architecture, privacy, deletion controls, secrets handling | `[ ]` |
@@ -39,6 +39,8 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G119 | 19 | Stitch design prompt + rendered reference screens | `[x]` |
 | G120 | 19a | Light dashboard UI shell implemented (then Reddit-orange colour-only recolour) | `[x]` |
 | G202 | 13 | M2 OpenCode gateway adapter: discovery, session inference, registry, routing, error handling | `[x]` |
+| G203 | 13 | M3 local profile storage, document ingestion (PDF/text/image OCR), verified extraction, user-confirmed merge | `[x]` |
+| G204 | 13 | M4 official-page verification: fetch guards, untrusted-content boundary, structured scholarship records with provenance | `[x]` |
 
 ---
 
@@ -184,6 +186,13 @@ eligible while critical requirements are unknown.
 - Explain relevance, satisfied requirements, uncertainties, and next actions.
 - Distinguish fully funded / tuition waiver / partial / other funding types.
 
+*Implemented in M5 (see [[goals]] §19f and [[achievements]] A12):*
+requirement states map to `satisfied / not_satisfied / unknown / needs checking
+(manual)`; hard requirements are compared before any ordering; ranking is a
+documented deterministic key, not a score; verdicts never say "eligible" and
+never show probabilities. Funding-type ranking policy is deliberately deferred
+(funding is descriptive in records, not a stochastic input).
+
 ## 8. Chat interface and UX (G108)
 
 Desktop chat with:
@@ -263,9 +272,9 @@ replace working components or add unnecessary dependencies without justification
 | -- | --------- | ----- | -------------------- | ------ |
 | G201 | M1 | Repository, project config, desktop shell, configuration handling, basic chat | App launches from a clean checkout; config validates; chat round-trips against a stubbed gateway; tests pass | `[x]` |
 | G202 | M2 | OpenCode gateway adapter, model registration, task routing, error handling | Registry loads; routing picks model per task; unavailable model/rate limit/timeout handled without crash | `[x]` |
-| G203 | M3 | Profiles, document ingestion, OCR, user-confirmed extraction | Profile persisted; marksheet parsed; low-confidence fields flagged; user corrections saved | `[ ]` |
-| G204 | M4 | Source discovery, official-source verification, structured scholarship storage | Scholarship records carry source URLs + timestamps + verification status; unverifiable fields marked unknown | `[ ]` |
-| G205 | M5 | Deterministic eligibility, explainable ranking, cited recommendations | Eligibility states correct on fixtures; ranking reproducible; every claim cites a source | `[ ]` |
+| G203 | M3 | Profiles, document ingestion, OCR, user-confirmed extraction | Profile persisted; marksheet parsed; low-confidence fields flagged; user corrections saved | `[x]` |
+| G204 | M4 | Source discovery, official-source verification, structured scholarship storage | Scholarship records carry source URLs + timestamps + verification status; unverifiable fields marked unknown | `[x]` |
+| G205 | M5 | Deterministic eligibility, explainable ranking, cited recommendations | Eligibility states correct on fixtures; ranking reproducible; every claim cites a source | `[x]` |
 | G206 | M6 | MCP integrations, comparison, saved opportunities, checklists | MCP tools usable behind adapter; comparison and saved items persist | `[ ]` |
 | G207 | M7 | Security review, testing, performance, Windows packaging | Packaged app runs on clean Windows; test suite green; no secrets in bundle | `[ ]` |
 
@@ -422,6 +431,121 @@ legitimate, relevant, realistically attainable scholarships.
 
 ---
 
+## 19d. Profile + document pipeline (G203, 2026-10-20)
+
+- **Storage** (`src/scholarpath/storage.py`): thread-safe SQLite (`scholarpath.db`
+  in `%APPDATA%\ScholarPath`). Documents keep filename, mime, full extracted text,
+  OCR flag, warnings and an extraction JSON that records both what was proposed
+  and what the user applied. Saved via a `BEGIN IMMEDIATE` write lock.
+- **Profile model** (`src/scholarpath/profiles.py`): strict Pydantic model,
+  no `extra` guessing; `merge_confirmed(profile, values)` merges only the fields
+  the user accepted and **never wipes a known value with None**; completion is a
+  share of 12 nothing-invented fields.
+- **Ingestion** (`src/scholarpath/documents.py`): PDF text layer via `pypdf`,
+  plain text/markdown passthrough, images via **Windows OCR** (Foundation.Media.Ocr,
+  pywin32+winsdk direct async call inside the app — no Tesseract install, works
+  with a QApplication present). Problems are warnings on the result, never crashes.
+- **Extraction** (`src/scholarpath/extraction.py`): one gateway call proposes a
+  JSON field map; every proposed value must appear **verbatim** (case-insensitive)
+  in the document text or it is marked "not found in document" with the reason.
+  Nothing unverifiable is applied silently.
+- **UI**: a "My Profile" page (local-only form, Save/Clear, honest feedback) and a
+  "Documents" page (Upload → local parse → proposal → per-value confirm rows with
+  ✓ found / ? not-found markers → "Apply checked values to profile"). The degree
+  combo accepts **free text** (e.g. "Bachelor of Science" from a transcript) so an
+  extracted title is displayed and re-saved verbatim instead of being wiped by the
+  literal-only dropdown — verified by a form round-trip check. The composer
+  attach button and the "Upload Documents" tile now open the documents page; the
+  sidebar entries are live ("Soon" badges remain only on Scholarships and Saved
+  Opportunities, M4/M6). The right-panel profile card mirrors the stored state
+  (name, degree, GPA, IELTS, countries, completion %).
+- **Window integration**: the body is a `QStackedWidget` (chat / profile /
+  documents); page switching keeps the sidebar highlight, top-bar title and status
+  strip in step; the database closes on exit and ingest threads are cancelled.
+- **Evidence**: 20 extraction tests + 16 storage tests; live end-to-end — OCR read
+  a synthetic marksheet image, the configured gateway proposed 4 fields, all four
+  verified verbatim against the OCR text, merged to a 33% profile and round-tripped
+  through SQLite; a UI-level check confirmed unticked fields stay empty after
+  Apply. Off-screen renders verified both pages visually. **84 pytest tests passing.**
+
+---
+
+## 19e. Official-page verification (G204, 2026-10-20)
+
+- **Honest scope decision first:** this build has **no web-search tool**, so
+  there is no "find me scholarships" step. Discovery ≠ verification is enforced
+  structurally: the user supplies the **official** page URL; the app verifies it.
+  Automatic candidate search stays open pending a search-tool decision
+  ([A11], open question).
+- **Retrieval** (`src/scholarpath/sources.py`): stdlib-only (no new dependency)
+  — http/https only (file:/ftp:/credentials refused), non-HTML content refused,
+  2 MB byte cap with an explicit "truncated" warning, redirect final-URL
+  tracking, script/style stripped to text, sha256 + retrieval timestamp captured.
+- **Untrusted-input boundary** (early G109 discipline): fetched page text is
+  data only; the extraction prompt wraps it in `<<<PAGE>>>` markers and tells
+  the model to ignore instructions inside it. Tests assert page content sits
+  inside the marked block.
+- **Verification** (`src/scholarpath/research.py`): the model proposes a
+  16-field scholarship schema (G106 fields: title, institution, country,
+  nationalities, levels, funding, deadline, intake, documents, application URL…);
+  every proposal must be **verbatim** in the page text (`verbatim_in_source`,
+  digit-group-tolerant) or it is reported as unknown. Nothing unverifiable is
+  stored. `parse_model_json` is now parameterized per allowed field set.
+- **Storage**: `scholarship` table with requested/final URL, retrieval
+  timestamp, page sha256, data JSON (values + unknown + warnings), status
+  `page-verified`; full CRUD.
+- **UI**: a fourth page ("Scholarship Pages"): URL input → Read page → draft
+  card with per-value confirm rows (✓ found on page / ? not found) →
+  "Save checked values" → stored record card listing provenance, saved values
+  and the explicitly-unknown fields. Sidebar "Scholarships" and the
+  "Find Scholarships" tile are live with honest labels ("Official pages you
+  paste", "no automatic search").
+- **Evidence**: 21 new tests (fake HTTP server covering every fetch guard +
+  draft verification + storage round-trip), **105 pytest tests passing**; live
+  end-to-end — fetched `chevening.org/scholarships/` (7,043 chars), the gateway
+  proposed 6 fields, **all verbatim** (title, institution, host country,
+  nationalities, degree level, funding coverage), each asserted verbatim against
+  the page text and round-tripped through SQLite.
+
+---
+
+## 19f. Deterministic eligibility engine (G205, 2026-10-20)
+
+- **Engine** (`src/scholarpath/eligibility.py`): pure rule-based Python — no
+  model calls, no probabilities. Five requirement checks against the stored
+  verbatim record values + local profile: nationality (whole-entry list match,
+  word-boundary safe), degree level (keyword reading of both sides), language
+  (IELTS/TOEFL thresholds with alternative pathways), academic GPA (compared
+  **only** on a matching, explicitly stated scale — mismatch is "needs checking",
+  never silently converted), deadline (only unambiguous month-name dates parsed;
+  numeric `01/02/2026`-style dates are never guessed).
+- **States**: `satisfied / not_satisfied / unknown / manual ("needs checking")`
+  per G107; every result carries an explanation plus the page evidence it was
+  read from (cited source = the record's stored page + field value).
+- **Verdict** is honest by construction: "Conflicts with the page as written: …",
+  "Potential only — N requirement(s) need checking…", or "No conflicts found on
+  the checked requirements — confirm on the official page before applying".
+  The word "eligible" never appears in a verdict.
+- **Ranking** (`EligibilityReport.rank_key`): documented deterministic tuple —
+  conflicts first, then fewest open checks, then most satisfied requirements,
+  then title/id tie-break — reproducible, no invented scores. Conflicting
+  records still surface (last), never deleted.
+- **UI** (`src/scholarpath/ui/eligibility_page.py`, fifth page "Eligibility",
+  sidebar + "Check Eligibility" tile live): profile summary line, report cards
+  ordered best-first, per-requirement state chips (green/grey/amber/red) with
+  explanation + truncated page evidence, "Open source page" deep link, auto
+  recompute when profile or records change.
+- **Evidence**: 29 engine tests (per-check includes non-match/unknown/ambiguous
+  cases; verdict never claims eligibility or shows "%"; deterministic ranking
+  asserted twice for reproducibility), **134 pytest tests passing**; live E2E on
+  the real Chevening record from M4 — nationality `satisfied` ("The page lists
+  Nepal"), degree `satisfied` ("one-year master's degrees"), language/academic/
+  deadline honestly `unknown` (the page's verbatim values didn't include
+  thresholds), verdict "Potential only — 3 requirement(s) need checking"; styled
+  full-window render verified.
+
+---
+
 ## Decisions (architectural)
 
 - **2026-10-20 — PySide6-Essentials, not the full PySide6 meta-package.** The
@@ -458,6 +582,28 @@ legitimate, relevant, realistically attainable scholarships.
 - **2026-10-20 — Icon glyphs use `Segoe MDL2 Assets`** (verified present on this
   Windows build). No icon-webfont dependency is added; a missing font degrades to
   tofu, not crashes.
+- **2026-10-20 — M3 extraction is verify-then-confirm, not trust-then-save.** The
+  gateway is allowed to propose field values only; every proposal is checked
+  verbatim against the document text before the UI offers it, and the merge into
+  the stored profile happens only from rows the user ticked (and may have edited).
+  pypdf is preferred over rendering PDFs to images: the text layer is exact, no
+  OCR needed when present.
+- **2026-10-20 — OCR runs in-process via the app's QApplication.** Windows OCR
+  worked fine inside the app process (verified 2026-10-20); the subprocess
+  isolation path is kept only as a crash fallback. `pypdf` and `pywin32` are the
+  only new dependencies (both pure/local).
+- **2026-10-20 — M4 ships verification, not search.** There is no web-search
+  tool configured, so discovery-by-search does not exist; the honest increment
+  is verified reading of official pages the user pastes. The fetch layer is
+  stdlib-only with hard guards (http/https, HTML-only, 2 MB cap, redirect-aware
+  provenance). Page text is untrusted data in every prompt. Fields not
+  verbatim on the page are recorded as unknown — never normalized, never
+  converted, never guessed.
+- **2026-10-20 — One giant-country proposal is kept verbatim.** The Chevening
+  page test showed the model copying a 150-country list verbatim into
+  `eligible_nationalities`. That is correct under "no rewrite without a
+  documented conversion policy"; a structured list format needs its own
+  documented policy (G105) before any normalisation is added.
 
 ## Dependencies to verify before building (open)
 
@@ -468,12 +614,17 @@ legitimate, relevant, realistically attainable scholarships.
 - [~] PySide6 deployment: Qt 6.12.0 works, `QPlainTextEdit.setPlaceholderText`
       exists (no workaround needed), Essentials-only venv is 260 MB. PyInstaller
       bundling still unproven.
-- [ ] OCR stack choice (Tesseract vs RapidOCR/PaddleOCR) — Windows install burden,
-      offline behaviour, licence.
+- [x] OCR stack choice: **resolved 2026-10-20** — Windows built-in OCR
+      (Foundation.Media.Ocr via pywin32+winsdk) for images, `pypdf` for PDF text
+      layers. No Tesseract/PaddleOCR install burden; offline; degrades to explicit
+      warnings when a page has no text or no installed OCR language. (goals.md
+      §19d, [[A10]].)
 - [~] `mcp` Python SDK: globally installed 1.25.0 is broken; must be pinned and
       import-tested inside the project venv before M6.
-- [ ] Web research tool: search API availability, terms, cost; whether an MCP search
-      server is required.
+- [~] Web research tool: automatic candidate search still needs a search API /
+      MCP server decision (cost, terms). Page verification itself is live
+      without it — official URLs pasted by the user are fetched and verified
+      (`goals.md` §19e, [[A11]]).
 - [ ] Supported Python version for packaging (3.11 vs 3.13) — 3.11 is the current target.
 
 ## Open questions

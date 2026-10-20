@@ -18,16 +18,150 @@ is finished, not when it is started. Each entry names the goal it satisfies
 
 - Repository: populated and pushed to `https://github.com/RajeshKc777/ScholarPath-`
   (`main`).
-- Working app: **yes** — M1 launches with the light Reddit-orange dashboard;
-  from M2 the chat runs **live through the local OpenCode service** (adapter +
-  registry + routing), with a provider-neutral UI and honest copy everywhere.
+- Working app: **yes** — M1 shell + M2 live chat + M3 profile/documents + M4
+  scholarship page verification + **M5 deterministic eligibility**: five
+  rule-based checks of every saved record against the local profile, honest
+  unknowns, deterministic ranking, no probabilities.
 - Licence: proprietary, source-available, view-only (`LICENSE`).
-- Tests: **57 passing** (`pytest`, ~9 s) — 25 original, 32 new for the gateway.
-- Next milestone: **M3** (G203) — profiles, document ingestion, OCR.
+- Tests: **134 passing** (`pytest`, ~11 s) — 25 original, 32 gateway, 20
+  extraction, 16 storage, 10 sources, 11 research, 29 eligibility, plus live
+  round-trips.
+- Next milestone: **M6** (G206) — MCP adapter, comparison, saved list.
 
 ---
 
 ## Log (newest first)
+
+### 2026-10-20 — A12 — Milestone 5 complete: deterministic eligibility + ranked reports
+
+**Satisfies:** G205, G107 (all bullet points except funding-type ranking, deferred
+with reason); honours the "never call a student eligible with unknowns" rule.
+
+Built:
+
+| Area | File(s) |
+| ---- | ------- |
+| Rule-based checks: nationality, degree, language, academic GPA, deadline | `src/scholarpath/eligibility.py` |
+| States + explanations + page evidence per requirement (`RequirementResult`) | `src/scholarpath/eligibility.py` |
+| Honest verdicts (conflicts / potential only / no conflicts found) | `src/scholarpath/eligibility.py` |
+| Deterministic ranking key (conflicts → open checks → satisfied → title/id) | `src/scholarpath/eligibility.py` |
+| Eligibility page: profile summary, ranked report cards, evidence, source link | `src/scholarpath/ui/eligibility_page.py` |
+| State chips (CapLive/CapGrey/CapAmber/CapFail) + link button styles | `src/scholarpath/ui/theme.py` |
+| Sidebar "Eligibility" + live "Check Eligibility" tile, page-aware copy | `src/scholarpath/ui/main_window.py` |
+
+Key honesty behaviours:
+
+- No model calls anywhere in the engine — pure deterministic Python.
+- GPA compared **only** when the page states its scale and it matches the
+  profile's; a scale difference is reported, never silently converted.
+- Only unambiguous month-name deadlines parsed; `01/02/2026`-style ambiguity
+  is "needs checking", never guessed.
+- The verdict strings never contain "eligible" and never show a percentage.
+- Long page evidence is truncated in the UI (200 chars) to keep citations
+  readable (the 150-country Chevening list case).
+
+**Evidence:** 29 new engine tests; full suite **134 pytest tests passing**
+(~11 s); live E2E against the real M4 Chevening record — nationality satisfied
+("The page lists Nepal"), degree satisfied ("one-year master's degrees"),
+language/academic/deadline honestly unknown, verdict "Potential only — 3
+requirement(s) need checking"; themed full-window screenshot verified.
+
+---
+
+### 2026-10-20 — A11 — Milestone 4 complete: official scholarship page verification
+
+**Satisfies:** G204, G106 (source hierarchy principle: only official pages enter
+the record), G109 (untrusted-input boundary), G110 (privacy, local records)
+
+Built:
+
+| Area | File(s) |
+| ---- | ------- |
+| Guarded page fetch (scheme/type/size/redirects, sha256 + timestamps) | `src/scholarpath/sources.py` |
+| 16-field schema, verbatim verification, draft/status | `src/scholarpath/research.py` |
+| Parameterized JSON parse (per-pipeline field sets) | `src/scholarpath/extraction.py` |
+| `scholarship` table + CRUD | `src/scholarpath/storage.py` |
+| Research page (URL → fetch → confirm rows → save/delete) | `src/scholarpath/ui/research_page.py` |
+| Shared confirm-row widget (documents + research) | `src/scholarpath/ui/confirm_row.py` |
+| Sidebar + tile wiring, page-aware copy | `src/scholarpath/ui/main_window.py` |
+| Tests | `tests/test_sources.py`, `tests/test_research.py` |
+
+Verified, not assumed:
+
+- `pytest` → **105 passed** (10 sources + 11 research new; fake HTTP server
+  covers scheme refusal, content-type refusal, 404, redirect final-URL,
+  truncation hash, unloadable host, empty page; draft tests cover kept-verbatim
+  vs unknown split, prompt boundary markers, storage round-trip).
+- **Live end-to-end**: fetched `https://www.chevening.org/scholarships/`
+  (7,043 chars, sha256 recorded); the configured gateway proposed 6 fields —
+  title, institution (FCDO), host country, eligible nationalities, degree
+  levels ("one-year master's degrees"), funding coverage ("fully-funded") —
+  every one asserted verbatim in the page text, then saved as a
+  `page-verified` record with URL + retrieval timestamp + page hash.
+- "No automatic search" is stated in the page lead, tile tooltip and status
+  strip — the honest discovery boundary is part of the UI, not a footnote.
+- Fixed during review: `parse_model_json` was hardwired to profile fields (now
+  parameterized); a BOM slipped into two files through a PowerShell rewrite
+  (caught by syntax check, removed).
+
+Known limits:
+
+- The Chevening page lists no deadline etc. — the model correctly left them
+  null, so the saved record has no unknowns flagged for them; richer pages will
+  exercise the unknown path more (unit-tested).
+- `eligible_nationalities` holds the page's country list verbatim (150+ names);
+  no normalisation until a documented conversion policy exists (G105).
+- No per-field provenance storage (which page text span each value came from) —
+  the sha256 + full field-level verbatim check is the current evidence.
+
+---
+
+### 2026-10-20 — A10 — Milestone 3 complete: profile + document ingestion + confirmed extraction
+
+**Satisfies:** G203, G105 (profile + document support; confirmation), G103, G110 (local-first privacy)
+
+Built:
+
+| Area | File(s) |
+| ---- | ------- |
+| SQLite storage (documents + profile, thread-safe) | `src/scholarpath/storage.py` |
+| Strict profile model + verified merge + completion | `src/scholarpath/profiles.py` |
+| PDF / text / image ingestion with Windows OCR | `src/scholarpath/documents.py` |
+| Gateway prompt, JSON parsing, verbatim verification | `src/scholarpath/extraction.py` |
+| Profile form page (local-only) | `src/scholarpath/ui/profile_page.py` |
+| Upload → propose → confirm → apply page | `src/scholarpath/ui/documents_page.py` |
+| Stacked pages, sidebar wiring, profile mini-card | `src/scholarpath/ui/main_window.py` |
+| Tests | `tests/test_extraction.py`, `tests/test_storage.py` |
+
+Verified, not assumed:
+
+- `pytest` → **84 passed** (16 storage + 20 extraction new; all prior green).
+- **Live end-to-end**: a synthetic marksheet PNG read with Windows OCR (93 chars),
+  the configured gateway proposed student name, degree level, graduation year and
+  GPA — all four verified verbatim against the OCR text, merged (33% complete),
+  round-tripped through SQLite. (OCR misread "GPA" as "CPA"; the model's proposed
+  `3.62 / 4.00` is still literally in the source, so the verification stays honest.)
+- **UI confirm path**: ticking only 2 of 4 rows and calling the page's apply
+  handler saved exactly those two fields; unticked GPA/degree stayed empty.
+- **Profile form round-trip**: a free-text degree title ("Bachelor of Science")
+  survives opening the form and re-saving; the five known options still store
+  their stable keys ("master" etc.). A wipe bug (the old literal-only dropdown
+  silently cleared extracted titles on save) was caught this way and fixed.
+- Fixed during review: documents scroll area painted black (missing viewport QSS),
+  a detached placeholder label left a ghost card, the Apply handler initially did
+  not merge — all corrected and re-verified with off-screen renders.
+- Real-window renders inspected: profile page (form + status strip page-aware) and
+  documents page (provenance text, source preview, green ✓ markers, warning rows).
+
+Known limits:
+
+- Extraction runs on the configured chat model; no dedicated vision/extract model
+  chosen yet. Multi-page PDFs work but heavy documents are untested.
+- No document deletion confirmation dialog; the record (and its confirmed values
+  already merged into the profile) cannot be retracted by deleting the document.
+- Research and eligibility are untouched — M4/M5 per plan.
+
+---
 
 ### 2026-10-20 — A9 · Provider-neutral UI + "Soon" badges (design pass)
 
@@ -282,5 +416,7 @@ pydantic 2.14.1, pytest 9.1.1 — all import-tested.
 
 ## Not yet achieved
 
-- G101, G102, G104–G111, G114 — product capabilities beyond the M2 gateway.
-- Milestones G203–G207.
+- G101, G102, G104, G106 (partial: per-field provenance), G108-G111, G114 -
+  product capabilities beyond the M5 engine.
+- G106 funding-type ranking policy (funding values stay descriptive).
+- Milestones G206-G207 (M6 MCP + comparison + saved list, M7 packaging).
