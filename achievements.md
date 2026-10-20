@@ -18,7 +18,8 @@ is finished, not when it is started. Each entry names the goal it satisfies
 
 - Repository: populated and pushed to `https://github.com/RajeshKc777/ScholarPath-`
   (`main`).
-- Working app: **yes** — M1 launches, chats through the offline stub, reports errors.
+- Working app: **yes** — M1 launches with the new light Reddit-orange dashboard,
+  chats through the offline stub, reports errors.
 - Licence: proprietary, source-available, view-only (`LICENSE`).
 - Tests: **25 passing** (`pytest`, 0.12 s).
 - Next milestone: **M2** (G202) — OpenCode gateway adapter.
@@ -26,6 +27,37 @@ is finished, not when it is started. Each entry names the goal it satisfies
 ---
 
 ## Log (newest first)
+
+### 2026-10-20 — A7 · Light dashboard UI implemented + Reddit-orange recolour
+
+**Satisfies:** G108 (partially — chat UX), G120 (new)
+
+- Rebuilt the M1 Qt shell as a light "AI dashboard"
+  (`src/scholarpath/ui/main_window.py`, `theme.py`):
+  - white sidebar with real milestones (disabled items carry M3/M4/M5/M6 badges),
+  - orange-gradient welcome card "Hello." with wired quick-action tiles,
+  - light-blue assistant cards + orange gradient user bubbles, hover "Copy",
+  - academic-profile panel showing real state ("Not set up yet", `—` values,
+    0% complete — nothing invented),
+  - "What works today" capability card, slim status strip with gateway/model/
+    message count and elided config path,
+  - `Segoe MDL2 Assets` glyphs for nav/icons (verified installed).
+- Second pass (same day): user-shared Reddit-style recolour — **palette swapped
+  in `theme.py` only, structure untouched**: `#FF4500`-family orange accents,
+  white chrome, orange user bubble / send button, blue assistant bubble.
+- Evidence: screenshots at 1440×900 empty + conversation and 1120×760 — no
+  clipping, chips/tiles wrap via `FlowLayout`, `pytest` **25 passing**, app
+  launches. `docs/screenshot.png` replaced with the live Reddit-colour build.
+- Honesty carried over: every unbuilt feature is labelled with its milestone;
+  clicking a future tile posts "Not available in this build — … arrives in
+  Milestone N." Settings opens the real config folder (`QDesktopServices`).
+
+Known limits: the earlier muted/editorial brief (`antigravityUI.md`) now describes
+the *old* look — kept as historical contract, superseded by `goals.md` §19a and
+`theme.py`. Suggestion chips were replaced by the four action tiles. Chat copy
+still comes from the deterministic stub; nothing pretends research happened.
+
+---
 
 ### 2026-10-20 — A6 · Stitch design prompts + rendered references
 

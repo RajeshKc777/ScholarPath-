@@ -1,5 +1,11 @@
 # Stitch Prompt — ScholarPath AI UI
 
+> **Status 2026-10-20: historical.** The muted palette these prompts describe was
+> superseded in the implemented app by the light dashboard + Reddit-orange
+> recolour (see `goals.md` §19a, `theme.py`). Keep this file for reference if
+> Stitch renders are ever wanted again — regenerate with the tokens from
+> `theme.py`, not the block below.
+
 Paste these into Google Stitch, **in order**. Project device type: **Desktop**.
 The design brief itself lives in [`antigravityUI.md`](antigravityUI.md); this file
 is only the prompt layer.

@@ -20,9 +20,9 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 <br>
 
 <div align="center">
-  <img src="docs/screenshot.png" alt="ScholarPath AI desktop window showing a conversation with the offline stub gateway" width="880">
+  <img src="docs/screenshot.png" alt="ScholarPath AI desktop window showing the Reddit-orange dashboard with a conversation with the offline stub gateway" width="880">
   <br>
-  <sub><em>Milestone 1 shell — an honest offline build: it says what it does not do.</em></sub>
+  <sub><em>Milestone 1 shell — an honest offline build, in the new dashboard look: it says what it does not do.</em></sub>
 </div>
 
 ---

@@ -1,5 +1,12 @@
 # Antigravity UI Brief — ScholarPath AI
 
+> **Status 2026-10-20: SUPERSEDED for the shipped shell.** The design described
+> here (muted editorial) was replaced in the running app by the light dashboard
+> and then the Reddit-orange recolour, per the user's references. See
+> `goals.md` §19a (G120) and `src/scholarpath/ui/theme.py` for the implemented
+> tokens. This brief is kept as history; do **not** rebuild the app to match it.
+> Its honesty rules and structural constraints still apply to any future UI pass.
+
 **Audience:** the Antigravity coding agent.
 **Task:** redesign the desktop user interface of ScholarPath AI.
 **Date:** 2026-10-20 · **Repo:** `C:\Users\LOQ\OneDrive\Desktop\ScholarPath`

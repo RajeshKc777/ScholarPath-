@@ -37,6 +37,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G117 | 17 | Presentation-grade README: screenshot, status, quick start, licence block | `[x]` |
 | G118 | 18 | External UI hand-off brief (`antigravityUI.md`) for Antigravity | `[x]` |
 | G119 | 19 | Stitch design prompt + rendered reference screens | `[x]` |
+| G120 | 19a | Light dashboard UI shell implemented (then Reddit-orange colour-only recolour) | `[x]` |
 
 ---
 
@@ -349,6 +350,26 @@ legitimate, relevant, realistically attainable scholarships.
   ("latency", "speed"), extra chips, truncated labels, and a God-object "context"
   control in the composer. Each render needs a cleanup pass before use.
 
+## 19a. Implemented dashboard design (G120, 2026-10-20)
+
+- The M1 shell was rebuilt as a light "AI dashboard": navy → white sidebar kept to
+  accompany the reference, gradient welcome card, four quick-action tiles, chat
+  column, academic-profile panel, slim status strip.
+- Structure mirrors the user's dashboard reference, **minus every fabricated
+  element**: profile fields read "Not set up yet" with `—` values, tiles and nav
+  items carry their milestone badge (M3/M4/M5/M6), disabled items explain when they
+  arrive, and clicking a future feature posts an honest status message instead of
+  pretending to work.
+- 2026-10-20 (second pass): the user supplied a Reddit-style recolour of the same
+  layout and asked for **colour only, no structural changes**. Palette is now
+  white chrome + orange accents (`#FF4500` family), light-blue assistant bubbles,
+  orange user bubble, orange send button. All tokens live in
+  `src/scholarpath/ui/theme.py`; `main_window.py` structure is untouched by the
+  recolour.
+- Layout still overrides the mock where honesty demands it: no fake scholarships,
+  no invented "80% profile complete", no notification badge, no search bar that
+  searches nothing.
+
 ---
 
 ## Decisions (architectural)
@@ -372,6 +393,14 @@ legitimate, relevant, realistically attainable scholarships.
 - **2026-10-20 — Proprietary source-available licence, not MIT/Apache/CC.** The
   owner wants the work visible but not reusable. MIT or GPL would grant exactly
   the rights being withheld, so `LICENSE` is a custom all-rights-reserved notice.
+- **2026-10-20 — Presentation direction after M1:** the muted editorial brief
+  (`antigravityUI.md`) is superseded for the implemented shell by the user's
+  references — first a light dashboard temperature, then the Reddit-orange
+  recolour (colour-only). Honesty constraints (no fabricated data, milestone
+  badges, "no research performed" copy) carry across both passes.
+- **2026-10-20 — Icon glyphs use `Segoe MDL2 Assets`** (verified present on this
+  Windows build). No icon-webfont dependency is added; a missing font degrades to
+  tofu, not crashes.
 
 ## Dependencies to verify before building (open)
 
