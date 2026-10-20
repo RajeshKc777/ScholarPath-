@@ -45,6 +45,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G122 | 21 | Profile facts stated in chat are captured, confirmed per field, and offered for saving (verbatim-verified only) | `[x]` |
 | G123 | 22 | Voice input in chat: speak a prompt or a voice message, speech becomes editable text, then is sent like a normal message (Windows Speech engine, honest privacy copy) | `[x]` |
 | G124 | 23 | Voice engine switched to the Python SpeechRecognition library (no Windows speech toggle, no model download); UI copy states that audio is sent to the transcription service | `[x]` |
+| G125 | 24 | While the mic is recording, the mic button shows an animated listening ripple; the button stays clickable to stop | `[x]` |
 
 ---
 
@@ -775,3 +776,21 @@ Two requirements from the owner, dated, after seeing the running app leak
   honest notice, mic usable again), and the real transcription service proven
   with the library's human-speech sample ("1 2"). Synthetic SAPI audio is
   rejected by the service - not user audio, not a code path.
+
+---
+
+## 19k. Listening ripple on the mic button (G125, 2026-10-20)
+
+- **Owner ask:** after clicking the mic, show a listening-type ripple effect.
+- **Implementation:** custom `MicButton` widget (`ui/mic_button.py`), painted
+  with QPainter - two orange rings expand outward and fade in a 1.4 s loop,
+  the core fills with the accent colour and the glyph turns white. A 16 ms
+  QTimer runs **only** while listening; idle is the quiet ghost button with a
+  hover tint. No image assets, no new dependency.
+- **Bug fixed on the way:** the previous code disabled the mic for the whole
+  capture, so "click again to stop" could never work. The button now stays
+  enabled while listening; the same click cancels and the ripple stops
+  immediately with a "Stopping the microphone..." notice.
+- **Honest states:** the ripple runs only while a capture is real; every
+  failure or result path ends it and restores the idle look - no animation
+  left running, no fake "listening" state.

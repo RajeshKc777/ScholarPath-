@@ -63,6 +63,36 @@ a confirmation card that saved exactly those three fields into the profile.
 
 ---
 
+### 2026-10-20 — A17 — Listening ripple on the mic button (G125)
+
+**Satisfies:** G125 (owner ask: show a listening-type ripple after clicking
+the mic).
+
+Built:
+
+| Area | File(s) |
+| ---- | ------- |
+| Animated mic widget: two expanding fading rings (1.4 s loop), accent core, white glyph; 16 ms timer only while listening | `src/scholarpath/ui/mic_button.py` |
+| Composer wiring: ripple starts with the capture, ends on result/failure/stop | `src/scholarpath/ui/main_window.py` |
+| Ripple geometry tests (bounds, expansion, fade, wrap, half-cycle offset) | `tests/test_mic_button.py` |
+
+Bug fixed on the way: the old start path disabled the mic for the whole
+capture, so "click again to stop" was impossible; the button now stays
+enabled while listening, the same click cancels ("Stopping the microphone…"
+notice), and the ripple stops immediately.
+
+Also restored in this change: image-OCR support (M4) got its `winsdk`
+dependency back after the G124 engine swap dropped it — now declared as the
+optional `ocr` extra in `pyproject.toml` and installed locally (`ocr_available`
+True again; the previously skipped OCR test passes).
+
+**Evidence:** 208 tests passing, no skips. E2E: click starts listening state
+(timer on, stays enabled), two grabbed frames differ (animation live), frames
+show visible pulse rings at 54 px; finished capture inserts text, ripple and
+timer stop, review notice shows.
+
+---
+
 ### 2026-10-20 — A16 — Voice engine swapped to SpeechRecognition (G124)
 
 **Satisfies:** G124 (owner decision after seeing the Windows toggle requirement);

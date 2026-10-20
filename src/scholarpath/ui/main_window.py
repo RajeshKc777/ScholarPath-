@@ -41,6 +41,7 @@ from scholarpath.profiles import Profile
 from scholarpath.storage import Database, database_path
 from scholarpath.ui import theme
 from scholarpath.ui.chat_controller import ChatController, Turn
+from scholarpath.ui.mic_button import MicButton
 from scholarpath.ui.profile_page import DEGREE_LABELS
 from scholarpath.ui.profile_suggestion import ProfileSuggestionCard, _ProfileScanWorker
 from scholarpath.voice import availability, cancel_active, listen_once
@@ -822,12 +823,8 @@ class MainWindow(QMainWindow):
         self.attach.setStyleSheet("font-family: 'Segoe MDL2 Assets'; font-size: 15px;")
         self.attach.clicked.connect(lambda: self.select_page("documents"))
 
-        self.mic_button = QToolButton(self.composer)
-        self.mic_button.setObjectName("Attach")
-        self.mic_button.setText(GLYPH_MIC)
-        self.mic_button.setFixedSize(36, 36)
-        self.mic_button.setCursor(Qt.PointingHandCursor)
-        self.mic_button.setStyleSheet("font-family: 'Segoe MDL2 Assets'; font-size: 15px;")
+        self.mic_button = MicButton(self.composer)
+        self.mic_button.setObjectName("Mic")
         usable, voice_reason = availability()
         self.mic_button.setToolTip(
             "Voice input - click, then speak. Transcribed by the "
@@ -1223,21 +1220,25 @@ class MainWindow(QMainWindow):
         )
         self._refresh_status()
 
-    # -- voice input (G123, G124) ---------------------------------------------
+    # -- voice input (G123, G124, G125) ---------------------------------------
     def _toggle_voice(self) -> None:
         worker = getattr(self, "_voice_worker", None)
         if worker is not None and worker.isRunning():
+            self.mic_button.set_listening(False)  # ripple stops immediately
+            self._notice = "Stopping the microphone\u2026"
+            self._refresh_status()
             cancel_active()  # second click stops the running capture
             return
         usable, reason = availability()
         if not usable:
+            self.mic_button.set_listening(False)
             self._notice = reason
             self._refresh_status()
             return
-        self.mic_button.setEnabled(False)
         self._error_text = None
         self._notice = "Listening \u2014 speak now, then pause. Click again to stop."
         self._voice_notice = True
+        self.mic_button.set_listening(True)  # ripple starts with the capture
         self._refresh_status()
         self._voice_worker = _VoiceWorker()
         self._voice_worker.heard.connect(self._on_voice_heard)
@@ -1245,7 +1246,7 @@ class MainWindow(QMainWindow):
         self._voice_worker.start()
 
     def _set_voice_not_ok(self) -> None:
-        self.mic_button.setEnabled(True)
+        self.mic_button.set_listening(False)
         if getattr(self, "_voice_notice", False):
             self._voice_notice = False
             self._notice = None

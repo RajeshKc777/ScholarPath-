@@ -25,6 +25,11 @@ dependencies = [
 dev = [
     "pytest>=8,<10",
 ]
+# Image-document OCR (M4) uses the Windows OCR engine through winsdk. Optional:
+# without it, text-layer PDFs still parse and image files say OCR is unavailable.
+ocr = [
+    "winsdk>=1.0,<2.0; sys_platform == 'win32'",
+]
 
 [project.scripts]
 scholarpath = "scholarpath.app:main"
