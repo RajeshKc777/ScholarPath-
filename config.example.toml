@@ -1,0 +1,37 @@
+# ScholarPath AI - configuration template
+#
+# Copy this file to the user config location and edit it:
+#   Windows: %APPDATA%\ScholarPath\config.toml
+#   Other:   ~/ScholarPath/config.toml
+#
+# Or let the app create it for you:
+#   scholarpath --init-config
+#
+# This template never contains real credentials. Secrets belong in the
+# environment or in the local config file, never in source control.
+
+# --- Model gateway -----------------------------------------------------------
+[gateway]
+# "stub"     = offline placeholder used by Milestone 1 (no network)
+# "opencode" = real gateway, available from Milestone 2 onward
+provider = "stub"
+
+# Model identifier passed to the gateway when it is implemented.
+# Example: "opencode/glm-5.3-flash-free"
+model = ""
+
+# Per-request timeout in seconds.
+timeout_seconds = 30.0
+
+# Retry attempts for transient failures (rate limits, timeouts).
+retries = 1
+
+# --- Interface ---------------------------------------------------------------
+[ui]
+theme = "dark"          # dark | light | system
+window_width = 1100
+window_height = 720
+
+# --- Diagnostics -------------------------------------------------------------
+# DEBUG | INFO | WARNING | ERROR
+log_level = "INFO"

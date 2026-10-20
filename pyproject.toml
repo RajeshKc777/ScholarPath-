@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scholarpath"
+version = "0.1.0"
+description = "AI scholarship discovery and academic guidance for students"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "LOQ" }]
+dependencies = [
+    "pydantic>=2.9,<3",
+    # Essentials = Core/Gui/Widgets/Network. The full PySide6 meta-package adds
+    # ~400 MB of WebEngine/Pdf/Multimedia this app does not use.
+    "PySide6-Essentials>=6.7,<7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<10",
+]
+
+[project.scripts]
+scholarpath = "scholarpath.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
