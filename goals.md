@@ -20,7 +20,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G3 | 0 | Documentation updated in the same session as the change | `[x]` |
 | G101 | 1 | Product vision: AI scholarship discovery + academic guidance, Windows desktop, local-first | `[ ]` |
 | G102 | 2 | Core principles: accuracy, official sources, explainability, routing, modularity, privacy, cost, UX, quality | `[ ]` |
-| G103 | 3 | Technology direction (Python, PySide6, FastAPI, Pydantic, SQLite, OpenCode, MCP, OCR, PyInstaller, pytest) | `[ ]` |
+| G103 | 3 | Technology direction (Python, PySide6, FastAPI, Pydantic, SQLite, OpenCode, MCP, OCR, PyInstaller, pytest) | `[~]` |
 | G104 | 4 | AI orchestration: 6 modular agents, model registry, task-based routing, failure handling | `[ ]` |
 | G105 | 5 | Conversational onboarding, academic profiles, document upload + confirmed extraction | `[ ]` |
 | G106 | 6 | Scholarship research with source-verification hierarchy and structured records | `[ ]` |
@@ -29,8 +29,8 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G109 | 9 | MCP + tool integration with untrusted-input handling and read-only research default | `[ ]` |
 | G110 | 10 | SQLite data architecture, privacy, deletion controls, secrets handling | `[ ]` |
 | G111 | 11 | Installation workflow and Windows packaging | `[ ]` |
-| G112 | 12 | Development workflow and code-quality rules | `[ ]` |
-| G113 | 13 | Milestones M1–M7, each with acceptance criteria | `[ ]` |
+| G112 | 12 | Development workflow and code-quality rules | `[~]` |
+| G113 | 13 | Milestones M1–M7, each with acceptance criteria | `[~]` |
 | G114 | 14 | Definition of success (10-step student journey) | `[ ]` |
 | G115 | 15 | Agent operating instructions (inspect → summarise → plan → verify → build smallest step) | `[x]` |
 
@@ -253,15 +253,15 @@ replace working components or add unnecessary dependencies without justification
 
 ## 13. Milestones (G113)
 
-| ID | Milestone | Scope | Acceptance criterion (proposed, pending confirmation) |
-| -- | --------- | ----- | ---------------------------------------------------- |
-| G201 | M1 | Repository, project config, desktop shell, configuration handling, basic chat | App launches from a clean checkout; config validates; chat round-trips against a stubbed gateway; tests pass |
-| G202 | M2 | OpenCode gateway adapter, model registration, task routing, error handling | Registry loads; routing picks model per task; unavailable model/rate limit/timeout handled without crash |
-| G203 | M3 | Profiles, document ingestion, OCR, user-confirmed extraction | Profile persisted; marksheet parsed; low-confidence fields flagged; user corrections saved |
-| G204 | M4 | Source discovery, official-source verification, structured scholarship storage | Scholarship records carry source URLs + timestamps + verification status; unverifiable fields marked unknown |
-| G205 | M5 | Deterministic eligibility, explainable ranking, cited recommendations | Eligibility states correct on fixtures; ranking reproducible; every claim cites a source |
-| G206 | M6 | MCP integrations, comparison, saved opportunities, checklists | MCP tools usable behind adapter; comparison and saved items persist |
-| G207 | M7 | Security review, testing, performance, Windows packaging | Packaged app runs on clean Windows; test suite green; no secrets in bundle |
+| ID | Milestone | Scope | Acceptance criterion | Status |
+| -- | --------- | ----- | -------------------- | ------ |
+| G201 | M1 | Repository, project config, desktop shell, configuration handling, basic chat | App launches from a clean checkout; config validates; chat round-trips against a stubbed gateway; tests pass | `[x]` |
+| G202 | M2 | OpenCode gateway adapter, model registration, task routing, error handling | Registry loads; routing picks model per task; unavailable model/rate limit/timeout handled without crash | `[ ]` |
+| G203 | M3 | Profiles, document ingestion, OCR, user-confirmed extraction | Profile persisted; marksheet parsed; low-confidence fields flagged; user corrections saved | `[ ]` |
+| G204 | M4 | Source discovery, official-source verification, structured scholarship storage | Scholarship records carry source URLs + timestamps + verification status; unverifiable fields marked unknown | `[ ]` |
+| G205 | M5 | Deterministic eligibility, explainable ranking, cited recommendations | Eligibility states correct on fixtures; ranking reproducible; every claim cites a source | `[ ]` |
+| G206 | M6 | MCP integrations, comparison, saved opportunities, checklists | MCP tools usable behind adapter; comparison and saved items persist | `[ ]` |
+| G207 | M7 | Security review, testing, performance, Windows packaging | Packaged app runs on clean Windows; test suite green; no secrets in bundle | `[ ]` |
 
 Rule: no milestone starts before the previous one has a working, testable result.
 
@@ -299,18 +299,39 @@ legitimate, relevant, realistically attainable scholarships.
 
 ---
 
+## Decisions (architectural)
+
+- **2026-10-20 — PySide6-Essentials, not the full PySide6 meta-package.** The
+  meta-package drags in WebEngine + Pdf (~400 MB) that nothing uses. Essentials
+  provides Core/Gui/Widgets/Network. Measured venv with tests: **260 MB**.
+- **2026-10-20 — Config is TOML at `%APPDATA%\ScholarPath\config.toml`,** validated
+  with pydantic (`extra="forbid"`). `SCHOLARPATH_HOME` overrides the folder;
+  `--config` overrides the file. A missing file is fine, an invalid one is fatal
+  (exit code 2).
+- **2026-10-20 — Gateway behind the `ModelGateway` protocol.** M1 ships the stub
+  only. Selecting `provider = "opencode"` exits with code 3 and an explicit
+  message — no silent downgrade to the stub.
+- **2026-10-20 — Chat UI re-renders one document per turn.** `insertHtml` merges
+  adjacent block elements in Qt, collapsing speaker labels into body text;
+  rebuilding the document is cheap at chat scale and renders correctly.
+- **2026-10-20 — Repository:** `https://github.com/RajeshKc777/ScholarPath-.git`,
+  branch `main`, local `.venv` (note: this folder is inside OneDrive, so the venv
+  syncs — move it out or exclude it if sync cost matters).
+
 ## Dependencies to verify before building (open)
 
 - [ ] OpenCode gateway: which interface the app calls (local server API vs inference
       endpoint), auth model, rate limits, free-tier constraints.
-- [ ] PySide6 deployment size and PyInstaller compatibility on the chosen Python.
+- [~] PySide6 deployment: Qt 6.12.0 works, `QPlainTextEdit.setPlaceholderText`
+      exists (no workaround needed), Essentials-only venv is 260 MB. PyInstaller
+      bundling still unproven.
 - [ ] OCR stack choice (Tesseract vs RapidOCR/PaddleOCR) — Windows install burden,
       offline behaviour, licence.
-- [ ] `mcp` Python SDK — the globally installed copy is broken (see achievements A2);
-      pin a working version inside the project venv.
+- [~] `mcp` Python SDK: globally installed 1.25.0 is broken; must be pinned and
+      import-tested inside the project venv before M6.
 - [ ] Web research tool: search API availability, terms, cost; whether an MCP search
       server is required.
-- [ ] Supported Python version for packaging (3.11 vs 3.13).
+- [ ] Supported Python version for packaging (3.11 vs 3.13) — 3.11 is the current target.
 
 ## Open questions
 
