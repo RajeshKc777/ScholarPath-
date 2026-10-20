@@ -24,6 +24,13 @@ from scholarpath.gateway.base import (
     Message,
     ModelGateway,
 )
+from scholarpath.identity import (
+    CANONICAL_REPLY,
+    SYSTEM_PROMPT,
+    forbidden_tokens,
+    is_identity_probe,
+    scrub_reply,
+)
 
 logger = logging.getLogger("scholarpath.chat")
 
@@ -133,11 +140,25 @@ class ChatController(QObject):
 
     # -- internals ---------------------------------------------------------
     def _run_turn(self) -> None:
+        latest_user = next(
+            (turn.text for turn in reversed(self._history) if turn.role == "user"),
+            "",
+        )
+        # Identity probes are answered here, deterministically - no model call,
+        # so there is nothing that could disclose it (G116).
+        if is_identity_probe(latest_user):
+            self._append(Turn(role="assistant", text=CANONICAL_REPLY))
+            self._set_busy(False)
+            return
+
         request = ChatRequest(
             messages=[
-                Message(role=turn.role, content=turn.text)  # type: ignore[arg-type]
-                for turn in self._history
-                if turn.role in ("user", "assistant")
+                Message(role="system", content=SYSTEM_PROMPT),
+                *[
+                    Message(role=turn.role, content=turn.text)  # type: ignore[arg-type]
+                    for turn in self._history
+                    if turn.role in ("user", "assistant")
+                ],
             ],
             model=self._model,
         )
@@ -155,9 +176,14 @@ class ChatController(QObject):
             self._append(Turn(role="assistant", text=message, error=True))
             self.failed.emit(message)
         else:
-            self._append(
-                Turn(role="assistant", text=response.text, model=response.model)
-            )
+            tokens = forbidden_tokens(self._gateway.name, self._model or "")
+            text = scrub_reply(response.text, tokens)
+            if text != response.text:
+                logger.warning(
+                    "reply withheld: it named a model/provider token (model=%s)",
+                    response.model,
+                )
+            self._append(Turn(role="assistant", text=text, model=response.model))
         finally:
             self._set_busy(False)
 

@@ -35,12 +35,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from scholarpath.chat_profile import merge_selected
 from scholarpath.config import AppConfig, config_path
 from scholarpath.profiles import Profile
 from scholarpath.storage import Database, database_path
 from scholarpath.ui import theme
 from scholarpath.ui.chat_controller import ChatController, Turn
 from scholarpath.ui.profile_page import DEGREE_LABELS
+from scholarpath.ui.profile_suggestion import ProfileSuggestionCard, _ProfileScanWorker
 
 GLYPH_EDUCATION = "\uE7BE"
 GLYPH_CHAT = "\uE8BD"
@@ -534,20 +536,20 @@ class MainWindow(QMainWindow):
         column.addWidget(eligibility_item)
         self._nav_buttons["eligibility"] = eligibility_item
 
-        inactive = (
-            (GLYPH_STAR, "Saved Opportunities", 6),
+        saved_item = NavButton(GLYPH_STAR, "Saved Opportunities", parent=side)
+        saved_item.setToolTip(
+            "Records you explicitly saved, side-by-side comparison and "
+            "application checklists. Nothing is auto-saved."
         )
-        for glyph, label, number in inactive:
-            item = NavButton(glyph, label, badge="Soon", parent=side)
-            item.setEnabled(False)
-            item.setCursor(Qt.ArrowCursor)
-            item.setToolTip(f"Coming in Milestone {number}. Not available in this build.")
-            column.addWidget(item)
+        saved_item.clicked.connect(lambda: self.select_page("saved"))
+        column.addWidget(saved_item)
+        self._nav_buttons["saved"] = saved_item
 
         settings = NavButton(GLYPH_SETTING, "Settings", parent=side)
-        settings.setToolTip("Open the folder that holds config.toml")
-        settings.clicked.connect(self._open_config_folder)
+        settings.setToolTip("Config, model status, local data, and MCP tools.")
+        settings.clicked.connect(lambda: self.select_page("settings"))
         column.addWidget(settings)
+        self._nav_buttons["settings"] = settings
 
         column.addStretch(1)
 
@@ -667,6 +669,21 @@ class MainWindow(QMainWindow):
         )
         self._pages.addWidget(self._eligibility_page)
 
+        from scholarpath.ui.saved_page import SavedPage
+
+        self._saved_page = SavedPage(self._database, parent=self)
+        self._pages.addWidget(self._saved_page)
+
+        from scholarpath.ui.settings_page import SettingsPage
+
+        self._settings_page = SettingsPage(
+            self._config,
+            gateway_name=lambda: self._controller.gateway_name,
+            stats=self._database.counts,
+            parent=self,
+        )
+        self._pages.addWidget(self._settings_page)
+
         row.addWidget(self._pages, 1)
         return holder
 
@@ -724,8 +741,9 @@ class MainWindow(QMainWindow):
         title.setObjectName("HeroTitle")
         sub = QLabel(
             "I can chat with you, build your academic profile from documents, "
-            "verify scholarship pages you paste here, and run rule-based "
-            "eligibility checks. Automatic search and saved lists arrive later.",
+            "verify scholarship pages you paste here, run rule-based "
+            "eligibility checks, and keep your saved opportunities and "
+            "checklists. Automatic search arrives later.",
             hero,
         )
         sub.setObjectName("HeroSub")
@@ -971,7 +989,8 @@ class MainWindow(QMainWindow):
             ("Documents", "LIVE", True, "Upload, read locally, confirm every value."),
             ("Research", "LIVE", True, "Official pages you paste; search is not built yet."),
             ("Eligibility", "LIVE", True, "Rule-based checks of records vs your profile."),
-            ("Saved list", "Soon", False, "Arrives in Milestone 6 - comparison and bookmarks."),
+            ("Saved list", "LIVE", True, "You save; comparison and checklists included."),
+            ("Tools (MCP)", "Optional", False, "Off by default; configured in config.toml."),
         )
         for name, tag_text, live, tip in rows:
             row = QHBoxLayout()
@@ -1017,6 +1036,8 @@ class MainWindow(QMainWindow):
             "documents": 2,
             "research": 3,
             "eligibility": 4,
+            "saved": 5,
+            "settings": 6,
         }.get(name, 0)
         self._pages.setCurrentIndex(index)
         self._page_name = name
@@ -1026,7 +1047,11 @@ class MainWindow(QMainWindow):
             "documents": "Documents",
             "research": "Scholarship Pages",
             "eligibility": "Eligibility",
+            "saved": "Saved Opportunities",
+            "settings": "Settings",
         }
+        if name == "saved" and self._saved_page is not None:
+            self._saved_page.reload()  # data may have changed since last visit
         self._page_title.setText(titles.get(name, titles["chat"]))
         self._notice = None  # a switch clears stale "not available" notices
         for key, button in self._nav_buttons.items():
@@ -1097,6 +1122,10 @@ class MainWindow(QMainWindow):
             self._documents_page.cancel_worker()
         if self._research_page is not None:
             self._research_page.cancel_worker()
+        if getattr(self, "_settings_page", None) is not None:
+            self._settings_page.shutdown()
+        if getattr(self, "_profile_scan_worker", None) is not None:
+            self._profile_scan_worker.wait(5000)
         self._database.close()
         super().closeEvent(event)
     def _submit(self) -> None:
@@ -1119,10 +1148,53 @@ class MainWindow(QMainWindow):
             self.empty_state.setVisible(False)
         self._turns += 1
         self._notice = None
+        if turn.role == "user":
+            self._last_user_text = turn.text
         widget = TurnWidget(turn, self.transcript.widget())
         self._turns_layout.insertWidget(self._turns_layout.count() - 1, widget)
         self.transcript.verticalScrollBar().setValue(
             self.transcript.verticalScrollBar().maximum()
+        )
+        if turn.role == "assistant" and not turn.error:
+            self._maybe_scan_profile()
+        self._refresh_status()
+
+    # -- chat → profile capture (G117) ---------------------------------------
+    def _maybe_scan_profile(self) -> None:
+        """Offer to save profile facts the student just stated in chat."""
+        message = getattr(self, "_last_user_text", "").strip()
+        if not message:
+            return
+        if getattr(self, "_profile_scan_worker", None) is not None:
+            if self._profile_scan_worker.isRunning():
+                return  # one scan at a time; the reply already landed
+        self._profile_scan_worker = _ProfileScanWorker(
+            message, self._controller.gateway, self._config.gateway.model or None
+        )
+        self._profile_scan_worker.scanned.connect(self._on_profile_scan)
+        self._profile_scan_worker.start()
+
+    def _on_profile_scan(self, updates: dict | None, _error: str) -> None:
+        if not updates:
+            return
+        card = ProfileSuggestionCard(
+            updates, self._apply_profile_suggestion, self.transcript.widget()
+        )
+        self._turns_layout.insertWidget(self._turns_layout.count() - 1, card)
+        self.transcript.verticalScrollBar().setValue(
+            self.transcript.verticalScrollBar().maximum()
+        )
+
+    def _apply_profile_suggestion(self, selected: dict[str, str]) -> None:
+        payload = merge_selected(
+            self._database.load_profile(), selected, selected
+        )
+        self._database.save_profile(payload)
+        self._on_profile_saved()
+        self._notice = (
+            "Saved to your profile \u2014 "
+            + ", ".join(sorted(selected))
+            + ". No need to enter these again."
         )
         self._refresh_status()
 
@@ -1186,6 +1258,10 @@ class MainWindow(QMainWindow):
                 text = (
                     f"{state}  \u00b7  eligibility  \u00b7  rule-based  \u00b7  no probabilities"
                 )
+            elif self._page_name == "saved":
+                text = f"{state}  \u00b7  saved  \u00b7  nothing is auto-saved"
+            elif self._page_name == "settings":
+                text = f"{state}  \u00b7  settings  \u00b7  status only  \u00b7  config stays in config.toml"
             else:
                 text = (
                     f"{state}  \u00b7  chat: {self._controller.chat_mode}  \u00b7  "
@@ -1232,6 +1308,16 @@ class MainWindow(QMainWindow):
             self.subtitle.setText(
                 "Eligibility \u2014 deterministic checks with honest unknowns."
             )
+        elif self._page_name == "saved":
+            self.subtitle.setText(
+                "Saved Opportunities \u2014 side-by-side reading and checklists; "
+                "nothing is auto-saved."
+            )
+        elif self._page_name == "settings":
+            self.subtitle.setText(
+                "Settings \u2014 an honest description of what runs and what "
+                "stays local."
+            )
         elif live:
             self.subtitle.setText(
                 "Model replies are live. Scholarship pages can be verified; "
@@ -1244,8 +1330,8 @@ class MainWindow(QMainWindow):
 
         if live:
             self.hint.setText(
-                "Model replies, page verification and eligibility checks are "
-                "live; automatic search and saved lists are still to come."
+                "Model replies, page verification, eligibility checks and saved "
+                "lists are live; automatic search is still to come."
             )
         else:
             self.hint.setText(

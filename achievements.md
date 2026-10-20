@@ -18,20 +18,82 @@ is finished, not when it is started. Each entry names the goal it satisfies
 
 - Repository: populated and pushed to `https://github.com/RajeshKc777/ScholarPath-`
   (`main`).
-- Working app: **yes** — M1 shell + M2 live chat + M3 profile/documents + M4
-  scholarship page verification + **M5 deterministic eligibility**: five
-  rule-based checks of every saved record against the local profile, honest
-  unknowns, deterministic ranking, no probabilities.
+- Working app: **yes** — M1–M5 plus **M6**: saved opportunities with explicit
+  save toggles, side-by-side comparison, per-record application checklists
+  drafted only from verbatim record values, an honest Settings page, and
+  opt-in read-only MCP tools behind a stdlib adapter. Plus two owner mandates:
+  the model/provider can never be disclosed in chat (probes answered
+  deterministically, leaky replies withheld), and profile facts stated in chat
+  are proposed for saving through an explicit, verbatim-verified confirmation
+  card.
 - Licence: proprietary, source-available, view-only (`LICENSE`).
-- Tests: **134 passing** (`pytest`, ~11 s) — 25 original, 32 gateway, 20
-  extraction, 16 storage, 10 sources, 11 research, 29 eligibility, plus live
-  round-trips.
-- Next milestone: **M6** (G206) — MCP adapter, comparison, saved list.
+- Tests: **197 passing** (`pytest`, ~12 s).
+- Next milestone: **M7** (G207) — security review, performance, Windows packaging.
 
 ---
 
 ## Log (newest first)
 
+### 2026-10-20 — A14 — Provider anonymity (G121) + chat→profile capture (G122)
+
+**Satisfies:** G121, G122 (owner mandates after seeing the running build leak
+its model name in chat).
+
+Built:
+
+| Area | File(s) |
+| ---- | ------- |
+| Canonical reply, sub-verdict probe matcher, scrub-whole-reply guard | `src/scholarpath/identity.py` |
+| System prompt on every chat request; probe interception before any model call | `src/scholarpath/ui/chat_controller.py` |
+| Verbatim-verified chat fact extraction + ticked-merge | `src/scholarpath/chat_profile.py` |
+| Confirmation card in the transcript ("save these to your profile?") | `src/scholarpath/ui/profile_suggestion.py` |
+| Transcript wiring, profile save + panel refresh | `src/scholarpath/ui/main_window.py` |
+
+Honesty behaviours: identity probes never reach the model; a reply that names
+any vendor/model token (the token list is derived from the *running
+configuration*, so changing providers changes nothing structurally) is
+withheld wholesale; only rows the student keeps ticked are saved; values stay
+editable; fabricated values can never survive the verbatim verifier.
+
+**Evidence:** 34 new tests (25 identity + 9 chat-profile + 5 controller incl.
+probe interception and system-prompt injection); live E2E with the real
+gateway — "which model are you?" answered canonically with no disclosure,
+and "my name is Rajesh Katuwala… London Metropolitan… IELTS with 7.0" produced
+a confirmation card that saved exactly those three fields into the profile.
+
+---
+
+### 2026-10-20 — A13 — Milestone 6 complete: saved opportunities, comparison, checklists, MCP
+
+**Satisfies:** G206, G109 (read-only default, untrusted tool output), G108
+(saved list + settings page), G110 (persistence, deletion cascade, no secrets).
+
+Built:
+
+| Area | File(s) |
+| ---- | ------- |
+| Stdlib MCP client: initialize / tools/list / tools/call, read-only guard, size caps | `src/scholarpath/mcp/client.py` |
+| `[mcp]` config section: opt-in, read-only default, unique names, no secrets | `src/scholarpath/config.py`, `config.example.toml` |
+| `saved_opportunity` + `checklist_item` tables, CRUD, cascade on delete | `src/scholarpath/storage.py` |
+| Checklist drafting from verbatim values only | `src/scholarpath/research.py` (`draft_checklist`) |
+| Saved page: list, compare selection, side-by-side grid, per-record checklists | `src/scholarpath/ui/saved_page.py` |
+| Settings page: honest model/data/MCP status, "Check tools" probe | `src/scholarpath/ui/settings_page.py` |
+| Save ★ toggles on Eligibility + Scholarship record cards | `src/scholarpath/ui/eligibility_page.py`, `research_page.py` |
+| Sidebar Saved Opportunities + Settings live; page-aware copy | `src/scholarpath/ui/main_window.py` |
+
+Honesty behaviours: nothing auto-saves; comparison is labelled "a reading aid,
+not a ranking"; checklists contain only verbatim-derived steps plus one fixed
+static line; MCP servers never start unless config enables them, tools that
+don't advertise `readOnlyHint` are refused while `read_only = true`, and tool
+output is size-capped data that is never executed or quoted into prompts.
+
+**Evidence:** 46 new tests (10 MCP with a scripted stdio server over a real
+pipe, 5 config, 5 storage persistence/cascade, 4 checklist drafting); suite
+**197 passing**; UI E2E — save toggle on two records persisted, checklist
+generated and persisted through regeneration (ticks survive), 2-record
+comparison grid rendered, Settings honest off-state rendered.
+
+---
 ### 2026-10-20 — A12 — Milestone 5 complete: deterministic eligibility + ranked reports
 
 **Satisfies:** G205, G107 (all bullet points except funding-type ranking, deferred
@@ -416,7 +478,8 @@ pydantic 2.14.1, pytest 9.1.1 — all import-tested.
 
 ## Not yet achieved
 
-- G101, G102, G104, G106 (partial: per-field provenance), G108-G111, G114 -
-  product capabilities beyond the M5 engine.
+- G101, G102, G104, G106 (partial: per-field provenance), G108 (country
+  filters), G109 (model-side tool use deferred), G111, G114 - product
+  capabilities beyond the M6 pipeline.
 - G106 funding-type ranking policy (funding values stay descriptive).
-- Milestones G206-G207 (M6 MCP + comparison + saved list, M7 packaging).
+- Milestone G207 (M7: security review, performance, Windows packaging).

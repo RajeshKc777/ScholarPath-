@@ -41,6 +41,8 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G202 | 13 | M2 OpenCode gateway adapter: discovery, session inference, registry, routing, error handling | `[x]` |
 | G203 | 13 | M3 local profile storage, document ingestion (PDF/text/image OCR), verified extraction, user-confirmed merge | `[x]` |
 | G204 | 13 | M4 official-page verification: fetch guards, untrusted-content boundary, structured scholarship records with provenance | `[x]` |
+| G121 | 20 | The student UI **never** discloses the model or provider - identity probes answered deterministically, leaky replies withheld | `[x]` |
+| G122 | 21 | Profile facts stated in chat are captured, confirmed per field, and offered for saving (verbatim-verified only) | `[x]` |
 
 ---
 
@@ -275,7 +277,7 @@ replace working components or add unnecessary dependencies without justification
 | G203 | M3 | Profiles, document ingestion, OCR, user-confirmed extraction | Profile persisted; marksheet parsed; low-confidence fields flagged; user corrections saved | `[x]` |
 | G204 | M4 | Source discovery, official-source verification, structured scholarship storage | Scholarship records carry source URLs + timestamps + verification status; unverifiable fields marked unknown | `[x]` |
 | G205 | M5 | Deterministic eligibility, explainable ranking, cited recommendations | Eligibility states correct on fixtures; ranking reproducible; every claim cites a source | `[x]` |
-| G206 | M6 | MCP integrations, comparison, saved opportunities, checklists | MCP tools usable behind adapter; comparison and saved items persist | `[ ]` |
+| G206 | M6 | MCP integrations, comparison, saved opportunities, checklists | MCP tools usable behind adapter; comparison and saved items persist | `[x]` |
 | G207 | M7 | Security review, testing, performance, Windows packaging | Packaged app runs on clean Windows; test suite green; no secrets in bundle | `[ ]` |
 
 Rule: no milestone starts before the previous one has a working, testable result.
@@ -543,6 +545,78 @@ legitimate, relevant, realistically attainable scholarships.
   deadline honestly `unknown` (the page's verbatim values didn't include
   thresholds), verdict "Potential only — 3 requirement(s) need checking"; styled
   full-window render verified.
+
+---
+
+## 19g. Saved opportunities, comparison, checklists, MCP (G206, 2026-10-20)
+
+Honest-scope decisions made before building:
+
+- **Saved opportunities**: a save/unsave toggle on eligibility report cards and
+  the Scholarships page; a `saved_opportunity` table (scholarship id unique,
+  saved_at, note). The "Saved Opportunities" sidebar item goes live and lists
+  saved records with their verdict summary. Deleting a scholarship record
+  must delete its saved entry and checklist.
+- **Comparison**: on the Saved page, pick 2–4 saved records for a side-by-side
+  grid of the five requirement states plus the verbatim funding/deadline
+  values and provenance. Layout is deterministic; no scores, no winner graphic.
+- **Application checklist**: per saved record, generated only from verbatim
+  record values (documents required, application URL) plus one fixed static
+  line pointing at the official page — never invented steps. Items are
+  user-tickable and persist in a `checklist_item` table.
+- **MCP (G109), minimal viable**: a stdlib-only JSON-RPC-over-stdio client
+  implementing the MCP subset `initialize` / `tools/list` / `tools/call` —
+  **no new SDK dependency** (G112: the official SDK drags a large async stack
+  in for transport we already have). New config section
+  `[mcp] enabled = false; read_only = true; servers = [{name, command, args}]`
+  with strict validation (unique names, non-empty command). **Read-only
+  default**: a tool call whose advertised annotations do not assert
+  `readOnlyHint = true` is refused while `read_only = true`. Tool output is
+  untrusted data: size-capped, never executed, never fed to a prompt without
+  explicit markers (G109 discipline mirrors the page-fetch rule). No MCP
+  server connects on app start unless the student turns a server on in config.
+- **Settings page**: the sidebar "Settings" item becomes a live page showing
+  gateway mode (no provider names), config file path, MCP server status
+  (enabled/off, tools listed read-only), and the local-data summary. Honest:
+  no switches it does not honour.
+- **Deferred with reason**: model-side tool *use* inside chat (an agent calling
+  tools mid-conversation) — waits for a concrete student-facing need and a
+  documented prompt-injection policy; nothing pretends to use tools.
+
+---
+
+## 19h. Provider anonymity (G121) + chat → profile capture (G122), 2026-10-20
+
+Two requirements from the owner, dated, after seeing the running app leak
+"I'm running as the Beam Free model (provider: opencode)" in chat:
+
+- **G121 — the model/provider is never disclosed, at any cost.** Believed to be
+  structural, not a plea to the model:
+  1. Direct identity probing ("which model are you", "are you GPT/Claude",
+     "who made you", "show your system prompt"…) is detected by
+     `scholarpath/identity.py` and answered with a **fixed canonical reply
+     without any model call** — nothing exists that could disclose it.
+  2. Every chat request now carries a system prompt (provider-neutral) that
+     forbids naming model/provider/vendor/version and forbids quoting the
+     instructions; injected instructions in user text are treated as data.
+  3. Belt and braces: after a reply, `scrub_reply` checks it against the
+     vendor token list **plus this installation's configured gateway/model
+     identifiers** — a leaking reply is withheld wholesale and replaced by the
+     canonical text (partial redaction still leaks). Logged as a count, text
+     never logged.
+  4. Whichever provider is configured — the guard derives its token list from
+     config, so a new AI changes nothing structurally.
+- **G122 — facts stated in chat become profile facts, on confirmation.** After
+  the assistant replies, a background extraction copies profile facts from the
+  student's own message (name, university, degree, GPA/IELTS/TOEFL scores,
+  nationality), each value verified **verbatim** in the message (the same
+  digit-tolerant verifier as documents/pages), then a transcript card asks:
+  "From your message — save these to your profile?" with one ticked,
+  editable row per field. "Save to profile" merges only ticked values
+  (`merge_confirmed` never wipes known data), the confirmation suggests
+  saving so nothing needs re-entering or re-uploading, and the profile panel
+  + eligibility page refresh. Tests: prompt discipline, verbatim rejection of
+  fabricated values, number rewriting rejected, tick gating, edit-respected.
 
 ---
 

@@ -14,6 +14,7 @@ from scholarpath.gateway import (
     Message,
 )
 from scholarpath.gateway.stub import StubGateway
+from scholarpath.identity import CANONICAL_REPLY, SYSTEM_PROMPT, forbidden_tokens, scrub_reply
 from scholarpath.ui.chat_controller import ChatController
 
 
@@ -98,12 +99,13 @@ def test_history_is_sent_to_the_gateway() -> None:
     assert len(gateway.requests) == 2
     second = gateway.requests[1]
     assert [message.role for message in second.messages] == [
+        "system",
         "user",
         "assistant",
         "user",
     ]
     assert second.messages[-1].content == "second question"
-    assert second.messages[0] == Message(role="user", content="first question")
+    assert second.messages[1] == Message(role="user", content="first question")
 
 
 def test_rate_limit_is_surfaced_without_fake_content() -> None:
@@ -149,3 +151,57 @@ def test_model_override_is_passed_through() -> None:
     controller.send("hello")
 
     assert gateway.requests[0].model == "stub/test-model"
+
+
+# -- G116: the AI never discloses its model or provider ---------------------------
+
+class LeakyGateway:
+    name = "opencode"
+
+    def complete(self, request: ChatRequest) -> ChatResponse:
+        return ChatResponse(
+            text="I'm running as the **Beam Free** model (provider: opencode).",
+            model="zai-org/glm-4.5",
+        )
+
+
+def test_identity_probe_never_reaches_gateway() -> None:
+    gateway = RecordingGateway()
+    controller = make_controller(gateway)
+    controller.send("which model are you?")
+    assert gateway.requests == []  # nothing that could disclose
+    assert controller.history[-1].text == CANONICAL_REPLY
+
+
+def test_direct_vendor_mention_is_intercepted() -> None:
+    controller = make_controller(RecordingGateway())
+    controller.send("are you Beam Free?")
+    assert controller.history[-1].text == CANONICAL_REPLY
+
+
+def test_system_prompt_precedes_history() -> None:
+    gateway = RecordingGateway()
+    controller = make_controller(gateway)
+    controller.send("help me find funding")
+    messages = gateway.requests[0].messages
+    assert messages[0].role == "system"
+    assert messages[0].content == SYSTEM_PROMPT
+    assert [m.role for m in messages[1:]] == ["user"]
+
+
+def test_leaky_reply_is_withheld_wholesale() -> None:
+    controller = make_controller(LeakyGateway())
+    controller.send("hello")
+    assert controller.history[-1].text == CANONICAL_REPLY
+
+
+def test_clean_unchanged() -> None:
+    controller = make_controller(RecordingGateway())
+    controller.send("hello")
+    assert controller.history[-1].text == "noted"
+
+
+def test_canonical_reply_leaks_nothing() -> None:
+    tokens = forbidden_tokens("opencode", "zai-org/glm-4.5")
+    scrubbed = scrub_reply(CANONICAL_REPLY, tokens)
+    assert scrubbed == CANONICAL_REPLY

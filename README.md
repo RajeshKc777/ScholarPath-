@@ -12,7 +12,7 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 ![Status](https://img.shields.io/badge/status-Milestone%204-4f8cff?style=flat-square)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Qt](https://img.shields.io/badge/Qt-6.12-41CD52?style=flat-square&logo=qt&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-134%20passing-2ea043?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-197%20passing-2ea043?style=flat-square)
 ![License](https://img.shields.io/badge/license-view--only%20%C2%B7%20all%20rights%20reserved-b3261e?style=flat-square)
 
 </div>
@@ -59,7 +59,7 @@ built on the opposite rule set.
 | M3 | Profiles, document ingestion, OCR, confirmed extraction | **Done** |
 | M4 | Source discovery, official-source verification, storage | **Done** |
 | M5 | Deterministic eligibility, explainable ranking | **Done** |
-| M6 | MCP tools, comparison, saved opportunities, checklists | Planned |
+| M6 | MCP tools behind adapter, comparison, saved opportunities, checklists | **Done** |
 | M7 | Security review, performance, Windows packaging | Planned |
 
 Full specification: [`goals.md`](goals.md) · Build log: [`achievements.md`](achievements.md)
@@ -89,6 +89,25 @@ Full specification: [`goals.md`](goals.md) · Build log: [`achievements.md`](ach
   it was read from, ranked deterministically — **no model, no probabilities,
   and the word "eligible" is never claimed**; it only reports conflicts, gaps
   and "confirm on the official page".
+- **Saved Opportunities page** — records you explicitly save (a Save ★ toggle
+  on the eligibility and record cards; nothing auto-saves), side-by-side
+  comparison labelled "a reading aid, not a ranking", and per-record
+  application checklists drafted **only** from each page's own wording —
+  if the page doesn't list documents or an application link, no steps are
+  invented.
+- **Chat captures your profile facts** — say "my name is …, I did IELTS 7.0"
+  and every value is verified word-for-word against your own message, shown
+  as an editable confirmation card in the transcript, and saved only to the
+  rows you tick ("no need to re-enter or re-upload these later").
+- **The model behind it stays anonymous** — identity questions ("which model
+  are you?") are answered deterministically without the model seeing them, a
+  provider-neutral system prompt forbids disclosure, and any reply that names
+  a model/provider token is withheld wholesale. Whichever provider is
+  configured, the guard derives its tokens from config.
+- **Tools (MCP) are opt-in and read-only** — off by default; configured in
+  `config.toml` per server. With `read_only = true`, only tools advertising
+  `readOnlyHint` may run; tool output is size-capped data, never instructions.
+  The Settings page shows honest status and can check a server's tool list.
 - Model registry + deterministic task routing (chat/classify/research/extract
   rules) built on the provider's advertised capabilities.
 - Strict configuration: unknown keys and bad values are rejected, not ignored.
@@ -105,6 +124,8 @@ Full specification: [`goals.md`](goals.md) · Build log: [`achievements.md`](ach
   and nothing is presented as verified advice beyond the page text.
 - GPA scale conversion, funding-type ranking, and deadline-reminder features
   are intentionally deferred until there is a documented, honest policy for them.
+- MCP servers never start, and no model uses tools mid-conversation, until a
+  concrete student-facing use and a documented injection policy exist.
 - Extraction is a proposal engine, not an authority: a value the source does not
   literally contain is flagged and never applied without you typing it yourself.
 
@@ -135,7 +156,7 @@ scholarpath --init-config   # write the configuration template, then exit
 scholarpath --config path\to\config.toml
 scholarpath --version
 python -m scholarpath       # equivalent to the console script
-pytest                      # 134 tests, no network required (fake server on loopback)
+pytest                      # 197 tests, no network required (fake server on loopback)
 ```
 
 </details>
@@ -190,13 +211,18 @@ src/scholarpath/
 ├── app.py                 entry point, startup checks, exit codes
 ├── config.py              TOML + pydantic models, strict validation
 ├── logging_setup.py       rotating logs, no payloads
-├── storage.py             SQLite: profiles, documents, extraction records
+├── storage.py             SQLite: profiles, documents, scholarships, saved list, checklists
 ├── profiles.py            strict Profile model, merge_confirmed, completion
 ├── documents.py           PDF text layer (pypdf), plain text, Windows OCR images
 ├── extraction.py          prompt, JSON parsing, verbatim-verification against source
 ├── sources.py             guarded http(s) fetch: caps, content-type, sha256, redirects
 ├── research.py            official-page pipeline: propose → verbatim verify → draft
 ├── eligibility.py         rule-based checks, honest verdicts, deterministic ranking
+├── identity.py            provider anonymity: probe interception + reply withholding
+├── chat_profile.py        chat-stated facts → verbatim-verified profile suggestions
+├── mcp/
+│   ├── __init__.py        exports
+│   └── client.py          opt-in stdio MCP client: initialize/list/call, read-only guard
 ├── gateway/
 │   ├── base.py            Message, ChatRequest/Response, typed errors, Protocol
 │   ├── stub.py            offline, deterministic, self-describing
@@ -209,6 +235,9 @@ src/scholarpath/
     ├── documents_page.py  upload → parse → propose → confirm → apply
     ├── research_page.py   official-page verification: URL → fields → save with provenance
     ├── eligibility_page.py ranked rule-based eligibility reports with cited evidence
+    ├── saved_page.py       saved list, comparison grid, application checklists
+    ├── settings_page.py    honest status: model, local data, MCP tools
+    ├── profile_suggestion.py transcript card confirming chat-stated facts
     ├── confirm_row.py     shared per-value confirm row (tick, edit, marker)
     ├── theme.py           light Reddit-orange palette and widget styles
     └── main_window.py     stacked pages, sidebar, transcript, status strip
@@ -246,8 +275,17 @@ the same discipline — business logic stays testable without a network or a mod
   same way. Files and the fetching of pages happen model-free on your machine.
 - Fetching a page is a normal web visit by this app (its User-Agent is
   `ScholarPath-AI/0.1`); the site sees it like any other visitor.
+- Facts you type into chat are sent to the model service twice: once for the
+  reply, and once as a marked, data-only extraction task whose only allowed
+  output is values verbatim from your own words. A suggestion is then shown
+  to you; nothing is saved to your profile without your tick.
+- The privacy disclosure rule runs in code, not good intentions: identity
+  probes never reach the model, and a leaking reply is withheld wholesale.
+- MCP servers are opt-in, read-only by default, and their output is treated
+  exactly like fetched web content: data, capped, never executed.
 - Nothing is uploaded to a ScholarPath server — there isn't one. Deletion
-  controls live on the profile, documents, and research pages.
+  controls live on the profile, documents, and research pages; deleting a
+  scholarship record also removes its saved entry and checklist items.
 
 ---
 
