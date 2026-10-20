@@ -27,6 +27,30 @@ is finished, not when it is started. Each entry names the goal it satisfies
 
 ## Log (newest first)
 
+### 2026-10-20 — A6 · Stitch design prompts + rendered references
+
+**Satisfies:** G119
+
+- `stitch-prompt.md` — project setup prompt, three screen prompts (empty state,
+  conversation + error, read-only settings), an iteration table for common drift,
+  and guardrails.
+- Generated in Stitch project `projects/551533196934687083` (`ScholarPath AI UI`):
+  - empty state → `screens/d548bb6780ae4bcbbb7703972a44f5f0`
+  - conversation + error → `screens/7714757823734a27a758c521bff36c0a`
+- Committed as `docs/stitch-empty-state.png` (600×480 preview) and
+  `docs/stitch-conversation.png`. Cleaned one render pass: removed an invented
+  header label, a stray fourth chip, a "CONTEXT" control, latency metrics, and
+  placeholder paths.
+
+Verified: both screenshots downloaded and inspected; they match the brief's palette,
+hierarchy and honesty rules (no scholarships, no fake progress).
+
+Known limits: Stitch renders a web approximation, not Qt. Labels truncate at this
+preview size, and the settings screen was prompted but not generated. The PNGs are a
+visual reference — `antigravityUI.md` remains the contract.
+
+---
+
 ### 2026-10-20 — A5 · UI hand-off brief for Antigravity
 
 **Satisfies:** G118

@@ -36,6 +36,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G116 | 16 | Public read-only repository: proprietary licence, no external contributions | `[x]` |
 | G117 | 17 | Presentation-grade README: screenshot, status, quick start, licence block | `[x]` |
 | G118 | 18 | External UI hand-off brief (`antigravityUI.md`) for Antigravity | `[x]` |
+| G119 | 19 | Stitch design prompt + rendered reference screens | `[x]` |
 
 ---
 
@@ -323,7 +324,6 @@ legitimate, relevant, realistically attainable scholarships.
   can mistake the shell for a working scholarship engine.
 
 ## 18. External UI hand-off (G118)
-
 - `antigravityUI.md` is the brief handed to the Antigravity coding agent to rebuild
   the presentation layer. It restates the M1 inventory, design tokens (palette,
   type scale, spacing), screen-by-screen states, copy rules, accessibility, and an
@@ -334,6 +334,20 @@ legitimate, relevant, realistically attainable scholarships.
   simulated work, no new runtime dependencies, no web view (Essentials only).
 - UI work delivered against the brief is accepted only when its §8 checklist is
   satisfied **and** `pytest` stays green; then it is logged here as an `An` entry.
+
+## 19. Design reference (G119)
+
+- `stitch-prompt.md` holds the copy-paste prompts for Google Stitch: a style block
+  plus one prompt per screen (empty state, conversation + error, settings), and a
+  table of iteration prompts for common drift.
+- Rendered screens are committed as `docs/stitch-empty-state.png` and
+  `docs/stitch-conversation.png` (Stitch project `551533196934687083`).
+- These are **references, not specifications**. Tokens in this file and
+  `antigravityUI.md` override anything the renderer invents; the generated HTML is
+  never shipped (the app is Qt, not a web view).
+- Observed drift to audit every render: invented micro-labels, invented metrics
+  ("latency", "speed"), extra chips, truncated labels, and a God-object "context"
+  control in the composer. Each render needs a cleanup pass before use.
 
 ---
 

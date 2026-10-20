@@ -88,6 +88,10 @@ quiet, precise, and adult. No gradients-as-decoration, no neon, no glassmorphism
 **Reference points:** Linear's restraint, Arc's typography, a well-set PDF report.
 Think "financial document you can trust", not "AI product landing page".
 
+Rendered references (Stitch, M1 scope): `docs/stitch-empty-state.png` and
+`docs/stitch-conversation.png`. Match their hierarchy and restraint; ignore the
+residual glyph artifacts.
+
 ### Tokens (use exactly these; put them in `ui/theme.py`)
 
 | Token | Value | Use |
