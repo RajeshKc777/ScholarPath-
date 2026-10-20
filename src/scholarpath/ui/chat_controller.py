@@ -93,6 +93,11 @@ class ChatController(QObject):
         return self._gateway.name
 
     @property
+    def gateway(self) -> ModelGateway:
+        """Direct access for features that run their own gateway calls (M3)."""
+        return self._gateway
+
+    @property
     def chat_mode(self) -> str:
         """Student-facing mode label ("live" / "offline"); no provider names."""
         return "live" if self._gateway.name != "stub" else "offline"
