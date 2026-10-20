@@ -275,12 +275,20 @@ Visual
 ## 9. Deliverables
 
 1. Code changes inside `src/scholarpath/ui/` (plus `tests/` if you add pure helpers).
-2. Updated `docs/screenshot.png` — capture with:
-   ```powershell
-   .\.venv\Scripts\python.exe -c "from PySide6.QtWidgets import QApplication; ..."
+2. Updated `docs/screenshot.png` — a real capture of the running window, not a
+   mock-up. Pattern that works in this repo (window must be shown, events pumped,
+   then grabbed):
+
+   ```python
+   app = QApplication([])
+   window = MainWindow(ChatController(StubGateway(), dispatch=lambda work: work()), AppConfig())
+   window.resize(1240, 820)
+   window.show()
+   controller.send("Your sample question")
+   for _ in range(8):
+       app.processEvents()
+   window.grab().save("docs/screenshot.png")
    ```
-   (see `achievements.md` A4 for the exact grab pattern; window must be shown and
-   `processEvents()` looped before `grab()`).
 3. `goals.md` — add the new requirement row and mark it done.
 4. `achievements.md` — new `An` entry: what changed, evidence, limits.
 5. `README.md` — only the screenshot/feature wording if it actually changed.
