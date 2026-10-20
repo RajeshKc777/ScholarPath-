@@ -214,3 +214,71 @@ def test_image_ocr_reads_rendered_text(tmp_path: Path) -> None:
 
     verified = build_draft("marksheet.png", draft_source, {"student_name": "Ram Bahadur Thapa"})
     assert verified.fields[0].verified
+
+# -- M6: saved opportunities + checklists ----------------------------------------
+
+def _seed(database: Database, title: str = "Grant A") -> int:
+    return database.save_scholarship(
+        values={"title": title},
+        unknown=[],
+        requested_url="https://example.edu/a",
+        final_url="https://example.edu/a",
+        retrieved_at="2026-10-20T10:00:00",
+        page_sha256="abc",
+        page_title=title,
+        warnings=[],
+    )
+
+
+def test_save_unsave_round_trip(db: Database) -> None:
+    assert db.is_saved(1) is False
+    assert db.saved_opportunity_ids() == []
+    sid = _seed(db)
+    db.save_opportunity(sid, note="fallback choice")
+    assert db.is_saved(sid) is True
+    assert db.saved_opportunity_ids() == [sid]
+    db.unsave_opportunity(sid)
+    assert db.is_saved(sid) is False
+
+
+def test_re_saving_replaces_note(db: Database) -> None:
+    sid = _seed(db)
+    db.save_opportunity(sid, note="first")
+    db.save_opportunity(sid, note="second")
+    ids = db.saved_opportunity_ids()
+    assert ids == [sid]
+    assert db.is_saved(sid)
+
+
+def test_delete_scholarship_cascades_to_saved_and_checklist(db: Database) -> None:
+    sid = _seed(db)
+    db.save_opportunity(sid)
+    db.replace_checklist(sid, ["Passport copy"])
+    items = db.checklist_items(sid)
+    assert len(items) == 1
+    assert db.delete_scholarship(sid) is True
+    assert db.is_saved(sid) is False
+    assert db.checklist_items(sid) == []
+
+
+def test_checklist_round_trip_and_tick_survival(db: Database) -> None:
+    sid = _seed(db)
+    db.replace_checklist(sid, ["Passport copy", "Transcript"])
+    items = db.checklist_items(sid)
+    assert [item["text"] for item in items] == ["Passport copy", "Transcript"]
+    assert all(item["done"] == 0 for item in items)
+    db.set_checklist_done(items[0]["id"], True)
+    # Re-generate with one surviving and one new item: the tick must survive.
+    db.replace_checklist(sid, ["Passport copy", "Reference letter"])
+    items = db.checklist_items(sid)
+    ticks = {item["text"]: item["done"] for item in items}
+    assert ticks == {"Passport copy": 1, "Reference letter": 0}
+
+
+def test_checklist_isolated_between_records(db: Database) -> None:
+    first = _seed(db)
+    second = _seed(db, "Grant B")
+    db.replace_checklist(first, ["A item"])
+    db.replace_checklist(second, ["B item"])
+    assert [item["text"] for item in db.checklist_items(first)] == ["A item"]
+    assert [item["text"] for item in db.checklist_items(second)] == ["B item"]

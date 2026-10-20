@@ -181,3 +181,37 @@ def record_status(draft: ScholarshipDraft) -> str:
     verified = len(draft.verified_values())
     unknown = len(draft.unknown_fields())
     return f"{verified} verified field(s), {unknown} unknown"
+
+
+# -- application checklist drafting (M6) ------------------------------------------
+
+CHECKLIST_STATIC_ITEM = "Confirm the details on the official page, then apply there"
+
+
+def draft_checklist(values: dict[str, str]) -> list[str]:
+    """Application checklist steps derived ONLY from verbatim record values.
+
+    - `required_documents` values are split on line breaks / semicolons into
+      one item each (no rewriting, no new wording around them beyond a
+      neutral "prepare: " prefix).
+    - If an `application_url` is recorded, one static step points at applying
+      on the official page (fixed constant, same text for every record).
+    - Anything else is deliberately NOT invented: no essays, no interviews,
+      no guesses about the process.
+    """
+    items: list[str] = []
+    documents = values.get("required_documents", "").strip()
+    if documents:
+        for part in re.split(r"[;\n]+", documents):
+            entry = part.strip().rstrip(".")
+            if entry:
+                items.append(f"Prepare: {entry}")
+    if values.get("application_url", "").strip():
+        items.append(CHECKLIST_STATIC_ITEM)
+    seen: set[str] = set()
+    unique: list[str] = []
+    for item in items:
+        if item.casefold() not in seen:
+            seen.add(item.casefold())
+            unique.append(item)
+    return unique[:25]

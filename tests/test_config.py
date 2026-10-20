@@ -115,3 +115,60 @@ def test_init_config_writes_template_once(tmp_path: Path, monkeypatch: pytest.Mo
 
     init_config(overwrite=True)
     assert "[gateway]" in written.read_text(encoding="utf-8")
+
+
+# -- MCP config (G109) ------------------------------------------------------------
+
+def test_mcp_defaults_are_off_and_read_only() -> None:
+    config = load_config(None)  # missing file
+    assert config.mcp.enabled is False
+    assert config.mcp.read_only is True
+    assert config.mcp.servers == []
+
+
+def test_mcp_section_parses(tmp_path: Path) -> None:
+    path = tmp_path / "config.toml"
+    path.write_text(
+        "[mcp]\n"
+        'enabled = false\n'
+        "\n"
+        "[[mcp.servers]]\n"
+        'name = "docs"\n'
+        'command = "python"\n'
+        'args = ["-m", "docs_server"]\n',
+        encoding="utf-8",
+    )
+    config = load_config(path)
+    assert len(config.mcp.servers) == 1
+    assert config.mcp.servers[0].name == "docs"
+    assert config.mcp.servers[0].enabled is False
+
+
+def test_mcp_duplicate_server_names_rejected(tmp_path: Path) -> None:
+    path = tmp_path / "config.toml"
+    path.write_text(
+        "[[mcp.servers]]\n"
+        'name = "same"\n'
+        'command = "a"\n'
+        "\n"
+        "[[mcp.servers]]\n"
+        'name = "same"\n'
+        'command = "b"\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(path)
+    assert "unique" in str(excinfo.value)
+
+
+def test_mcp_empty_command_rejected(tmp_path: Path) -> None:
+    path = tmp_path / "config.toml"
+    path.write_text(
+        "[[mcp.servers]]\n"
+        'name = "ghost"\n'
+        'command = ""\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(path)
+    assert "command" in str(excinfo.value)

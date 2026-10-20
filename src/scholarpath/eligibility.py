@@ -19,7 +19,7 @@ and open checks only.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Iterable
 
@@ -53,6 +53,9 @@ class EligibilityReport:
     source_url: str
     retrieved_at: str
     requirements: tuple[RequirementResult, ...]
+    # The verbatim record values this report was computed from - the citation
+    # base for every state above (empty when a row carried no data).
+    values: dict = field(default_factory=dict)
 
     def state_of(self, key: str) -> str:
         for requirement in self.requirements:
@@ -428,6 +431,7 @@ def evaluate(
         or scholarship_row.get("requested_url", ""),
         retrieved_at=scholarship_row.get("retrieved_at", ""),
         requirements=tuple(checks),
+        values=dict(values),
     )
 
 

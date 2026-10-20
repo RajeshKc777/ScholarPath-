@@ -231,11 +231,17 @@ class DraftCard(QFrame):
 
 
 class SavedScholarshipCard(QFrame):
-    """A stored record: provenance, saved values, unknowns, delete."""
+    """A stored record: provenance, saved values, unknowns, save + delete."""
 
     deleted = Signal(int)
+    save_toggled = Signal(int, bool)  # record id, want_saved
 
-    def __init__(self, row: dict, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        row: dict,
+        is_saved: bool = False,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self._id = int(row["id"])
         self.setObjectName("DocCard")
@@ -255,6 +261,15 @@ class SavedScholarshipCard(QFrame):
         meta.setObjectName("DocMeta")
         meta.setWordWrap(True)
         head.addWidget(meta)
+        save = QPushButton("Save ★" if not is_saved else "Saved ✓ (remove)", self)
+        save.setObjectName("LinkButton" if not is_saved else "GhostButton")
+        save.setToolTip(
+            "Add to Saved Opportunities. Nothing is ever saved automatically."
+        )
+        save.clicked.connect(
+            lambda: self.save_toggled.emit(self._id, save.objectName() == "LinkButton")
+        )
+        head.addWidget(save)
         delete = QPushButton("Delete", self)
         delete.setObjectName("GhostButton")
         delete.clicked.connect(lambda: self.deleted.emit(self._id))
@@ -450,9 +465,19 @@ class ResearchPage(QWidget):
             card.discarded.connect(self.reload)
             self._list.insertWidget(self._list.count() - 1, card)
         for row in rows:
-            item = SavedScholarshipCard(row, self)
+            item = SavedScholarshipCard(
+                row, is_saved=self._database.is_saved(int(row["id"])), parent=self
+            )
             item.deleted.connect(self._on_delete)
+            item.save_toggled.connect(self._on_save_toggle)
             self._list.insertWidget(self._list.count() - 1, item)
+
+    def _on_save_toggle(self, record_id: int, want_saved: bool) -> None:
+        if want_saved:
+            self._database.save_opportunity(record_id)
+        else:
+            self._database.unsave_opportunity(record_id)
+        self.reload()
 
     # -- persistence ---------------------------------------------------------
     def _on_save_card(self, verification: PageVerification) -> None:

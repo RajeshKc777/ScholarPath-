@@ -11,6 +11,7 @@ import tomllib
 from pathlib import Path
 from typing import Literal
 
+import pydantic
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 APP_NAME = "ScholarPath"
@@ -45,11 +46,41 @@ class UIConfig(BaseModel):
     window_height: int = Field(default=720, ge=600, le=3000)
 
 
+class McpServerConfig(BaseModel):
+    """One configured MCP server (stdio command). Never auto-enabled."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1)
+    command: str = Field(min_length=1)
+    args: list[str] = []
+    enabled: bool = False
+
+
+class McpConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    # Read-only research default (G109): tools not advertising readOnlyHint
+    # are refused while this is true.
+    read_only: bool = True
+    servers: list[McpServerConfig] = []
+
+    @pydantic.field_validator("servers")
+    @classmethod
+    def _unique_names(cls, value: list[McpServerConfig]) -> list[McpServerConfig]:
+        names = [server.name for server in value]
+        if len(names) != len(set(names)):
+            raise ValueError("MCP server names must be unique")
+        return value
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
+    mcp: McpConfig = Field(default_factory=McpConfig)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
 

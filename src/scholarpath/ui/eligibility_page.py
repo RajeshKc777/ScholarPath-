@@ -79,7 +79,14 @@ class RequirementRow(QWidget):
 
 
 class ReportCard(QFrame):
-    def __init__(self, report, open_source: Callable[[str], None], parent=None) -> None:
+    def __init__(
+        self,
+        report,
+        open_source: Callable[[str], None],
+        on_save: Callable[[int, bool], None],
+        is_saved: bool = False,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
         self._report = report
         self.setObjectName("DocCard")
@@ -106,6 +113,17 @@ class ReportCard(QFrame):
         meta.setObjectName("DocMeta")
         foot.addWidget(meta)
         foot.addStretch(1)
+        record_id = report.scholarship_id
+        save = QPushButton("Save ★" if not is_saved else "Saved ✓ (remove)", self)
+        save.setObjectName("LinkButton" if not is_saved else "GhostButton")
+        save.setCursor(Qt.PointingHandCursor)
+        save.setToolTip(
+            "Add to Saved Opportunities. Nothing is ever saved automatically."
+        )
+        save.clicked.connect(
+            lambda: on_save(record_id, save.objectName() == "LinkButton")
+        )
+        foot.addWidget(save)
         if report.source_url:
             link = QPushButton("Open source page", self)
             link.setObjectName("LinkButton")
@@ -208,8 +226,20 @@ class EligibilityPage(QWidget):
             self._summary.setText(f"Checking against your profile \u2014 {shown}.")
         reports = evaluate_all(payload, rows)
         for report in reports:
-            card = ReportCard(report, self._open_url, self)
+            card = ReportCard(
+                report,
+                self._open_url,
+                self._toggle_save,
+                is_saved=self._database.is_saved(report.scholarship_id),
+            )
             self._list.insertWidget(self._list.count() - 1, card)
+
+    def _toggle_save(self, record_id: int, save: bool) -> None:
+        if save:
+            self._database.save_opportunity(record_id)
+        else:
+            self._database.unsave_opportunity(record_id)
+        self.reload()
 
     def _open_url(self, url: str) -> None:
         QDesktopServices.openUrl(QUrl(url))

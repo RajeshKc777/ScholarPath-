@@ -9,9 +9,11 @@ import pytest
 from scholarpath.extraction import parse_model_json
 from scholarpath.gateway.base import ChatResponse, ModelGateway
 from scholarpath.research import (
+    CHECKLIST_STATIC_ITEM,
     SCHOLARSHIP_FIELD_NAMES,
     build_scholarship_draft,
     build_scholarship_prompt,
+    draft_checklist,
     is_probable_page_url,
     record_status,
     verify_page,
@@ -205,3 +207,40 @@ def test_pipeline_end_to_end_with_fake_gateway() -> None:
     assert draft.verified_values()["deadline"] == "1 February 2026"
     assert "stipend" in draft.unknown_fields()
     assert draft.page_title == "BEST GRANT 2026"
+
+
+# -- checklist drafting (M6) -------------------------------------------------------
+
+def test_draft_checklist_comes_only_from_record_values() -> None:
+    items = draft_checklist(
+        {
+            "required_documents": "Academic transcript\n- Two references\nPassport scan",
+            "application_url": "https://apply.example.edu/form",
+        }
+    )
+    assert items == [
+        "Prepare: Academic transcript",
+        "Prepare: - Two references",
+        "Prepare: Passport scan",
+        CHECKLIST_STATIC_ITEM,
+    ]
+
+
+def test_draft_checklist_empty_when_record_silent() -> None:
+    assert draft_checklist({"title": "Only a title"}) == []
+
+
+def test_draft_checklist_never_invents_process_steps() -> None:
+    items = draft_checklist(
+        {"deadline": "1 February 2026", "funding_coverage": "Full tuition"}
+    )
+    assert items == []  # no documents, no URL: no invented steps
+
+
+def test_draft_checklist_dedupes_and_caps() -> None:
+    values = {"required_documents": "Transcript\nTranscript\n;" + "\n".join(
+        f"Doc {n}" for n in range(40)
+    )}
+    items = draft_checklist(values)
+    assert len(items) <= 25
+    assert len(set(i.casefold() for i in items)) == len(items)

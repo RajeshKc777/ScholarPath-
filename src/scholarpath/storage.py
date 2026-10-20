@@ -49,6 +49,21 @@ CREATE TABLE IF NOT EXISTS scholarship (
     status TEXT NOT NULL DEFAULT 'page-verified',
     data TEXT NOT NULL DEFAULT '{}'
 );
+
+CREATE TABLE IF NOT EXISTS saved_opportunity (
+    scholarship_id INTEGER PRIMARY KEY CHECK (scholarship_id > 0),
+    saved_at TEXT NOT NULL,
+    note TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS checklist_item (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scholarship_id INTEGER NOT NULL,
+    text TEXT NOT NULL,
+    done INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    UNIQUE (scholarship_id, text)
+);
 """
 
 
@@ -235,8 +250,111 @@ class Database:
 
     def delete_scholarship(self, scholarship_id: int) -> bool:
         with self._write() as cursor:
+            cursor.execute(
+                "DELETE FROM saved_opportunity WHERE scholarship_id = ?",
+                (scholarship_id,),
+            )
+            cursor.execute(
+                "DELETE FROM checklist_item WHERE scholarship_id = ?",
+                (scholarship_id,),
+            )
             cursor.execute("DELETE FROM scholarship WHERE id = ?", (scholarship_id,))
             return cursor.rowcount > 0
+
+    # -- saved opportunities -------------------------------------------------
+    def save_opportunity(self, scholarship_id: int, note: str = "") -> None:
+        """Bookmark a verified record. Idempotent; re-saving refreshes note."""
+        with self._write() as cursor:
+            cursor.execute(
+                "INSERT INTO saved_opportunity (scholarship_id, saved_at, note) "
+                "VALUES (?, ?, ?) ON CONFLICT(scholarship_id) DO UPDATE SET "
+                "note = excluded.note, saved_at = excluded.saved_at",
+                (
+                    scholarship_id,
+                    datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    note[:500],
+                ),
+            )
+
+    def unsave_opportunity(self, scholarship_id: int) -> bool:
+        with self._write() as cursor:
+            cursor.execute(
+                "DELETE FROM saved_opportunity WHERE scholarship_id = ?",
+                (scholarship_id,),
+            )
+            return cursor.rowcount > 0
+
+    def is_saved(self, scholarship_id: int) -> bool:
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT 1 FROM saved_opportunity WHERE scholarship_id = ?",
+                (scholarship_id,),
+            ).fetchone()
+        return row is not None
+
+    def saved_opportunity_ids(self) -> list[int]:
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT scholarship_id FROM saved_opportunity ORDER BY saved_at DESC"
+            ).fetchall()
+        return [int(row["scholarship_id"]) for row in rows]
+
+    def counts(self) -> dict[str, int]:
+        """Cheap counters for the Settings page (no document bodies read)."""
+        with self._lock:
+            documents = self._connection.execute(
+                "SELECT COUNT(*) AS n FROM document"
+            ).fetchone()["n"]
+            scholarships = self._connection.execute(
+                "SELECT COUNT(*) AS n FROM scholarship"
+            ).fetchone()["n"]
+            saved = self._connection.execute(
+                "SELECT COUNT(*) AS n FROM saved_opportunity"
+            ).fetchone()["n"]
+        return {"documents": int(documents), "scholarships": int(scholarships), "saved": int(saved)}
+
+    # -- application checklists ----------------------------------------------
+    def replace_checklist(
+        self, scholarship_id: int, items: list[str]
+    ) -> None:
+        """Replace the generated draft items, keeping ticks for surviving texts."""
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        with self._lock:
+            previous = {
+                row["text"]: row["done"]
+                for row in self._connection.execute(
+                    "SELECT text, done FROM checklist_item WHERE scholarship_id = ?",
+                    (scholarship_id,),
+                ).fetchall()
+            }
+        with self._write() as cursor:
+            cursor.execute(
+                "DELETE FROM checklist_item WHERE scholarship_id = ?",
+                (scholarship_id,),
+            )
+            for text in items:
+                done = previous.get(text, 0)
+                cursor.execute(
+                    "INSERT INTO checklist_item "
+                    "(scholarship_id, text, done, created_at) VALUES (?, ?, ?, ?)",
+                    (scholarship_id, text[:300], done, now),
+                )
+
+    def checklist_items(self, scholarship_id: int) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT id, text, done, created_at FROM checklist_item "
+                "WHERE scholarship_id = ? ORDER BY id",
+                (scholarship_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def set_checklist_done(self, item_id: int, done: bool) -> None:
+        with self._write() as cursor:
+            cursor.execute(
+                "UPDATE checklist_item SET done = ? WHERE id = ?",
+                (1 if done else 0, item_id),
+            )
 
     def delete_document(self, document_id: int) -> None:
         with self._write() as cursor:

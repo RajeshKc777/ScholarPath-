@@ -51,3 +51,18 @@ location_dir = ""
 theme = "dark"          # dark | light | system
 window_width = 1100
 window_height = 720
+
+# --- Tools (MCP, optional) -----------------------------------------------------
+# MCP is opt-in and read-only by default. No server starts unless mcp.enabled
+# is true AND that server has enabled = true. With read_only = true, only
+# tools advertising readOnlyHint in their annotations may be called.
+[mcp]
+enabled = false
+read_only = true
+
+# Example server entry (add one [[mcp.servers]] block per server):
+# [[mcp.servers]]
+# name = "docs"
+# command = "python"
+# args = ["-m", "docs_server"]
+# enabled = false
