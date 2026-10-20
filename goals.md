@@ -391,12 +391,34 @@ legitimate, relevant, realistically attainable scholarships.
 - Config: `[gateway] base_url / service_file / location_dir` optional overrides;
   when `base_url` is set the password must come from `OPENCODE_SERVICE_PASSWORD`
   (never stored in config.toml or source control).
-- UI honesty: header pill turns green "Live · opencode" when the gateway is live,
-  stays orange "Offline · stub" otherwise; subtitle and composer hint state that
-  replies are live but research is still not built.
+- UI honesty: header indicator turns into a small green "● Live" chip when the
+  gateway is live, an orange "● Offline" chip otherwise; subtitle and composer
+  hint state that replies are live but research is still not built. Provider
+  names are never shown in the student-facing UI (logs only).
 - Evidence: fake-server test suite (`tests/test_registry.py`,
   `tests/test_opencode_gateway.py`); live round-trip against the real service —
   model replied "gateway live" (usage + finish recorded), 56 tests passing.
+
+---
+
+## 19c. Student-facing copy pass (G120 follow-up, 2026-10-20)
+
+- **Provider-neutral UI.** Students never see which company or model serves a
+  reply: the status chip is just "● Live"/"● Offline", the status strip reads
+  "chat: live"/"chat: offline", and assistant turn headers show only
+  "SCHOLARPATH" (the served model stays in the logs). Technical names
+  (`opencode`, model ids) live in `config.toml`, logs and this document.
+- **"Soon" badges, not "M3/M4/M6".** Sidebar items, quick-action tiles, the
+  profile card and the "What works today" rows carried opaque Mx badges. They
+  now read "Soon"; the milestone number moved into the tooltip ("Coming in
+  Milestone 3 — not available in this build"), so the roadmap survives without
+  jargon.
+- **Live chip layout fix.** The status label was stretched to the 76px top-bar
+  height by the layout (a big coloured block). It is now aligned vertically and
+  sizes to its text; the live state is transparent with green text, no
+  background.
+- Verified with rendered screenshots of the real window (off-screen, real
+  fonts) in empty and two-turn states; 57 tests passing.
 
 ---
 

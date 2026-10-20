@@ -89,7 +89,13 @@ class ChatController(QObject):
 
     @property
     def gateway_name(self) -> str:
+        """Internal identifier - shown in logs, never in the student-facing UI."""
         return self._gateway.name
+
+    @property
+    def chat_mode(self) -> str:
+        """Student-facing mode label ("live" / "offline"); no provider names."""
+        return "live" if self._gateway.name != "stub" else "offline"
 
     @property
     def model(self) -> str | None:

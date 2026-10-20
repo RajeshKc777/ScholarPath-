@@ -127,11 +127,11 @@ QLabel#StatusPill {{
 }}
 QLabel#StatusLive {{
     color: #15803D;
-    background: {p['tint_green']};
-    border: 1px solid #B7E6C8;
-    border-radius: 11px;
-    padding: 3px 10px;
+    background: transparent;
+    border: none;
+    padding: 0px 2px;
     font-size: 11px;
+    font-weight: 600;
 }}
 QLabel#Avatar {{
     background: {GRADIENT_SEND};

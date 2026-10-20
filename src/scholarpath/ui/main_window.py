@@ -339,8 +339,7 @@ class TurnWidget(QWidget):
         header = QHBoxLayout()
         header.setSpacing(8)
         title = "SCHOLARPATH"
-        if self._turn.model:
-            title = f"{title} \u00b7 {self._turn.model}"
+        # The served model stays in the logs; students do not need provider names.
         label = QLabel(title, self)
         label.setObjectName("ErrLabel" if self._turn.error else "AsstLabel")
         header.addWidget(label)
@@ -473,16 +472,16 @@ class MainWindow(QMainWindow):
         column.addWidget(chat_item)
 
         inactive = (
-            (GLYPH_PERSON, "My Profile", "M3"),
-            (GLYPH_EDUCATION, "Scholarships", "M4"),
-            (GLYPH_STAR, "Saved Opportunities", "M6"),
-            (GLYPH_DOCUMENT, "Documents", "M3"),
+            (GLYPH_PERSON, "My Profile", 3),
+            (GLYPH_EDUCATION, "Scholarships", 4),
+            (GLYPH_STAR, "Saved Opportunities", 6),
+            (GLYPH_DOCUMENT, "Documents", 3),
         )
-        for glyph, label, badge in inactive:
-            item = NavButton(glyph, label, badge=badge, parent=side)
+        for glyph, label, number in inactive:
+            item = NavButton(glyph, label, badge="Soon", parent=side)
             item.setEnabled(False)
             item.setCursor(Qt.ArrowCursor)
-            item.setToolTip(f"Arrives in Milestone {badge[1:]}. Not available in this build.")
+            item.setToolTip(f"Coming in Milestone {number}. Not available in this build.")
             column.addWidget(item)
 
         settings = NavButton(GLYPH_SETTING, "Settings", parent=side)
@@ -534,7 +533,7 @@ class MainWindow(QMainWindow):
         titles.setSpacing(2)
         title = QLabel("Chat Assistant", bar)
         title.setObjectName("PageTitle")
-        self.subtitle = QLabel("Milestone 1 \u00b7 offline stub, no research", bar)
+        self.subtitle = QLabel("Starting\u2026", bar)
         self.subtitle.setObjectName("PageSub")
         titles.addWidget(title)
         titles.addWidget(self.subtitle)
@@ -544,7 +543,9 @@ class MainWindow(QMainWindow):
         pill = QLabel("\u25cf  \u2026", bar)
         pill.setObjectName("StatusPill")
         self.pill = pill
-        row.addWidget(pill)
+        # Align instead of stretch: the chip must stay its own small height,
+        # not fill the 76px top bar.
+        row.addWidget(pill, 0, Qt.AlignVCenter)
 
         avatar = QLabel("S", bar)
         avatar.setObjectName("Avatar")
@@ -631,7 +632,7 @@ class MainWindow(QMainWindow):
         tiles = QWidget(holder)
         flow = FlowLayout(tiles, spacing=10)
         for title_text, subtitle, milestone, glyph, tint, accent in ACTION_TILES:
-            tile = ActionTile(glyph, title_text, subtitle, milestone, tint, accent, tiles)
+            tile = ActionTile(glyph, title_text, subtitle, "Soon", tint, accent, tiles)
             tile.setToolTip(
                 f"{title_text} arrives in Milestone {milestone[1:]}. "
                 "Not available in this build."
@@ -727,8 +728,9 @@ class MainWindow(QMainWindow):
         title.setObjectName("CardTitle")
         header.addWidget(title)
         header.addStretch(1)
-        tag = QLabel("M3", card)
+        tag = QLabel("Soon", card)
         tag.setObjectName("CapSoon")
+        tag.setToolTip("Profile setup arrives in Milestone 3.")
         header.addWidget(tag)
         column.addLayout(header)
 
@@ -828,13 +830,13 @@ class MainWindow(QMainWindow):
         column.addWidget(title)
 
         rows = (
-            ("Conversation", "LIVE", True),
-            ("Documents", "M3", False),
-            ("Research", "M4", False),
-            ("Eligibility", "M5", False),
-            ("Saved list", "M6", False),
+            ("Conversation", "LIVE", True, "Chat replies run through the model gateway."),
+            ("Documents", "Soon", False, "Arrives in Milestone 3 - profile, upload, extraction."),
+            ("Research", "Soon", False, "Arrives in Milestone 4 - source-verified discovery."),
+            ("Eligibility", "Soon", False, "Arrives in Milestone 5 - deterministic checks."),
+            ("Saved list", "Soon", False, "Arrives in Milestone 6 - comparison and bookmarks."),
         )
-        for name, tag_text, live in rows:
+        for name, tag_text, live, tip in rows:
             row = QHBoxLayout()
             row.setSpacing(8)
             label = QLabel(name, card)
@@ -843,6 +845,7 @@ class MainWindow(QMainWindow):
             row.addStretch(1)
             tag = QLabel(tag_text, card)
             tag.setObjectName("CapLive" if live else "CapSoon")
+            tag.setToolTip(tip)
             row.addWidget(tag)
             column.addLayout(row)
         return card
@@ -952,12 +955,11 @@ class MainWindow(QMainWindow):
         else:
             name = "Status"
             state = "Working\u2026" if busy else "Ready"
-            model = self._controller.model or "default"
             count = self._turns
             noun = "message" if count == 1 else "messages"
             text = (
-                f"{state}  \u00b7  gateway: {self._controller.gateway_name}  \u00b7  "
-                f"model: {model}  \u00b7  {count} {noun}  \u00b7  no research performed"
+                f"{state}  \u00b7  chat: {self._controller.chat_mode}  \u00b7  "
+                f"{count} {noun}  \u00b7  no research performed"
             )
 
         if self.status.objectName() != name:
@@ -967,12 +969,13 @@ class MainWindow(QMainWindow):
         self.status.style().polish(self.status)
 
         live = self._controller.gateway_name != "stub"
+        # Provider names stay in the logs - students only see "live" or "offline".
         if live:
             pill_name = "StatusLive"
-            pill_text = f"\u25cf  Live \u00b7 {self._controller.gateway_name}"
+            pill_text = "\u25cf  Live"
         else:
             pill_name = "StatusPill"
-            pill_text = "\u25cf  Offline \u00b7 stub"
+            pill_text = "\u25cf  Offline"
         if busy:
             pill_text += " \u00b7 working"
         if self.pill.objectName() != pill_name:
@@ -985,20 +988,20 @@ class MainWindow(QMainWindow):
             self.subtitle.setText("Working on your message\u2026")
         elif live:
             self.subtitle.setText(
-                f"Model replies are live ({self._controller.gateway_name}). "
-                "Scholarship research is still to come."
+                "Model replies are live. Scholarship research is still to come."
             )
         else:
-            self.subtitle.setText("Milestone edition \u00b7 offline stub, no research")
+            self.subtitle.setText(
+                "Offline preview \u2014 replies are placeholder text, no model behind them."
+            )
 
         if live:
             self.hint.setText(
-                "Model replies are live through OpenCode. "
-                "Research, eligibility and documents are not built yet."
+                "Model replies are live. Research, eligibility and documents are not built yet."
             )
         else:
             self.hint.setText(
-                "Offline stub \u2014 no network, no model, no scholarship data in this build."
+                "Offline preview \u2014 replies are placeholder text with no model behind them."
             )
 
     @staticmethod

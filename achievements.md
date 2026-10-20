@@ -18,16 +18,41 @@ is finished, not when it is started. Each entry names the goal it satisfies
 
 - Repository: populated and pushed to `https://github.com/RajeshKc777/ScholarPath-`
   (`main`).
-- Working app: **yes** — M1 launches with the new light Reddit-orange dashboard;
+- Working app: **yes** — M1 launches with the light Reddit-orange dashboard;
   from M2 the chat runs **live through the local OpenCode service** (adapter +
-  registry + routing), falls back to the stub with honest copy when selected.
+  registry + routing), with a provider-neutral UI and honest copy everywhere.
 - Licence: proprietary, source-available, view-only (`LICENSE`).
-- Tests: **56 passing** (`pytest`, ~9 s) — 25 original, 31 new for the gateway.
+- Tests: **57 passing** (`pytest`, ~9 s) — 25 original, 32 new for the gateway.
 - Next milestone: **M3** (G203) — profiles, document ingestion, OCR.
 
 ---
 
 ## Log (newest first)
+
+### 2026-10-20 — A9 · Provider-neutral UI + "Soon" badges (design pass)
+
+**Satisfies:** G120 (copy pass), G108 (UX clarity), G110 (privacy principle)
+
+- User request: students must not see the model provider in the UI, and the
+  M3/M4/M6 sidebar badges were unreadable jargon.
+- Changes (`main_window.py`, `theme.py`, `chat_controller.py`):
+  - status chip is now a small "● Live" (transparent, green text) or
+    "● Offline"; the previous filled chip was also stretched to the full
+    top-bar height by the layout — fixed with `Qt.AlignVCenter` sizing,
+  - status strip: `chat: live|offline` instead of `gateway: <provider>`,
+  - subtitle/hint copy no longer names OpenCode,
+  - assistant turn header is just "SCHOLARPATH" (served model stays in logs; a
+    `chat_mode` property on `ChatController` carries the neutral label),
+  - all Mx badges → "Soon" with tooltips "Coming in Milestone N …".
+- Verified by rendering the **real window** off-screen with real fonts
+  (Qt `WA_DontShowOnScreen` + `grab()`): empty state and a live two-turn
+  conversation with a real model reply — provider never appears. `pytest`
+  **57 passing**; fresh app launch shows the new UI.
+
+Known limit: README and config docs still name OpenCode — intentional: config
+and documentation are technical surfaces, not the student UI.
+
+---
 
 ### 2026-10-20 — A8 · Milestone 2 complete — OpenCode gateway adapter
 
