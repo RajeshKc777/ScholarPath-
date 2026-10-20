@@ -14,6 +14,10 @@ dependencies = [
     # Essentials = Core/Gui/Widgets/Network. The full PySide6 meta-package adds
     # ~400 MB of WebEngine/Pdf/Multimedia this app does not use.
     "PySide6-Essentials>=6.7,<7",
+    # Windows-only projection for on-device speech dictation (G123): the voice
+    # stays on the device; there is no cloud STT and no API key. The app
+    # degrades to typing (with an honest notice) if the projection is absent.
+    "winsdk>=1.0,<2.0; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]

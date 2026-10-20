@@ -43,6 +43,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G204 | 13 | M4 official-page verification: fetch guards, untrusted-content boundary, structured scholarship records with provenance | `[x]` |
 | G121 | 20 | The student UI **never** discloses the model or provider - identity probes answered deterministically, leaky replies withheld | `[x]` |
 | G122 | 21 | Profile facts stated in chat are captured, confirmed per field, and offered for saving (verbatim-verified only) | `[x]` |
+| G123 | 22 | Voice input in chat: speak a prompt or a voice message, speech becomes editable text, then is sent like a normal message (Windows Speech engine, honest privacy copy) | `[x]` |
 
 ---
 
@@ -617,6 +618,39 @@ Two requirements from the owner, dated, after seeing the running app leak
   saving so nothing needs re-entering or re-uploading, and the profile panel
   + eligibility page refresh. Tests: prompt discipline, verbatim rejection of
   fabricated values, number rewriting rejected, tick gating, edit-respected.
+
+---
+
+## 19i. Voice input in chat (G123, 2026-10-20)
+
+- **Decision before build (owner chose: Windows speech + toggle):** the engine
+  is the **Windows Speech recognizer (winsdk)** using a dictation topic
+  constraint. Dictation is performed by **Microsoft's Windows speech service
+  (online)**: it requires the Windows toggle *Settings → Privacy & security →
+  Speech → Online speech recognition*, and the student's microphone audio is
+  sent to that Windows service. No API key, no third-party service; the chat
+  model only ever receives the recognized words as text. An offline SAPI
+  alternative was evaluated and declined (weaker accuracy) — revisit only if
+  the owner changes the privacy posture.
+- **Honest availability:** the app reads (never writes) the Windows registry
+  value `OnlineSpeechPrivacy\HasAccepted`. With the toggle off — its state on
+  this machine at build time — the mic stays clickable and shows the exact
+  action needed (settings path), so flipping the toggle needs **no app
+  restart**; the click re-probes.
+- **Interaction:** a mic button next to the composer. Click to start listening
+  (end-silence stops the capture), click again to force-stop; the recognized
+  words land in the composer as **editable text** — the student reviews and
+  presses Enter, so a voice message becomes a normal text prompt.
+- **Honest degradation:** every Windows failure maps to a plain-language
+  student message (toggle off / microphone unavailable / audio quality /
+  language pack / timeouts), `0x80045509` included. No recognition — no card,
+  no silent nothing. `winsdk` is a justified, verified dependency (G112);
+  its modern `windows.media.speech` namespace is absent from the projection,
+  so the working `windows.media.speechrecognition` module was probed live
+  before any code was written.
+- **UI copy says exactly what happens:** the tooltip and the success notice
+  name Windows speech recognition (online) — nothing claims the audio is
+  understood locally or on this device.
 
 ---
 

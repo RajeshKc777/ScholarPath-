@@ -12,7 +12,7 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 ![Status](https://img.shields.io/badge/status-Milestone%204-4f8cff?style=flat-square)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Qt](https://img.shields.io/badge/Qt-6.12-41CD52?style=flat-square&logo=qt&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-197%20passing-2ea043?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-204%20passing-2ea043?style=flat-square)
 ![License](https://img.shields.io/badge/license-view--only%20%C2%B7%20all%20rights%20reserved-b3261e?style=flat-square)
 
 </div>
@@ -99,6 +99,11 @@ Full specification: [`goals.md`](goals.md) · Build log: [`achievements.md`](ach
   and every value is verified word-for-word against your own message, shown
   as an editable confirmation card in the transcript, and saved only to the
   rows you tick ("no need to re-enter or re-upload these later").
+- **Voice input (Windows speech)** — click the mic and speak; your words land
+  as **editable text** in the composer for review before you press Enter
+  (press, then pause; click again to stop early). Uses the Windows Speech
+  engine with its "Online speech recognition" toggle; if it is off, the app
+  says exactly where to switch it on — no silent failures, no auto-send.
 - **The model behind it stays anonymous** — identity questions ("which model
   are you?") are answered deterministically without the model seeing them, a
   provider-neutral system prompt forbids disclosure, and any reply that names
@@ -156,7 +161,7 @@ scholarpath --init-config   # write the configuration template, then exit
 scholarpath --config path\to\config.toml
 scholarpath --version
 python -m scholarpath       # equivalent to the console script
-pytest                      # 197 tests, no network required (fake server on loopback)
+pytest                      # 204 tests, no network required (fake server on loopback)
 ```
 
 </details>

@@ -8,7 +8,7 @@ feature tiles are explicitly marked as not built yet.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QUrl, Signal
+from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QThread, QUrl, Signal
 from PySide6.QtGui import (
     QColor,
     QDesktopServices,
@@ -43,6 +43,7 @@ from scholarpath.ui import theme
 from scholarpath.ui.chat_controller import ChatController, Turn
 from scholarpath.ui.profile_page import DEGREE_LABELS
 from scholarpath.ui.profile_suggestion import ProfileSuggestionCard, _ProfileScanWorker
+from scholarpath.voice import availability, cancel_active, listen_once
 
 GLYPH_EDUCATION = "\uE7BE"
 GLYPH_CHAT = "\uE8BD"
@@ -52,6 +53,7 @@ GLYPH_DOCUMENT = "\uE8A5"
 GLYPH_SETTING = "\uE713"
 GLYPH_SEND = "\uE724"
 GLYPH_ATTACH = "\uE723"
+GLYPH_MIC = "\uE720"
 GLYPH_GLOBE = "\uE774"
 GLYPH_CHECK = "\uE73E"
 
@@ -820,6 +822,23 @@ class MainWindow(QMainWindow):
         self.attach.setStyleSheet("font-family: 'Segoe MDL2 Assets'; font-size: 15px;")
         self.attach.clicked.connect(lambda: self.select_page("documents"))
 
+        self.mic_button = QToolButton(self.composer)
+        self.mic_button.setObjectName("Attach")
+        self.mic_button.setText(GLYPH_MIC)
+        self.mic_button.setFixedSize(36, 36)
+        self.mic_button.setCursor(Qt.PointingHandCursor)
+        self.mic_button.setStyleSheet("font-family: 'Segoe MDL2 Assets'; font-size: 15px;")
+        usable, voice_reason = availability()
+        self.mic_button.setToolTip(
+            "Voice input - click, then speak. Uses Windows speech recognition "
+            "(online): your words come back as text here, and the model "
+            "receives only that text. Click again to stop early."
+            if usable
+            else f"Voice input is unavailable: {voice_reason} Clicking shows "
+            "this notice; typing still works."
+        )
+        self.mic_button.clicked.connect(self._toggle_voice)
+
         self.input = ChatInput(self.composer)
         self.input.setObjectName("Input")
         self.input.setPlaceholderText("Type your message\u2026")
@@ -835,6 +854,7 @@ class MainWindow(QMainWindow):
         )
 
         row.addWidget(self.attach, 0, Qt.AlignVCenter)
+        row.addWidget(self.mic_button, 0, Qt.AlignVCenter)
         row.addWidget(self.input, 1)
         row.addWidget(self.send_button, 0, Qt.AlignVCenter)
         column.addWidget(self.composer)
@@ -1126,6 +1146,10 @@ class MainWindow(QMainWindow):
             self._settings_page.shutdown()
         if getattr(self, "_profile_scan_worker", None) is not None:
             self._profile_scan_worker.wait(5000)
+        if getattr(self, "_voice_worker", None) is not None:
+            if self._voice_worker.isRunning():  # a mic capture cannot outlive the window
+                cancel_active()
+                self._voice_worker.wait(5000)
         self._database.close()
         super().closeEvent(event)
     def _submit(self) -> None:
@@ -1196,6 +1220,52 @@ class MainWindow(QMainWindow):
             + ", ".join(sorted(selected))
             + ". No need to enter these again."
         )
+        self._refresh_status()
+
+    # -- voice input (G123) ---------------------------------------------------
+    def _toggle_voice(self) -> None:
+        worker = getattr(self, "_voice_worker", None)
+        if worker is not None and worker.isRunning():
+            cancel_active()  # second click stops the running capture
+            return
+        usable, reason = availability()
+        if not usable:
+            self._notice = reason
+            self._refresh_status()
+            return
+        self.mic_button.setEnabled(False)
+        self._notice = "Listening \u2014 speak now, then pause. Click again to stop."
+        self._voice_notice = True
+        self._refresh_status()
+        self._voice_worker = _VoiceWorker()
+        self._voice_worker.heard.connect(self._on_voice_heard)
+        self._voice_worker.failed.connect(self._on_voice_failed)
+        self._voice_worker.start()
+
+    def _set_voice_not_ok(self) -> None:
+        self.mic_button.setEnabled(True)
+        if getattr(self, "_voice_notice", False):
+            self._voice_notice = False
+            self._notice = None
+            self._refresh_status()
+
+    def _on_voice_heard(self, text: str) -> None:
+        self._set_voice_not_ok()
+        if not text.strip():
+            self._notice = "Nothing was heard. Click the mic and try again."
+            self._refresh_status()
+            return
+        self.input.insertPlainText(text.strip() + " ")
+        self.input.setFocus()
+        self._notice = (
+            "Voice converted to text by Windows speech \u2014 review it and "
+            "press Enter to send."
+        )
+        self._refresh_status()
+
+    def _on_voice_failed(self, message: str) -> None:
+        self._set_voice_not_ok()
+        self._error_text = message
         self._refresh_status()
 
     def _on_busy_changed(self, busy: bool) -> None:
@@ -1342,3 +1412,13 @@ class MainWindow(QMainWindow):
     def _elided_path(text: str) -> str:
         metrics = QFontMetrics(QFont("Consolas", 9))
         return metrics.elidedText(text, Qt.ElideMiddle, 340)
+
+
+class _VoiceWorker(QThread):
+    """On-device dictation capture, off the UI thread."""
+
+    heard = Signal(str)
+    failed = Signal(str)
+
+    def run(self) -> None:
+        listen_once(self.heard.emit, self.failed.emit)

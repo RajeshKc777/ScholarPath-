@@ -63,6 +63,42 @@ a confirmation card that saved exactly those three fields into the profile.
 
 ---
 
+### 2026-10-20 — A15 — Voice input in chat (G123)
+
+**Satisfies:** G123 (owner mandate: give prompts or talk to the model by voice).
+
+Built:
+
+| Area | File(s) |
+| ---- | ------- |
+| Dictation capture, cancel, availability probe, honest status mapping | `src/scholarpath/voice.py` |
+| Mic button in the composer, press-to-talk toggle, status-strip notices | `src/scholarpath/ui/main_window.py` (`_toggle_voice`, `_VoiceWorker`) |
+| Windows toggle read-only probe (`OnlineSpeechPrivacy\HasAccepted`) | `src/scholarpath/voice.py` (`_online_speech_enabled`) |
+| Engine dependency, Windows-only marker | `pyproject.toml` (`winsdk` + comment) |
+
+Behaviour: click mic → Windows Speech dictation (press-to-talk) → recognized
+words land **editable** in the composer for review before Enter; second click
+force-stops; every Windows failure (toggle off, mic unavailable, timeouts,
+audio quality, language pack) becomes a plain-language notice, never silent.
+With the Windows "Online speech recognition" toggle off (its state on this
+machine), the click shows the exact settings path and needs no app restart.
+UI copy names Windows speech recognition (online) — the audio goes to
+Microsoft's Windows speech service, the chat model receives only the final
+text (goals.md §19i, corrected during this work after the first draft wrongly
+claimed fully on-device recognition).
+
+**Evidence:** 7 tests in `tests/test_voice.py`; suite total 204 passing. UI
+E2E: toggle-off click shows the actionable notice; toggle-on (mocked) click
+inserts the transcript and the status strip confirms the review step. Real
+recognition awaits the owner flipping the Windows toggle (audio to Windows
+speech service) — the only remaining manual step.
+
+**Known limits:** English-language dictation on Windows speech; requires the
+Windows toggle; accuracy is Microsoft's recognizer, reported verbatim (no
+cleanup or auto-send by design).
+
+---
+
 ### 2026-10-20 — A13 — Milestone 6 complete: saved opportunities, comparison, checklists, MCP
 
 **Satisfies:** G206, G109 (read-only default, untrusted tool output), G108
