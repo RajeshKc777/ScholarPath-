@@ -63,6 +63,40 @@ a confirmation card that saved exactly those three fields into the profile.
 
 ---
 
+### 2026-10-20 — A16 — Voice engine swapped to SpeechRecognition (G124)
+
+**Satisfies:** G124 (owner decision after seeing the Windows toggle requirement);
+supersedes the engine choice in A15, keeps G123's interaction.
+
+Built:
+
+| Area | File(s) |
+| ---- | ------- |
+| Mic capture + transcription via `SpeechRecognition`/PyAudio, cancel, honest errors | `src/scholarpath/voice.py` (rewritten) |
+| Tooltip/notices naming the library and the Google speech service | `src/scholarpath/ui/main_window.py` |
+| Dependencies: `SpeechRecognition` + `PyAudio` replace `winsdk` | `pyproject.toml` |
+| Library-stubbed tests: availability, success, no-speech, crash, cancel | `tests/test_voice.py` (10 tests) |
+
+Behaviour: click mic -> records from the default microphone (no Windows toggle,
+no model download) -> end-silence or a second click ends capture -> the free
+web speech engine returns text that lands editable in the composer. Failures
+surface as informative notices ("Nothing was heard...", "No microphone...",
+"The speech service could not be reached..."), never as crashes or silence.
+Fixed during verification: a voice notice no longer uses the red error style,
+and a stale failure notice is cleared when the next capture succeeds.
+
+**Evidence:** 207 tests passing. Live E2E through the app: the real microphone
+capture ran the full 15 s no-speech path and showed the honest notice with the
+mic usable again; the stubbed success path inserted "check if I am eligible for
+Chevening" and the review notice. The real transcription service was proven
+with the library's human-speech sample ("1 2"); synthetic Windows TTS audio is
+rejected by the service (not user audio).
+
+**Known limits:** English (`en-US`) dictation; needs internet for the free web
+speech engine; accuracy is the service's, reported verbatim (no auto-send).
+
+---
+
 ### 2026-10-20 — A15 — Voice input in chat (G123)
 
 **Satisfies:** G123 (owner mandate: give prompts or talk to the model by voice).

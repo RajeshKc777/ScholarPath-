@@ -830,8 +830,9 @@ class MainWindow(QMainWindow):
         self.mic_button.setStyleSheet("font-family: 'Segoe MDL2 Assets'; font-size: 15px;")
         usable, voice_reason = availability()
         self.mic_button.setToolTip(
-            "Voice input - click, then speak. Uses Windows speech recognition "
-            "(online): your words come back as text here, and the model "
+            "Voice input - click, then speak. Transcribed by the "
+            "SpeechRecognition library (audio is sent to Google's free speech "
+            "service). Your words come back here as text, and the model "
             "receives only that text. Click again to stop early."
             if usable
             else f"Voice input is unavailable: {voice_reason} Clicking shows "
@@ -1222,7 +1223,7 @@ class MainWindow(QMainWindow):
         )
         self._refresh_status()
 
-    # -- voice input (G123) ---------------------------------------------------
+    # -- voice input (G123, G124) ---------------------------------------------
     def _toggle_voice(self) -> None:
         worker = getattr(self, "_voice_worker", None)
         if worker is not None and worker.isRunning():
@@ -1234,6 +1235,7 @@ class MainWindow(QMainWindow):
             self._refresh_status()
             return
         self.mic_button.setEnabled(False)
+        self._error_text = None
         self._notice = "Listening \u2014 speak now, then pause. Click again to stop."
         self._voice_notice = True
         self._refresh_status()
@@ -1251,6 +1253,7 @@ class MainWindow(QMainWindow):
 
     def _on_voice_heard(self, text: str) -> None:
         self._set_voice_not_ok()
+        self._error_text = None
         if not text.strip():
             self._notice = "Nothing was heard. Click the mic and try again."
             self._refresh_status()
@@ -1258,14 +1261,14 @@ class MainWindow(QMainWindow):
         self.input.insertPlainText(text.strip() + " ")
         self.input.setFocus()
         self._notice = (
-            "Voice converted to text by Windows speech \u2014 review it and "
-            "press Enter to send."
+            "Voice converted to text \u2014 review it and press Enter to send."
         )
         self._refresh_status()
 
     def _on_voice_failed(self, message: str) -> None:
         self._set_voice_not_ok()
-        self._error_text = message
+        # Informational, not an app error: the message says what to do next.
+        self._notice = message
         self._refresh_status()
 
     def _on_busy_changed(self, busy: bool) -> None:
@@ -1415,7 +1418,7 @@ class MainWindow(QMainWindow):
 
 
 class _VoiceWorker(QThread):
-    """On-device dictation capture, off the UI thread."""
+    """Microphone capture + transcription, off the UI thread."""
 
     heard = Signal(str)
     failed = Signal(str)

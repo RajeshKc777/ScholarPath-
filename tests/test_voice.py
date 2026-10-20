@@ -1,75 +1,117 @@
-"""Voice input module: availability, status mapping, honest errors (G123)."""
+"""Voice-to-text module: availability, error mapping, callbacks (G124)."""
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from scholarpath import voice
 from scholarpath.voice import (
+    LIBRARY_MISSING,
     MAX_LISTEN_SECONDS,
+    NO_MICROPHONE,
+    NOTHING_HEARD,
+    SERVICE_UNREACHABLE,
+    STOPPED,
     VoiceError,
-    _student_message_for_status,
     availability,
     listen_once,
 )
 
 
-def test_availability_reports_the_windows_toggle_honestly(monkeypatch) -> None:
-    monkeypatch.setattr(voice, "_online_speech_enabled", lambda: False)
+def test_availability_without_the_library_is_honest(monkeypatch) -> None:
+    monkeypatch.setattr(voice, "_sr", None)
     usable, reason = availability()
     assert not usable
-    assert "Online speech recognition" in reason
-
-    monkeypatch.setattr(voice, "_online_speech_enabled", lambda: True)
-    if _engine_present():
-        usable, reason = availability()
-        assert usable and reason == ""
+    assert reason == LIBRARY_MISSING
+    assert "stays off" in reason
 
 
-def _engine_present() -> bool:
-    try:
-        import winsdk  # noqa: F401
-        import winsdk.windows.media.speechrecognition  # noqa: F401
-    except Exception:  # noqa: BLE001
-        return False
-    return True
+def test_availability_without_a_microphone_is_honest(monkeypatch) -> None:
+    fake = SimpleNamespace(
+        Microphone=SimpleNamespace(list_microphone_names=lambda: [])
+    )
+    monkeypatch.setattr(voice, "_sr", fake)
+    usable, reason = availability()
+    assert not usable
+    assert reason == NO_MICROPHONE
 
 
-def test_toggle_probe_is_read_only_and_swallows_errors(monkeypatch) -> None:
-    def boom(*args: object) -> None:
-        raise OSError("reg closed")
-
-    import winreg
-
-    monkeypatch.setattr(winreg, "OpenKey", boom)
-    assert voice._online_speech_enabled() is False
-
-
-def test_status_messages_are_student_facing() -> None:
-    for name in (
-        "PRIVACY_DECLINED",
-        "MICROPHONE_UNAVAILABLE",
-        "AUDIO_QUALITY_FAILURE",
-        "NETWORK_FAILURE",
-        "TIMEOUT_EXCEEDED",
-        "USER_CANCELED",
-        "UNKNOWN",
-    ):
-        message = _student_message_for_status(name, "")
-        assert message and "Error" not in message and "0x" not in message
+def test_availability_reports_a_usable_microphone(monkeypatch) -> None:
+    fake = SimpleNamespace(
+        Microphone=SimpleNamespace(
+            list_microphone_names=lambda: ["Microphone Array (Realtek)"]
+        )
+    )
+    monkeypatch.setattr(voice, "_sr", fake)
+    usable, reason = availability()
+    assert usable and reason == ""
 
 
-def test_platform_error_is_reported_verbatim_when_status_is_blank() -> None:
-    message = _student_message_for_status("", "mic busy")
-    assert "mic busy" in message
-
-
-def test_listen_once_reports_the_error_to_the_callback() -> None:
-    # A capture that cannot possibly succeed (immediate cap, no speech) must
-    # surface through the error callback, never raise.
+def test_success_path_delivers_recognized_text(monkeypatch) -> None:
+    monkeypatch.setattr(
+        voice, "_record_and_transcribe", lambda seconds: "Apply for Chevening"
+    )
     done: list[str] = []
     errors: list[str] = []
-    listen_once(done.append, errors.append, max_seconds=0.001)
-    assert not done, "no recognized text can exist in an immediate test"
-    assert errors, "the failure must surface through the error callback"
+    listen_once(done.append, errors.append)
+    assert done == ["Apply for Chevening"]
+    assert not errors
+
+
+def test_no_speech_maps_to_a_student_message(monkeypatch) -> None:
+    def nothing(_seconds: float) -> str:
+        raise VoiceError(NOTHING_HEARD)
+
+    monkeypatch.setattr(voice, "_record_and_transcribe", nothing)
+    done: list[str] = []
+    errors: list[str] = []
+    listen_once(done.append, errors.append)
+    assert not done
+    assert errors == [NOTHING_HEARD]
+
+
+def test_crash_is_reported_and_cancel_is_not_an_error_message(monkeypatch) -> None:
+    def crash(_seconds: float) -> str:
+        raise RuntimeError("stream died")
+
+    monkeypatch.setattr(voice, "_record_and_transcribe", crash)
+    errors: list[str] = []
+    listen_once(lambda _text: None, errors.append)
+    assert errors and "unexpectedly" in errors[0]
+
+    errors.clear()
+
+    def crash_while_canceled(_seconds: float) -> str:
+        voice._cancel_event.set()  # simulate a student stopping mid-capture
+        raise RuntimeError("stream stopped by cancel")
+
+    monkeypatch.setattr(voice, "_record_and_transcribe", crash_while_canceled)
+    listen_once(lambda _text: None, errors.append)
+    voice._cancel_event.clear()
+    assert errors == [STOPPED]
+
+
+def test_cancel_active_marks_the_capture_and_stops_sources() -> None:
+    stopped: list[bool] = []
+
+    class Source:
+        def stop(self) -> None:
+            stopped.append(True)
+
+    source = Source()
+    voice._register_active(source)
+    try:
+        voice.cancel_active()
+        assert stopped == [True]
+        assert voice._cancel_event.is_set()
+    finally:
+        voice._unregister_active(source)
+        voice._cancel_event.clear()
+
+
+def test_messages_are_student_facing() -> None:
+    for message in (NOTHING_HEARD, NO_MICROPHONE, SERVICE_UNREACHABLE, LIBRARY_MISSING):
+        assert message and "Error" not in message and "0x" not in message
 
 
 def test_max_listen_cap_is_sane() -> None:

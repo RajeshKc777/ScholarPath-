@@ -44,6 +44,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G121 | 20 | The student UI **never** discloses the model or provider - identity probes answered deterministically, leaky replies withheld | `[x]` |
 | G122 | 21 | Profile facts stated in chat are captured, confirmed per field, and offered for saving (verbatim-verified only) | `[x]` |
 | G123 | 22 | Voice input in chat: speak a prompt or a voice message, speech becomes editable text, then is sent like a normal message (Windows Speech engine, honest privacy copy) | `[x]` |
+| G124 | 23 | Voice engine switched to the Python SpeechRecognition library (no Windows speech toggle, no model download); UI copy states that audio is sent to the transcription service | `[x]` |
 
 ---
 
@@ -623,6 +624,10 @@ Two requirements from the owner, dated, after seeing the running app leak
 
 ## 19i. Voice input in chat (G123, 2026-10-20)
 
+> **Superseded for the engine by §19j (G124).** The interaction and honesty
+> rules below still hold; only the speech engine changed. G123 remains
+> achieved as shipped (Windows Speech).
+
 - **Decision before build (owner chose: Windows speech + toggle):** the engine
   is the **Windows Speech recognizer (winsdk)** using a dictation topic
   constraint. Dictation is performed by **Microsoft's Windows speech service
@@ -742,3 +747,31 @@ Two requirements from the owner, dated, after seeing the running app leak
    API (session flow); the direct inference endpoint refuses free-tier callers.
 2. Research breadth target for the prototype: global, or a fixed set of countries?
 3. Should the first build ship a seeded scholarship dataset for offline testing?
+
+---
+
+## 19j. Voice engine swapped to the SpeechRecognition library (G124, 2026-10-20)
+
+- **Owner decision:** drop the Windows Speech engine (it needed the Windows
+  "Online speech recognition" toggle and still sent audio to Microsoft).
+  Replace it with the standard Python **SpeechRecognition** library (mic via
+  PyAudio). This is the "built-in library" route: no Windows setting to flip,
+  no model download, no API key.
+- **Honest privacy posture:** the library's free `recognize_google` engine
+  sends the short audio clip to Google's speech service for transcription
+  (needs internet; chat itself is online). The mic tooltip and the status
+  notices say exactly that; the chat model still receives only the final text.
+- **Unchanged interaction (G123):** one click starts listening, end-silence
+  (or 45 s cap) stops it, a second click force-stops; transcript lands in the
+  composer as editable text, the student reviews and presses Enter.
+- **Unchanged honesty rules:** every failure is a plain-language notice -
+  nothing heard, no microphone, service unreachable, stopped - never a silent
+  failure and never fabricated text.
+- **Dependency note (G112):** `SpeechRecognition` + `PyAudio` replace `winsdk`
+  in `pyproject.toml`; both ship Windows/py3.11 wheels, verified by live
+  install before coding. `winsdk` is no longer a dependency.
+- **Verification:** 207 tests (10 voice-module tests with the library stubbed);
+  live capture through the real microphone via the app (15 s no-speech path ->
+  honest notice, mic usable again), and the real transcription service proven
+  with the library's human-speech sample ("1 2"). Synthetic SAPI audio is
+  rejected by the service - not user audio, not a code path.
