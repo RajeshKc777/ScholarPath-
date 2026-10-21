@@ -16,8 +16,11 @@ dependencies = [
     "PySide6-Essentials>=6.7,<7",
     # Voice replies in live voice mode (G126, G130): the natural voice is the
     # free Edge neural TTS (no API key, online); the local Windows SAPI voice
-    # stays as the automatic offline fallback.
+    # stays as the automatic offline fallback. miniaudio decodes the neural
+    # MP3 to a WAV file, which Windows plays through winmm - the same route
+    # the local voice uses.
     "edge-tts>=7,<8",
+    "miniaudio>=1.59,<2",
     "pyttsx3>=2.90,<3",
     "pywin32>=306; sys_platform == 'win32'",
     # Voice-to-text (G124): microphone capture + the free web speech engine.

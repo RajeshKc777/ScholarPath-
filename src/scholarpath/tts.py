@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import wave
 from pathlib import Path
 from typing import Callable
 
@@ -77,6 +78,53 @@ def _neural_available() -> bool:
 def engine_label(engine: str) -> str:
     """Student-facing description of the voice engine in use."""
     return ENGINE_LABELS.get(engine, ENGINE_LABELS[ENGINE_OFFLINE])
+
+
+def _mp3_to_wav(source: Path) -> Path | None:
+    """Decode a synthesized MP3 into a WAV file (the format winmm plays).
+
+    Returns None when the decoder is unavailable or the file cannot be read;
+    the caller then plays the original file.
+    """
+    try:
+        import miniaudio
+    except Exception:  # noqa: BLE001 - the caller falls back to the MP3
+        logger.info("no MP3 decoder available; playing the MP3 directly")
+        return None
+    try:
+        decoded = miniaudio.decode_file(
+            str(source),
+            output_format=miniaudio.SampleFormat.SIGNED16,
+            nchannels=1,
+            sample_rate=24000,
+        )
+    except Exception as exc:  # noqa: BLE001 - never crash the voice path
+        logger.info("could not decode the neural audio: %s", exc)
+        return None
+    target = source.with_suffix(".wav")
+    try:
+        with wave.open(str(target), "wb") as handle:
+            handle.setnchannels(decoded.nchannels)
+            handle.setsampwidth(2)
+            handle.setframerate(decoded.sample_rate)
+            handle.writeframes(decoded.samples.tobytes())
+    except Exception as exc:  # noqa: BLE001 - never crash the voice path
+        logger.info("could not write the WAV file: %s", exc)
+        return None
+    return target
+
+
+def _audio_seconds(path: Path) -> float:
+    """Length of a WAV file in seconds (0.0 when it cannot be measured)."""
+    try:
+        with wave.open(str(path), "rb") as handle:
+            frames = handle.getnframes()
+            rate = handle.getframerate()
+    except Exception:  # noqa: BLE001 - measuring is best effort
+        return 0.0
+    if not rate:
+        return 0.0
+    return frames / float(rate)
 
 
 class Speaker(QObject):
@@ -198,15 +246,23 @@ class Speaker(QObject):
             self.finished.emit()
 
     def _speak_neural(self, text: str) -> None:
-        """Synthesize with the free Edge neural voice and play it locally."""
+        """Synthesize with the free Edge neural voice and play it locally.
+
+        The service returns MP3, but Windows' MCI MP3 device can play it
+        silently. The audio is decoded to a WAV file and played through
+        winmm - the same route the local Windows voice uses, which is known
+        to be audible on this machine.
+        """
         import asyncio
         import tempfile
+        import time
         import uuid
         import winsound
 
         import edge_tts
 
         path = Path(tempfile.gettempdir()) / f"scholarpath_voice_{uuid.uuid4().hex}.mp3"
+        wav_path: Path | None = None
         try:
 
             async def synth() -> None:
@@ -216,14 +272,32 @@ class Speaker(QObject):
             asyncio.run(synth())
             if not path.exists() or path.stat().st_size == 0:
                 raise RuntimeError("neural voice returned no audio")
+            wav_path = _mp3_to_wav(path)
+            target = wav_path or path
+            audio_seconds = _audio_seconds(wav_path or path)
             # Playback is blocking in this worker thread, so "finished" means
             # the audio really ended; the UI can interrupt with SND_PURGE.
-            winsound.PlaySound(str(path), winsound.SND_FILENAME)
+            started = time.monotonic()
+            winsound.PlaySound(str(target), winsound.SND_FILENAME)
+            elapsed = time.monotonic() - started
+            logger.info(
+                "neural voice played %s (%.2fs of audio in %.2fs)",
+                target.suffix,
+                audio_seconds,
+                elapsed,
+            )
+            if audio_seconds > 0.5 and elapsed < audio_seconds * 0.5:
+                # The sound device did not really run: treat it as a failure
+                # so the offline voice speaks instead of silence.
+                raise RuntimeError("neural audio did not play")
         finally:
-            try:
-                path.unlink(missing_ok=True)
-            except OSError:
-                pass
+            for temporary in (path, wav_path):
+                if temporary is None:
+                    continue
+                try:
+                    temporary.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
     def _speak_offline(self, text: str, init: Callable[[], object] | None = None) -> None:
         """Speak with the local Windows voice (no network)."""

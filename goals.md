@@ -53,6 +53,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G130 | 29 | Spoken replies use a natural neural voice (free Edge neural TTS, no API key) with the offline Windows voice as automatic fallback; the transcript auto-scrolls as the conversation grows | `[x]` |
 | G131 | 29 | Replies read like a person wrote them: no markdown symbols (bold asterisks, `--`, headings, tables) in the chat bubble or the voice, and the model is asked to answer in plain, warm, conversational prose | `[x]` |
 | G132 | 29 | Live voice mode survives a failed reply: the app says what happened out loud and keeps listening, and stopping a capture really releases the microphone | `[x]` |
+| G133 | 29 | The spoken reply must actually be audible: the neural audio is played as a WAV file through the Windows audio engine (the route the local voice uses), and if playback does not run the app falls back to the offline voice instead of silence | `[ ]` |
 
 ---
 
@@ -887,3 +888,30 @@ Two requirements from the owner, dated, after seeing the running app leak
     from the log file instead of guessed at.
   - Voice worker threads are held until they really end, so Qt never destroys
     a running thread.
+
+---
+
+## 19o. Making the neural voice actually audible (G133, 2026-10-21)
+
+- **Owner ask:** the model replied, the voice bar said "Speaking… with the
+  neural voice", and no sound came out. Before the neural change, the app
+  spoke.
+- **Diagnosis.** The app log showed the utterance was handled correctly:
+  `speaking with the neural engine` then `speech finished` 3.7 s later. The
+  synthesized audio itself was fine (measured: 3.62 s, peak -4.2 dBFS, RMS
+  -22.8 dBFS, 62% non-zero samples), so the file was good. The fault was the
+  **playback route**: the neural audio was an MP3 played through the Windows
+  MCI MP3 device, and on this machine that device accepts the file and runs
+  the clock without producing sound. The local Windows voice, which the
+  owner could hear, plays a WAV through winmm.
+- **Fix.** The neural MP3 is decoded to a WAV file (`miniaudio`) and played
+  through winmm - the route that is known to be audible here. If the WAV
+  cannot be produced, the MP3 is played directly. If the sound device does
+  not really run (playback returns far too early), the neural engine is
+  treated as failed and the **offline Windows voice speaks instead**, so the
+  app can never be silent.
+- **Evidence in the log.** Every utterance now logs the route and the
+  timing: `neural voice played .wav (3.62s of audio in 4.09s)`.
+- **Still open:** the final audible confirmation is the owner's ear - the
+  previous route was reported silent, the new one is mechanically verified
+  (Windows rendered the whole 3.62 s stream) but nobody has heard it yet.

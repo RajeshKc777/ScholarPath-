@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import wave
+
 from scholarpath.tts import (
     DEFAULT_SPEECH_LIMIT,
     ENGINE_OFFLINE,
     Speaker,
+    _audio_seconds,
+    _mp3_to_wav,
     clean_speech,
     to_speech,
 )
@@ -96,3 +100,25 @@ def test_speak_failure_reports_and_still_finishes() -> None:
     speaker.failed.connect(failures.append)
     speaker._speak("text", init=boom, engine=ENGINE_OFFLINE)
     assert failures and "could not be spoken" in failures[0]
+
+
+def test_audio_seconds_measures_a_wav_file(tmp_path) -> None:
+    path = tmp_path / "tone.wav"
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(24000)
+        handle.writeframes(b"\x00\x00" * 24000)  # one second
+    assert abs(_audio_seconds(path) - 1.0) < 0.01
+
+
+def test_audio_seconds_is_zero_for_a_broken_file(tmp_path) -> None:
+    path = tmp_path / "broken.wav"
+    path.write_bytes(b"not audio")
+    assert _audio_seconds(path) == 0.0
+
+
+def test_mp3_to_wav_returns_none_instead_of_raising(tmp_path) -> None:
+    broken = tmp_path / "broken.mp3"
+    broken.write_bytes(b"not audio at all")
+    assert _mp3_to_wav(broken) is None

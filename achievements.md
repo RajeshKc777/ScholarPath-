@@ -93,6 +93,39 @@ timer stop, review notice shows.
 
 ---
 
+### 2026-10-21 — A21 — Neural voice that is actually audible (G133)
+
+**Satisfies:** G133 (the model replied, the bar said "Speaking…", and no
+sound came out).
+
+Built:
+
+| Area | File(s) |
+| ---- | ------- |
+| Neural MP3 decoded to WAV and played through winmm; playback guard + offline fallback | `src/scholarpath/tts.py` |
+| Decoder dependency | `pyproject.toml` (`miniaudio`) |
+| Tests | `tests/test_tts.py` (+3 tests) |
+
+Behaviour: the neural audio is decoded to a WAV file and played through the
+Windows audio engine - the same route the local Windows voice uses, which
+the owner could hear before. If the WAV cannot be produced the MP3 is played
+directly, and if the sound device does not really run the neural engine is
+treated as failed so the offline voice speaks instead of silence. Every
+utterance logs the route and the timing, e.g. `neural voice played .wav
+(3.62s of audio in 4.09s)`.
+
+**Evidence:** 264 tests passing. Measured: the synthesized audio is healthy
+(3.62 s, peak -4.2 dBFS, RMS -22.8 dBFS) - the old MP3/MCI route was the
+fault, not the audio; the new WAV route was played by Windows end to end
+(3.62 s of audio in 4.09 s of wall clock).
+
+**Known limits:** the audible confirmation is the owner's ear - the previous
+route was reported silent and the new one is mechanically verified only; the
+fallback voice is the rougher offline one; playback is still blocking, so
+turning the mode off stops the sound a moment later.
+
+---
+
 ### 2026-10-21 — A20 — Human-sounding replies + voice that survives failures (G131, G132)
 
 **Satisfies:** G131 (the `**` and `--` made the conversation look machine-made)
@@ -696,4 +729,9 @@ pydantic 2.14.1, pytest 9.1.1 — all import-tested.
   key rotation: **code and tests landed** in commit `fe51cb0` (recovered from
   an interrupted session) and the suite is green, but no end-to-end run against
   a live provider yet, so they stay unverified until that happens.
+- G133 - the neural voice is now played as a WAV through winmm instead of an
+  MP3 through the Windows MCI MP3 device (which ran the clock silently on
+  this machine). The code, the playback guard, the offline fallback and the
+  tests are in place, but the **audible confirmation is still the owner's ear**,
+  so the goal stays open until they hear it.
 - Milestone G207 (M7: security review, performance, Windows packaging).
