@@ -137,6 +137,17 @@ class PrivacyConfig(BaseModel):
     web_search: bool = False
 
 
+class SearchConfig(BaseModel):
+    """How the web search behaves. The student's own trusted domains."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Domains the student trusts (for example a scholarship body that is not
+    # a university or a government). Matched exactly, on the registrable
+    # domain: "chevening.org" covers "www.chevening.org".
+    trusted_domains: list[str] = []
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -144,6 +155,7 @@ class AppConfig(BaseModel):
     ui: UIConfig = Field(default_factory=UIConfig)
     mcp: McpConfig = Field(default_factory=McpConfig)
     privacy: PrivacyConfig = Field(default_factory=PrivacyConfig)
+    search: SearchConfig = Field(default_factory=SearchConfig)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
 

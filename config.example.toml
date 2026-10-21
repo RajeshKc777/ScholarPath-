@@ -87,6 +87,14 @@ voice_tts = false
 # Search question -> the web-search service (and the pages it returns).
 web_search = false
 
+# --- Web search ---------------------------------------------------------------
+# Domains you trust for scholarship information. They are matched exactly, on
+# the registrable domain: "chevening.org" covers "www.chevening.org", and
+# nothing else. University and government domains (.edu, .ac.xx, .gov,
+# .gov.xx) are always treated as official-looking.
+[search]
+trusted_domains = []
+
 # --- Tools (MCP, optional) -----------------------------------------------------
 # MCP is opt-in and read-only by default. No server starts unless mcp.enabled
 # is true AND that server has enabled = true. With read_only = true, only

@@ -86,14 +86,15 @@ def test_official_domains_are_listed_first_and_labelled() -> None:
         "<a class='result-link' href='https://www.chevening.org/scholarships'>Chevening</a>"
     )
     results = parse_results(page)
+    # ".org" is a generic registry, not proof: a scholarship body has to be
+    # trusted by the student (search.trusted_domains). With nothing trusted
+    # and nothing official, the page order is kept.
     assert [result.url for result in results] == [
-        "https://www.chevening.org/scholarships",
         "https://blog.example.com/scholarship",
+        "https://www.chevening.org/scholarships",
     ]
-    assert results[0].official_looking
-    assert not results[1].official_looking
+    assert not results[0].official_looking
     block = format_results("uk scholarship", results)
-    assert "official-looking domain" in block
     assert "not an official domain" in block
 
 

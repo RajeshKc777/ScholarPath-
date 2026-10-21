@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import functools
 import logging
 import sys
 from pathlib import Path
@@ -16,6 +17,7 @@ from scholarpath.gateway.factory import build_gateway
 from scholarpath.logging_setup import setup_logging
 from scholarpath.ui.chat_controller import ChatController
 from scholarpath.ui.main_window import MainWindow
+from scholarpath.websearch import search
 
 logger = logging.getLogger("scholarpath.app")
 
@@ -85,6 +87,9 @@ def main(argv: list[str] | None = None) -> int:
         gateway,
         model=config.gateway.model or None,
         search_enabled=config.privacy.web_search,
+        searcher=functools.partial(
+            search, trusted_domains=config.search.trusted_domains
+        ),
     )
     window = MainWindow(controller, config)
     window.show()
