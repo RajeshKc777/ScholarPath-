@@ -28,9 +28,9 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 <br>
 
 <div align="center">
-  <img src="docs/screenshot.png" alt="ScholarPath AI: the chat page with a saved local profile and four quick actions" width="880">
+  <img src="docs/screenshot.png" alt="ScholarPath AI: the chat page with a sample local profile and four quick actions" width="880">
   <br>
-  <sub><em>The real app, not a mock-up: chat, a local profile, catalog-backed discovery and page-verified records.</em></sub>
+  <sub><em>The real UI with sample data: chat, a local profile, catalog-backed discovery and page-verified records.</em></sub>
 </div>
 
 ---
@@ -53,8 +53,10 @@ built on the opposite rule set.
 
 ## 📸 A look inside
 
-Eight screens, all rendered from the shipped build — no mock-ups. Click any
-image to open it full size.
+Eight screens, rendered from the shipped build with a **stub gateway** (the
+green "Live" pill is illustrative) and **sample data** (a fictional profile and
+fictional records). The UI is real; the data and the gateway status are not.
+Click any image to open it full size.
 
 <table>
   <tr>
@@ -96,22 +98,28 @@ image to open it full size.
 </table>
 
 > [!NOTE]
-> The screenshots use **sample records created for this README**. The providers,
-> deadlines and amounts shown are fictional (the links use reserved `.example`
-> domains) and are not real scholarship data.
+> The screenshots were taken with a **stub gateway**, so the "Live" status pill
+> is illustrative and no model reply is shown. They use a **sample profile**
+> ("Aarav Sharma") and **sample records created for this README**; the
+> providers, deadlines and amounts are fictional (the links use reserved
+> `.example` domains) and are not real scholarship data.
 
 ---
 
 ## 🚦 Status
 
 > [!IMPORTANT]
-> **All seven milestones are complete**, and **phases 1 to 3 of the discovery
-> roadmap** are in: the app now walks **official scholarship portals** itself,
-> lets you **search what they stated**, and **keeps those records true** — a
-> background re-check re-reads a page that changed, keeps both versions and
-> shows the field-by-field difference, while **warning signs** (payment wording,
-> a lookalike domain, a missing source, a missing deadline) are shown next to
-> the record instead of a verdict.
+> **M1–M6 and phases 1–3 of the discovery roadmap are done.** **M7 is packaged
+> but not clean-Windows verified**: the folder build is produced and
+> bundle-audited, but it has not been run on a freshly installed Windows, there
+> is no installer, and no separate security/performance review exists yet.
+>
+> The discovery work is in: the app now walks **official scholarship portals**
+> itself, lets you **search what they stated**, and **keeps those records
+> true** — a background re-check re-reads a page that changed, keeps both
+> versions and shows the field-by-field difference, while **warning signs**
+> (payment wording, a lookalike domain, a missing source, a missing deadline)
+> are shown next to the record instead of a verdict.
 >
 > Chat runs **live through the local OpenCode service**, profiles and documents
 > work locally, and you can **verify a scholarship page**: paste the official
@@ -134,7 +142,7 @@ image to open it full size.
 | M4 | Source discovery, official-source verification, storage | ✅ Done |
 | M5 | Deterministic eligibility, explainable ranking | ✅ Done |
 | M6 | MCP tools behind adapter, comparison, saved opportunities, checklists | ✅ Done |
-| M7 | Security review, performance, Windows packaging | ✅ Done — packaged build produced and audited |
+| M7 | Security review, performance, Windows packaging | 🟡 Packaged and bundle-audited — clean-Windows install and security review not done |
 | P1 | Catalog: sources registry, crawler, background run, dedup + sources | ✅ Done — 8 official portals shipped |
 | P2 | Discover: search + filters over the catalog, eligibility hand-off | ✅ Done |
 | P3 | Freshness + safety: re-check job with diffs, reminders, export, warning signs | ✅ Done |
@@ -417,7 +425,9 @@ Rules the build keeps:
   `%APPDATA%\ScholarPath` and are created on first run, never shipped.
 - **No secrets in the build.** API keys are read from the user's config or
   the environment at run time.
-- **The Python runtime is bundled**, so the app starts on a clean Windows.
+- **The Python runtime is bundled**, so the target machine does not need Python.
+  The packaged build was run on this machine; a clean-Windows VM run is still
+  to be done (see the live-proof checklist).
 - Measured startup of the packaged build on this machine: **~1.6 s** to the
   first window.
 
@@ -436,19 +446,32 @@ Config lives outside the package so it survives upgrades:
 <summary><strong>Full config.toml template</strong></summary>
 
 ```toml
+log_level = "INFO"            # top-level keys must come before the first [table]
+
 [gateway]
-provider = "stub"     # or "opencode" - talks to a running OpenCode service
-model = ""            # "provider/model" or bare id; empty = OpenCode's default
+provider = "stub"             # "stub" | "opencode" | "openai"
+model = ""                    # "provider/model" or a bare id; empty = the provider default
+models = []                   # failover chain when a model is rate-limited
+fallback_providers = []       # e.g. ["opencode", "openai"]; tried after the primary
+failover_attempts = 6         # model/account attempts per turn before an honest error
 timeout_seconds = 30.0
 retries = 1
 
-# opencode adapter overrides (empty = discover the running service automatically)
+# OpenCode adapter (empty = discover the running service automatically)
 base_url = ""
 service_file = ""
 location_dir = ""
+rotate_credentials = true     # ask the service to rotate accounts on a quota loss
+
+# OpenAI-compatible adapter (only used when provider = "openai")
+api_base_url = ""
+api_model = ""                # endpoint's own model; empty = use model above
+api_models = []               # endpoint's own chain; empty = use models above
+api_keys = []                 # app's keys, tried in order; or SCHOLARPATH_API_KEYS
+account_keys = []             # console keys rotated when a quota is exhausted
 
 [ui]
-theme = "dark"
+theme = "dark"                # dark | light | system
 window_width = 1100
 window_height = 720
 
@@ -458,21 +481,31 @@ voice_stt = false   # microphone clip -> Google's speech service
 voice_tts = false   # reply text -> Microsoft's speech service
 web_search = false  # search question -> the web-search service
 
-# Domains you trust for scholarship information (matched exactly).
+# Domains you trust for scholarship information (matched on the registrable domain).
 [search]
-trusted_domains = ["chevening.org"]
+trusted_domains = []
 
 # Keeping the stored records true (saved records are always checked first).
 [freshness]
-auto = true          # check in the background when a record is due, at startup and every half hour
-interval_hours = 24  # how old a last check may be before the record is due again
-max_per_run = 20     # how many records one run may read
+auto = true
+interval_hours = 24
+max_per_run = 20
 
 # Deadline reminders: OFF by default. A local Windows notification, nothing sent.
 [reminders]
 enabled = false
 
-log_level = "INFO"
+# Tools (MCP), opt-in and read-only by default. No server starts unless both
+# mcp.enabled and the server's own enabled are true.
+[mcp]
+enabled = false
+read_only = true
+
+# [[mcp.servers]]
+# name = "docs"
+# command = "python"
+# args = ["-m", "docs_server"]
+# enabled = false
 ```
 
 </details>

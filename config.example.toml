@@ -29,6 +29,10 @@ provider = "stub"
 # model that OpenCode reports.
 model = ""
 
+# Providers tried after the primary one when it is rate-limited or unreachable.
+# Names must be one of: stub, opencode, openai. Empty = no provider fallback.
+fallback_providers = []
+
 # Failover chain, tried in order when a model is rate-limited. Empty = the
 # provider's own choice first, then its free-tier models. Paid models are
 # never entered automatically - name them here if you want them tried.
@@ -65,9 +69,18 @@ rotate_credentials = true
 # http://127.0.0.1:4182/v1 for a local router.
 api_base_url = ""
 
+# The endpoint's own model and chain. When both are empty the endpoint
+# uses "model"/"models" above instead - that is the standalone case.
+api_model = ""
+api_models = []
+
 # The app's own API keys, tried in order. Keep them in THIS local file or in
 # the SCHOLARPATH_API_KEYS environment variable - never in the repository.
 api_keys = []
+
+# Console keys the app registers with the model service and rotates between
+# when a model quota is exhausted. Keep them here or out of the repository.
+account_keys = []
 
 # --- Interface ---------------------------------------------------------------
 [ui]

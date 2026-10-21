@@ -36,13 +36,46 @@ is finished, not when it is started. Each entry names the goal it satisfies
   badges and eight real screenshots of the shipped pages (A30).
 - Licence: proprietary, source-available, view-only (`LICENSE`).
 - Tests: **562 passing** (`pytest`, ~43 s).
-- Next: **Phase 4** of the owner roadmap (README fixes, database encryption,
-  OCR/TTS interfaces, GitHub Actions) — not started. M7 packaging and the
-  security review remain in place.
+- M7: packaged and bundle-audited (`dist\ScholarPathAI`,
+  `packaging\build.ps1`), but **not clean-Windows verified**; there is no
+  installer and no separate security/performance review. G138, G207 and G113
+  are `[~]` (A31).
+- Next: **G165** (database encryption), **G166** (OCR/TTS interfaces) and
+  **G167** (GitHub Actions CI), then the UI polish and live checks (G168-G170).
+  G164 (the truthful README) is done in A31.
 
 ---
 
 ## Log (newest first)
+
+### 2026-10-21 - A31 - Truth pass: M7 is not done, Phase 4 is tracked, and the docs say what the code does (G164)
+
+**Satisfies:** G164 (a truthful README). Reconciles G207, G138, G113, G105,
+G110 and G107; adds G165-G170.
+
+The audit found three documents disagreeing: `goals.md` had M7 `[x]`,
+`achievements.md` listed M7 as not achieved, and the README said "all seven
+milestones are complete". The same pass fixed the config template, the
+screenshot captions and the stale dependency list.
+
+| Area | What changed |
+| ---- | ------------ |
+| M7 honesty | G207, G138 and G113 are `[~]`: folder build produced and bundle-audited; clean-Windows install, installer and a separate security/performance review still missing |
+| G105 | stays open for conversational onboarding; the profile form, documents, OCR and confirmed extraction are built |
+| G110 | stays open for persisted eligibility/match/research-run tables and encryption (G165); deletion controls exist |
+| G107 | note added: funding-type ranking deliberately deferred |
+| Dependencies | the "to verify (open)" list became a resolved list; Python 3.11 is the packaging target, PyInstaller proven, the MCP SDK is not used |
+| README | status and the M7 table tell the truth; the config block lists every key; `config.example.toml` gained `fallback_providers`, `api_model`, `api_models` and `account_keys`; screenshots are labelled stub-gateway/sample data; the untested "starts on a clean Windows" claim was corrected |
+| Assets | unused `docs/screens/chat.png` removed |
+| New requirements | G164 (this pass, `[x]`), G165 DB encryption, G166 OCR/TTS interfaces, G167 CI, G168 UI polish, G169 live catalog run, G170 live-proofs checklist |
+
+**Evidence:** docs-only change; **562 tests pass** (`pytest`, exit 0). Every
+status claim was checked against the code paths and the existing A-entries.
+No feature code was touched.
+
+**Known limits:** the README screenshots still show a stub gateway as "Live"
+because they were not retaken; the caption now says so. The clean-Windows and
+security-review gaps are real and stay open.
 
 ### 2026-10-21 - A30 - A visual README, eight real screenshots, and two fixes they exposed (G161-G163)
 
@@ -359,6 +392,10 @@ timer stop, review notice shows.
 
 **Satisfies:** G138 (ship as a self-contained app) and G207 (M7: security
 review, testing, performance, Windows packaging).
+
+> **Superseded in part (2026-10-21):** G138 and G207 are `[~]`, not `[x]`.
+> The folder build and its bundle audit are real, but a clean-Windows install,
+> an installer and a separate security/performance review were not done. See A31.
 
 Built:
 
@@ -1161,13 +1198,18 @@ pydantic 2.14.1, pytest 9.1.1 — all import-tested.
   filters), G109 (model-side tool use deferred), G111, G114 - product
   capabilities beyond the M6 pipeline.
 - G106 funding-type ranking policy (funding values stay descriptive).
+- G105 - the profile form, documents, OCR and confirmed extraction are built;
+  the conversational onboarding flow is not.
+- G110 - storage, privacy switches and deletion controls are built; persisted
+  eligibility/match/research-run tables and encryption (G165) are not.
 - G127, G128, G129 - provider chain, failover, OpenAI-compatible endpoint and
-  key rotation: **code and tests landed** in commit `fe51cb0` (recovered from
-  an interrupted session) and the suite is green, but no end-to-end run against
-  a live provider yet, so they stay unverified until that happens.
-- G133 - the neural voice is now played as a WAV through winmm instead of an
-  MP3 through the Windows MCI MP3 device (which ran the clock silently on
-  this machine). The code, the playback guard, the offline fallback and the
-  tests are in place, but the **audible confirmation is still the owner's ear**,
-  so the goal stays open until they hear it.
-- Milestone G207 (M7: security review, performance, Windows packaging).
+  key rotation: **code and tests landed** in commit `fe51cb0` and the suite is
+  green, but no end-to-end run against a live provider yet.
+- G133 - the neural voice is played as a WAV through winmm; code, playback
+  guard, offline fallback and tests are in place, but the **audible
+  confirmation is still the owner's ear**.
+- G138, G207 and M7 (G113) - packaged folder build produced and bundle-audited;
+  clean-Windows install, installer and a separate security/performance review
+  are still missing.
+- G165, G166, G167, G168, G169, G170 - Phase 4 and the next steps; G164 is done
+  in A31.

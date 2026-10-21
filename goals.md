@@ -24,7 +24,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G104 | 4 | AI orchestration: 6 modular agents, model registry, task-based routing, failure handling | `[ ]` |
 | G105 | 5 | Conversational onboarding, academic profiles, document upload + confirmed extraction | `[ ]` |
 | G106 | 6 | Scholarship research with source-verification hierarchy and structured records | `[ ]` |
-| G107 | 7 | Deterministic eligibility engine and explainable ranking | `[x]` |
+| G107 | 7 | Deterministic eligibility engine and explainable ranking (funding-type ranking deferred - funding stays descriptive, see §7) | `[x]` |
 | G108 | 8 | Desktop chat UI: onboarding, results, filters, comparison, saved list, settings | `[ ]` |
 | G109 | 9 | MCP + tool integration with untrusted-input handling and read-only research default | `[ ]` |
 | G110 | 10 | SQLite data architecture, privacy, deletion controls, secrets handling | `[ ]` |
@@ -58,7 +58,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G135 | 31 | Let the chat use MCP tools: when a read-only MCP tool is configured and enabled, the chat can call it during a turn, with tool output treated as untrusted data, size-capped and never obeying instructions inside it | `[ ]` |
 | G136 | 32 | Web search in the chat: the app can run a keyless web search when the student needs current results, answer from those results with the pages named, and treat every result as untrusted data | `[x]` |
 | G137 | 33 | Saving the profile must be unmistakable: the save is confirmed on screen with the time, a failed save says so, and the side card always mirrors what is really stored locally | `[x]` |
-| G138 | 33 | A packaged Windows build: ScholarPath ships as a self-contained app that starts on a clean Windows, keeps all user data and secrets outside the bundle, and passes a security and performance review | `[x]` |
+| G138 | 33 | A packaged Windows build: ScholarPath ships as a self-contained app that starts on a clean Windows, keeps all user data and secrets outside the bundle, and passes a security and performance review | `[~]` |
 | G139 | 34 | Verbatim verification tolerates spelling differences (unicode, quotes, dashes, hyphenated line breaks, dates compared by value) without ever accepting a value the page does not state | `[x]` |
 | G140 | 34 | Privacy switches: voice input, the spoken reply and web search are off by default, each is gated on its own switch, and the Settings page states exactly which third party receives what | `[x]` |
 | G141 | 34 | Official pages are recognised by an exact suffix allowlist on the registrable domain (.edu, .ac.xx, .gov, .gov.xx), plus the student's own trusted_domains - never by a substring | `[x]` |
@@ -84,6 +84,13 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G161 | 39 | A visual README: a coloured banner, live badges, and a gallery of fresh screenshots of the shipped pages (Chat, Discover, Saved Opportunities, Eligibility, Catalog, Settings) with captions and a sample-data notice; the grouping of the feature list, the technical content and the honesty rules are unchanged | `[x]` |
 | G162 | 39 | The chat quick-action "Explore Countries" opens the Discover page instead of showing a stale "Soon" chip, so no screenshot or shortcut claims a shipped feature is missing | `[x]` |
 | G163 | 39 | The Saved Opportunities page holds up with four or more records: the card list scrolls, the saved and checked dates read as dates (not raw ISO timestamps), and the freshness line stays on one line | `[x]` |
+| G164 | 39a | A truthful README: the status and milestone table match the code and the tracked docs, the config template is complete, the screenshots are labelled as stub-gateway sample data, and no stale asset or dependency list remains | `[x]` |
+| G165 | 40 | Local database encryption at rest (DPAPI or SQLCipher), with a migration for existing databases and an honest note on what the key protects and what it does not | `[ ]` |
+| G166 | 40 | OCR and TTS/STT sit behind small Protocol interfaces (like `gateway/`), with the Windows implementation as the default and a fake for tests; no behaviour change | `[ ]` |
+| G167 | 41 | GitHub Actions CI on `windows-latest`: Python 3.11, install `.[dev]`, run pytest and the bundle checks that need no build, and show a README status badge | `[ ]` |
+| G168 | 42 | UI privacy and status correctness: voice buttons disabled (and linked to Settings) when their switch is off, status text never cut mid-word, copy follows config, accurate tooltips, profile initial, and no clipped panels | `[ ]` |
+| G169 | 43 | Live catalog run with the real model on 3 portals, at most 8 pages each, with a per-field verbatim audit; every bug found is fixed with a fake-server/fake-gateway regression test | `[ ]` |
+| G170 | 44 | A live-proofs checklist in `docs/live_checks.md` for forced-429 failover, neural-voice audibility and clean-Windows packaging; the goals stay open until the owner runs it and reports back | `[ ]` |
 
 ---
 
@@ -191,6 +198,14 @@ Document support: marksheets, transcripts, degree certificates, language-test re
   documented conversion policy.
 - Users can correct extracted data and update profiles at any time.
 
+**Where it stands (2026-10-21).** Built: the local profile form for the fields
+above, document upload for PDF/text/image with Windows OCR, verbatim-checked
+extraction, per-field confirmation and edit-anytime. **Not built:** the
+conversational onboarding flow that asks these questions in chat, and a
+documented GPA-scale conversion (deliberately deferred - never guessed). G105
+therefore stays open; A10's "satisfies" covers the profile + document half
+only.
+
 ## 6. Scholarship research and source verification (G106)
 
 Source priority:
@@ -282,6 +297,15 @@ application tasks.
 - Deletion controls for profiles, documents, and research history.
 - Make it clear when external services are used and when data leaves the device.
 
+**Where it stands (2026-10-21).** Built: SQLite storage, local-by-default
+profiles and documents, the three privacy switches, no credentials in source or
+in the bundle, and Delete/Clear controls for documents, stored scholarship
+records, saved opportunities and the profile. **Not built:** persisted tables
+for eligibility evaluations, matches and research runs (they are recomputed,
+not stored), and encryption at rest (tracked as G165). G110 stays open for those
+two items; A10 and A13's "satisfies" covered the storage and privacy half, not
+the encryption.
+
 ## 11. Installation and distribution (G111)
 
 - Development: git clone + standard Python project config, Windows-focused docs.
@@ -319,7 +343,13 @@ replace working components or add unnecessary dependencies without justification
 | G204 | M4 | Source discovery, official-source verification, structured scholarship storage | Scholarship records carry source URLs + timestamps + verification status; unverifiable fields marked unknown | `[x]` |
 | G205 | M5 | Deterministic eligibility, explainable ranking, cited recommendations | Eligibility states correct on fixtures; ranking reproducible; every claim cites a source | `[x]` |
 | G206 | M6 | MCP integrations, comparison, saved opportunities, checklists | MCP tools usable behind adapter; comparison and saved items persist | `[x]` |
-| G207 | M7 | Security review, testing, performance, Windows packaging | Packaged app runs on clean Windows; test suite green; no secrets in bundle | `[x]` |
+| G207 | M7 | Security review, testing, performance, Windows packaging | Packaged app runs on clean Windows; test suite green; no secrets in bundle | `[~]` |
+
+**Where M7 stands (2026-10-21).** M1-M6 are done and tested. M7 is `[~]`: the
+folder build is produced and bundle-audited, but it has not been run on a clean
+Windows install, there is no installer, and no separate security/performance
+review exists. G207 and G138 are `[~]` for the same reason; G113 (M1-M7) stays
+`[~]` until they are done.
 
 Rule: no milestone starts before the previous one has a working, testable result.
 
@@ -757,27 +787,17 @@ Two requirements from the owner, dated, after seeing the running app leak
   documented conversion policy"; a structured list format needs its own
   documented policy (G105) before any normalisation is added.
 
-## Dependencies to verify before building (open)
+## Dependencies (resolved 2026-10-21)
 
-- [x] OpenCode gateway: **verified 2026-10-20** — local server API (session
-      flow), Basic auth from the service registration file, free-tier one-shot
-      endpoint rejected, model catalogue at `/api/model`. (`goals.md` §19b,
-      [[A8]].)
-- [~] PySide6 deployment: Qt 6.12.0 works, `QPlainTextEdit.setPlaceholderText`
-      exists (no workaround needed), Essentials-only venv is 260 MB. PyInstaller
-      bundling still unproven.
-- [x] OCR stack choice: **resolved 2026-10-20** — Windows built-in OCR
-      (Foundation.Media.Ocr via pywin32+winsdk) for images, `pypdf` for PDF text
-      layers. No Tesseract/PaddleOCR install burden; offline; degrades to explicit
-      warnings when a page has no text or no installed OCR language. (goals.md
-      §19d, [[A10]].)
-- [~] `mcp` Python SDK: globally installed 1.25.0 is broken; must be pinned and
-      import-tested inside the project venv before M6.
-- [~] Web research tool: automatic candidate search still needs a search API /
-      MCP server decision (cost, terms). Page verification itself is live
-      without it — official URLs pasted by the user are fetched and verified
-      (`goals.md` §19e, [[A11]]).
-- [ ] Supported Python version for packaging (3.11 vs 3.13) — 3.11 is the current target.
+- [x] OpenCode gateway — verified live (A8, §19b).
+- [x] PySide6 deployment — Qt 6.12 Essentials works; PyInstaller bundled the
+      app into `dist\ScholarPathAI` (A25, §19s).
+- [x] OCR stack — Windows OCR for images, `pypdf` for text layers (A10, §19d).
+- [x] `mcp` SDK — not used. A stdlib MCP client was written instead, so the
+      broken external SDK is no longer a dependency (A13, §19g).
+- [x] Web research — keyless web search shipped (G136, §19q); the catalog uses
+      official portals, not a search API.
+- [x] Python for packaging — 3.11, the version the shipped build uses (A25).
 
 ## Open questions
 
@@ -1058,6 +1078,9 @@ Two requirements from the owner, dated, after seeing the running app leak
   the packaged build; it was not tested on a freshly installed Windows with
   no Python, and there is no installer (no signed `.msi`/Inno Setup yet) -
   the folder build is copied to the target machine as-is.
+- **Status (2026-10-21):** G138 and G207 stay `[~]`. The bundle is produced and
+  audited; a clean-Windows run and a separate security review are still
+  missing. The README and the goal register now say so instead of "done".
 
 ---
 
@@ -1257,14 +1280,15 @@ What shipped:
 1. **`docs/banner.svg`** - a self-contained banner (gradient, mortarboard mark,
    tagline, no external fonts, no scripts), hand-written SVG so it stays sharp
    at any width and needs no build step.
-2. **Eight screenshots in `docs/screens/`** - chat, Discover, Saved
-   Opportunities, Saved Opportunities with the difference panel open,
-   Eligibility, Catalog, Settings and My Profile; `docs/screenshot.png` is the
-   new chat capture and is the hero image. They are real `MainWindow` grabs
-   rendered offscreen (`QT_QPA_PLATFORM=offscreen`, plus `QT_QPA_FONTDIR` so the
-   Windows fonts load) from the shipped build, seeded with sample records in a
-   throwaway `SCHOLARPATH_HOME`; the real profile and database are never
-   touched.
+2. **Eight screenshots** - seven page captures in `docs/screens/` (Discover,
+   Saved Opportunities with the difference panel open, Eligibility, Catalog,
+   Settings and My Profile, plus the Saved page) and `docs/screenshot.png` as
+   the hero chat capture. They are real `MainWindow` grabs rendered offscreen
+   (`QT_QPA_PLATFORM=offscreen`, plus `QT_QPA_FONTDIR` so the Windows fonts
+   load) from the shipped build, seeded with sample records in a throwaway
+   `SCHOLARPATH_HOME`; the real profile and database are never touched. The
+   harness uses a stub gateway named like a live one, so the green "Live" pill
+   is illustrative; G164 now says so in the README.
 3. **README structure** - banner, tagline, seven badges (the status badge now
    reads "phase 3 shipped"), nav links, the screenshot gallery with captions
    and a sample-data notice, GitHub alert callouts, and the 30-bullet feature
@@ -1299,3 +1323,109 @@ domains, which the README states; they are regenerated by a throwaway script in
 the temp folder, not by a tool in the repository, so a future UI change means
 re-taking them by hand. The banner and the gallery are maintained like the
 diagrams.
+
+---
+
+## 39a. Truth pass: M7, Phase 4 and the docs (G164, G207, 2026-10-21)
+
+The audit found three documents disagreeing with each other and with the code:
+`goals.md` marked M7 done, `achievements.md` listed M7 as not achieved, and the
+README said "all seven milestones are complete". It also found stale dependency
+items, a "Full config template" that was not full, screenshots whose green
+"Live" pill came from a stub gateway, and Phase 4 with no requirement rows.
+
+What changed (docs only - no application code):
+
+1. **M7 is `[~]`, not done.** G207, G138 and G113 now say: the folder build is
+   produced and bundle-audited; a clean-Windows install, an installer and a
+   separate security/performance review are still missing. README status and
+   the milestone table say the same. The truth is in one place, not three.
+2. **G105 and G110 reconciled.** Both stay open with the exact remainder
+   written down: conversational onboarding for G105; stored
+   eligibility/match/research-run tables and encryption for G110. A10/A13's
+   "satisfies" covered only the built half.
+3. **G107 note.** Funding-type ranking is deliberately deferred; funding stays
+   descriptive.
+4. **Dependencies resolved.** The "to verify (open)" list is now a resolved
+   list; Python 3.11 is the packaging target and PyInstaller bundling is
+   proven.
+5. **Phase 4 and the next steps have rows.** G164 (this README truth pass, now
+   `[x]`), G165 (DB encryption), G166 (OCR/TTS interfaces), G167 (GitHub
+   Actions), G168 (UI privacy/status), G169 (live catalog run), G170 (live
+   proofs checklist).
+6. **README.** "All seven milestones complete" and M7 "Done" replaced with
+   "M1-M6 + phases 1-3 done; M7 packaged, clean-Windows pending". The config
+   block now lists every key (`models`, `fallback_providers`,
+   `failover_attempts`, `api_keys`, `api_model`, `api_models`, `account_keys`,
+   `[mcp]`) and `config.example.toml` gained the missing keys. Screenshots are
+   labelled as a stub gateway with a sample profile and sample records. The
+   unused `docs/screens/chat.png` was removed.
+7. **Packaging copy.** "So the app starts on a clean Windows" in the README was
+   an untested claim; it now says the runtime is bundled and the clean-Windows
+   run is still to be done.
+
+Verification: **562 tests pass** (docs-only change), and the README's claims
+were checked against `goals.md`, `achievements.md` and the code paths named in
+the audit.
+
+---
+
+## 40. Local encryption and OCR/TTS interfaces (G165, G166)
+
+- **G165 (DB encryption).** Encrypt the local SQLite database at rest with
+  DPAPI (per Windows user) or SQLCipher, migrate existing databases in place,
+  and document what the key protects (a copied database file) and what it does
+  not (a compromised logged-in session, screenshots, exports). A restore path
+  and a key-loss message are part of the design.
+- **G166 (interfaces).** Move OCR and TTS/STT behind small `Protocol`
+  interfaces, mirroring `gateway/`: Windows OCR / Edge+SAPI as the default
+  implementations, a fake for tests. No behaviour change; tests keep passing.
+
+## 41. CI (G167)
+
+A GitHub Actions workflow on `windows-latest` with Python 3.11: install
+`.[dev]`, run `pytest` (no network, no model), and run the parts of
+`packaging/verify_bundle.py` that do not need a built bundle. Add the workflow
+badge to the README. The suite must never depend on a live provider.
+
+## 42. UI privacy and status polish (G168)
+
+- Mic and Live voice disabled and greyed when `privacy.voice_stt` /
+  `voice_tts` are off; the tooltip says "Off. Turn on in Settings > Privacy"
+  and a click opens Settings at that section.
+- The status strip elides with the full text in a tooltip (or wraps to two
+  lines); never cut mid-word. The config path keeps a tooltip only.
+- The hint, subtitle and "What works today" follow the config: web search and
+  voice read "Off (enable in Settings)" when their switch is false.
+- The stale "search is not built yet" tooltip and the "Official pages you
+  paste" subtitle are corrected; the dead `_not_available` path is removed.
+- The header avatar shows the first letter of the profile name (generic icon
+  when no name).
+- The right profile panel's 23 px clip is fixed; My Profile is wrapped in a
+  scroll area so the Save row never clips at any Windows scaling.
+
+## 43. Live catalog verification (G169)
+
+Use a temporary `SCHOLARPATH_HOME` so the real data is untouched. Run the
+headless catalog with the real model on Chevening, DAAD and Erasmus+ only,
+at most 8 pages each, respecting robots.txt and one request per second. Record
+pages fetched/skipped, created/updated/merged, conflicts, errors and time.
+Print a per-record table: title, domain, source URL, and each field with
+"verbatim on page: yes/no". Then check: no field absent from its page, no
+non-scholarship page saved, no wrong merge or missed duplicate, no
+`deadline_text` without a justified `deadline_date`, no truncated
+`apply_url`, and no unhandled timeout/bad JSON/rate limit. Run the freshness
+re-check (unchanged pages must report unchanged) and `scam_flags` (official
+portals must get no false warning), and render Catalog + Discover offscreen
+with this data (search "daad" and "master"; filters must not leak). Fix each
+bug with a fake-server/fake-gateway regression test; ask before any design
+decision. Record the run honestly in `achievements.md`.
+
+## 44. Live proofs checklist (G170)
+
+`docs/live_checks.md` with exact manual steps, inputs and a pass/fail box for:
+forced-429 provider failover (G127-G129), neural-voice audibility (G133), and
+the packaged app on a clean Windows VM (M7). `fallback_providers` and
+`account_keys` are documented in `config.example.toml`; the checklist tells the
+owner how to use them. These goals stay `[ ]` / `[~]` until the owner runs the
+checklist and reports back; the file is a procedure, not evidence.
