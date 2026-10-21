@@ -30,7 +30,9 @@ is finished, not when it is started. Each entry names the goal it satisfies
   page - search and filters over the stored records with an eligibility
   hand-off (A27); **phase 3** adds the freshness job, the version history and
   its difference view, opt-in reminders, CSV/ICS export and the warning signs
-  (A28).
+  (A28). The README now carries five Mermaid diagrams — the student journey,
+  the system map, the record pipeline, the re-check decision and the device
+  trust boundary (A29).
 - Licence: proprietary, source-available, view-only (`LICENSE`).
 - Tests: **558 passing** (`pytest`, ~43 s).
 - Next: **Phase 4** of the owner roadmap (README fixes, database encryption,
@@ -40,6 +42,40 @@ is finished, not when it is started. Each entry names the goal it satisfies
 ---
 
 ## Log (newest first)
+
+### 2026-10-21 — A29 — README diagrams (G160)
+
+**Satisfies:** G160.
+
+| Area | File(s) |
+| ---- | ------- |
+| Student journey, layered system map, record pipeline, re-check decision, device trust boundary | `README.md` |
+| The requirement and what was checked | `goals.md` (section 19x) |
+
+Five Mermaid blocks, all text in the README (no image build step, editable):
+
+1. **The student journey** at the top of "What works today".
+2. **The system map** at the top of "Architecture" — Qt UI → domain logic →
+   SQLite / guarded fetch / model gateway, with the portals behind the fetch.
+3. **How a scholarship record travels** — six stages, with a numbered list of
+   the rules a summary diagram cannot carry.
+4. **The re-check decision** — unchanged, changed (re-read + verify), failed
+   ("could not re-check, last verified DATE"), and EXPIRED only from a stored
+   `deadline_date`.
+5. **What crosses the device boundary** under Privacy — the local box, the
+   model service the student configures, and the three off-by-default third
+   parties (Google speech, Microsoft speech, DuckDuckGo).
+
+**Evidence:** all five blocks parse with `mermaid.parse` (Mermaid 12.2) and
+were rendered to PNG with `@mermaid-js/mermaid-cli` 12.0 against the system
+Edge; every image was inspected and the labels were rewritten where Mermaid
+split a word at a hyphen or produced a misleading edge. Docs only, so the
+suite is unchanged: **558 passing**.
+
+**Limits:** the diagrams are hand-maintained — a new page or module does not
+appear until someone edits the Mermaid block — and Mermaid wraps labels into a
+narrow column, so each box is kept short. The file tree under "Architecture"
+remains the authoritative inventory.
 
 ### 2026-10-21 — A28 — Phase 3: freshness, reminders, export and warning signs (G152-G159)
 

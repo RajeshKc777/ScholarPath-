@@ -86,6 +86,20 @@ Full specification: [`goals.md`](goals.md) · Build log: [`achievements.md`](ach
 
 ## What works today
 
+### The student journey
+
+```mermaid
+flowchart LR
+    open["Open ScholarPath"] --> profile["Fill in My Profile<br/>degree, GPA, IELTS/TOEFL"]
+    profile --> run["Run the catalog<br/>official portals only"]
+    run --> disc["Discover<br/>search and filter"]
+    disc --> check["Check against profile<br/>rule-based report"]
+    check --> save["Save the opportunity"]
+    save --> recheck["Re-check<br/>did the page change?"]
+    save --> remind["Reminder<br/>30 / 14 / 7 / 1 days"]
+    save --> export["Export<br/>CSV or calendar"]
+```
+
 - Native Qt window with a real chat loop (Enter to send, Shift+Enter for newline).
 - **Live model replies** through the local OpenCode service (stub still available
   and switchable in config).
@@ -403,6 +417,84 @@ shipped list.
 
 ## Architecture
 
+### System map
+
+Mermaid renders this on GitHub (and in VS Code's preview). Nothing in the
+diagram is aspirational: every box names code that ships, and every arrow is a
+call path that exists.
+
+```mermaid
+flowchart LR
+    ui["Qt UI<br/>Chat · Profile<br/>Documents<br/>Research<br/>Eligibility<br/>Catalog<br/>Discover<br/>Saved<br/>Settings"]
+    logic["Domain logic<br/>no Qt imports<br/>extraction<br/>research<br/>crawler<br/>catalog<br/>search<br/>freshness<br/>warnings<br/>reminders<br/>export<br/>eligibility"]
+    data[("Local SQLite<br/>profiles<br/>documents<br/>records<br/>versions<br/>sources<br/>saved list<br/>checklists<br/>reminders")]
+    net["Guarded fetch<br/>sources.py<br/>SSRF-safe<br/>size caps<br/>conditional GET<br/>1 req/s/host"]
+    gw["Model gateway<br/>stub · OpenCode<br/>OpenAI compatible"]
+    portals["Official portals<br/>and pasted pages"]
+
+    ui --> logic
+    logic --> data
+    logic --> net
+    logic --> gw
+    net --> portals
+```
+
+**Reading the map:** the UI never talks to a provider directly, and only
+`gateway/` knows which provider is configured. The catalog and the re-check job
+both go through the same guarded fetch, so the SSRF guard, the one-request-per-
+second pacing and the conditional GET exist in exactly one place. Everything
+except the gateway and `sources.py` can be tested with no network at all.
+
+### How a scholarship record travels
+
+```mermaid
+flowchart LR
+    reg["Sources registry<br/>8 official portals"] --> crawl["Crawler<br/>robots, sitemaps<br/>feeds, same-site"]
+    crawl --> fetch["Guarded fetch<br/>conditional GET<br/>1 req/s per host"]
+    fetch --> extract["Model proposes<br/>verbatim check<br/>then merge"]
+    extract --> db[("Catalog<br/>SQLite<br/>plus versions")]
+    db --> use["Discover<br/>save, re-check<br/>export, remind"]
+```
+
+The steps in words, because the diagram is a summary:
+
+1. **Registry** — eight official portals, each with allowed path prefixes,
+   crawl depth and a trust level. Nothing outside those prefixes is fetched.
+2. **Crawler** — discovers pages from `robots.txt`, sitemaps, RSS/Atom and
+   same-site links, one request per second per host, HTML only, page caps.
+3. **Guarded fetch** — every page goes through `sources.py`: resolved-address
+   check, size and type caps, every redirect re-checked, conditional GET with
+   ETag / If-Modified-Since, sha256 recorded.
+4. **Propose, verify, merge** — the model proposes values, each value is
+   checked word-for-word against the page text, and only verified values are
+   stored. Duplicates are merged by a canonical key; a conflicting value is
+   kept and written down, never silently overwritten.
+5. **Catalog** — SQLite records plus the source row per page and the version
+   history used by the re-check job.
+6. **Use** — Discover search and filters, the eligibility hand-off, the saved
+   list, re-check differences, CSV/ICS export and the opt-in reminders. The
+   warning signs sit beside every card.
+
+### The re-check decision
+
+```mermaid
+flowchart TD
+    start["Due records<br/>saved first, then most recent"] --> fetch["Fetch page<br/>conditional GET, 1 req/s per host"]
+    fetch -->|"blocked, timeout, non-HTML"| fail["could not<br/>re-check,<br/>last verified DATE<br/>old copy kept,<br/>never called fresh"]
+    fetch -->|"304 or same sha256"| same["Unchanged<br/>last checked = now"]
+    fetch -->|"different sha256"| changed["Page changed"]
+    changed --> reread{"Model service available"}
+    reread -->|no| unread["Page changed,<br/>could not be<br/>re-read,<br/>old copy kept<br/>and labelled"]
+    reread -->|yes| verify["Re-extract and verify<br/>word-for-word against the new text"]
+    verify --> versions["Store the new version<br/>keep the older one"]
+    versions --> ui["Show what changed<br/>old to new + the page sentence"]
+    versions --> expired{"stored deadline_date<br/>before today?"}
+    expired -->|yes| exp["EXPIRED"]
+    expired -->|"no, or ambiguous or no date"| open["Open / no date<br/>never guessed"]
+```
+
+### Files
+
 ```
 src/scholarpath/
 ├── app.py                 entry point, startup checks, exit codes
@@ -510,6 +602,38 @@ the same discipline — business logic stays testable without a network or a mod
 - Nothing is uploaded to a ScholarPath server — there isn't one. Deletion
   controls live on the profile, documents, and research pages; deleting a
   scholarship record also removes its saved entry and checklist items.
+
+### What crosses the device boundary
+
+```mermaid
+flowchart LR
+    subgraph LOCAL["On this device"]
+        local["Profile, documents,<br/>scholarpath.db and versions,<br/>exports, reminders"]
+    end
+
+    model["Model service you configure<br/>local OpenCode service,<br/>or an<br/>OpenAI compatible<br/>endpoint"]
+
+    subgraph OPTIN["OFF until you switch it on"]
+        stt["voice_stt<br/>microphone clip"]
+        tts["voice_tts<br/>reply text"]
+        web["web_search<br/>your question"]
+    end
+
+    google["Google speech service"]
+    microsoft["Microsoft speech service"]
+    ddg["DuckDuckGo"]
+
+    local -->|"chat message,<br/>document text,<br/>fetched page text"| model
+    local -->|"reply text, if on"| tts
+    stt --> google
+    tts --> microsoft
+    web --> ddg
+```
+
+The arrows out of the "off until you switch it on" box exist only while that
+switch is on; the Settings page names the third party and the data for each
+one. Deadline reminders are Windows notifications drawn on this machine and
+send nothing.
 
 ---
 

@@ -80,6 +80,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G157 | 37 | Export: the saved list as CSV and as an ICS calendar file, each carrying the source URL, the deadline text exactly as the page wrote it, and the date the page was last verified | `[x]` |
 | G158 | 37 | Warning signs: payment/fee wording on the page, a domain that is neither official nor trusted (exact registrable-domain match, never a substring), a missing source and a missing deadline are shown on the cards and in the why panel; nothing is hidden or deleted, and the wording never calls a page a scam or safe | `[x]` |
 | G159 | 37 | Privacy toggles: voice_stt, voice_tts and web_search stay off by default, each feature is gated on its own switch, and the Settings page names the third party and the data for each | `[x]` |
+| G160 | 38 | The README carries Mermaid diagrams - the student journey, the layered system map, the record pipeline, the re-check decision and the device trust boundary - and every box and arrow describes shipped behaviour | `[x]` |
 
 ---
 
@@ -1206,3 +1207,37 @@ see the warning signs without being told what to think.
    off by default, each feature is gated on its own switch, and the Settings
    page states which third party receives which data when a switch is on. The
    deadline reminder is a local Windows notification and sends nothing.
+
+## 19x. README diagrams (G160, 2026-10-21)
+
+The owner asked for a flowchart or architecture diagram in the README so the
+system can be understood at a glance. Requirement G160: the diagrams are
+Mermaid text in `README.md` (no image build step, editable), and no box or
+arrow may describe something the code does not do. Five diagrams:
+
+1. **The student journey** - open, fill the profile, run the catalog, Discover,
+   check against the profile, save, then re-check / remind / export.
+2. **The system map** - four layers plus the model seam: Qt UI, domain logic
+   (no Qt), local SQLite, the guarded fetch, the gateway, the portals. The
+   gateway is the only provider-aware code; `sources.py` is the only door to
+   the web.
+3. **How a scholarship record travels** - registry, crawler, guarded fetch,
+   propose/verify/merge, catalog, then Discover / save / re-check / export /
+   reminders, with a numbered list beside the diagram because a summary
+   diagram cannot carry every rule.
+4. **The re-check decision** - 304 or same sha256 = unchanged; a different
+   hash = re-extract and verify; unreachable = "could not re-check, last
+   verified <date>"; EXPIRED only from a stored `deadline_date`.
+5. **What crosses the device boundary** - the local box, the model service the
+   student configures, and the three off-by-default third parties
+   (Google speech, Microsoft speech, DuckDuckGo).
+
+Verification: all five blocks parse with `mermaid.parse` (Mermaid 12.2) and
+were rendered to PNG with `@mermaid-js/mermaid-cli` 12.0 against the system
+Edge before commit; the rendered images were inspected for misleading edges,
+hyphen-split words and text that only fits at an unreasonable width. No code
+changed, so the suite is still green: 558 tests.
+
+Limits: the diagrams are hand-maintained. A new page or module does not appear
+in the map until someone edits the Mermaid block; the file tree under
+"Architecture" stays the authoritative inventory.
