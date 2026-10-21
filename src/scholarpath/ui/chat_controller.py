@@ -176,7 +176,8 @@ class ChatController(QObject):
             self._append(Turn(role="assistant", text=message, error=True))
             self.failed.emit(message)
         else:
-            tokens = forbidden_tokens(self._gateway.name, self._model or "")
+            providers = getattr(self._gateway, "provider_names", (self._gateway.name,))
+            tokens = forbidden_tokens(*providers, self._model or "")
             text = scrub_reply(response.text, tokens)
             if text != response.text:
                 logger.warning(

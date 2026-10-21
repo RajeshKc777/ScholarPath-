@@ -25,10 +25,19 @@ class ConfigError(Exception):
 class GatewayConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    provider: Literal["stub", "opencode"] = "stub"
+    provider: Literal["stub", "opencode", "openai"] = "stub"
+    # Providers tried after the first one, in order, when the earlier ones
+    # cannot answer (rate limited, unreachable).
+    fallback_providers: list[str] = []
     model: str = ""
+    # Failover chain: tried in order when a model is rate-limited. Empty means
+    # "use the provider's own choice, then its free-tier alternatives".
+    models: list[str] = []
     timeout_seconds: float = Field(default=30.0, gt=0, le=600)
     retries: int = Field(default=1, ge=0, le=5)
+    # How many model/account attempts one turn may make before the app gives
+    # up with an honest error.
+    failover_attempts: int = Field(default=6, ge=1, le=24)
 
     # OpenCode adapter options. Leave base_url empty to discover the running
     # background service from its registration file. When base_url is set, the
@@ -36,6 +45,36 @@ class GatewayConfig(BaseModel):
     base_url: str = ""
     service_file: str = ""
     location_dir: str = ""
+
+    # OpenAI-compatible adapter options (provider = "openai").
+    api_base_url: str = ""
+    # The endpoint's own model and chain. When both are empty the endpoint
+    # uses "model"/"models" instead - that is the standalone case.
+    api_model: str = ""
+    api_models: list[str] = []
+    # The app's own keys. They live in the user's local config file or in the
+    # SCHOLARPATH_API_KEYS environment variable - never in the repository.
+    api_keys: list[str] = []
+    # Console keys the app registers with the model service and rotates
+    # between when a model quota is exhausted.
+    account_keys: list[str] = []
+    # Ask the model service to switch account when a model quota is exhausted.
+    rotate_credentials: bool = True
+
+    @pydantic.model_validator(mode="after")
+    def _check_providers(self) -> GatewayConfig:
+        known = {"stub", "opencode", "openai"}
+        unknown = [name for name in self.fallback_providers if name not in known]
+        if unknown:
+            raise ValueError(
+                "gateway.fallback_providers contains unknown providers: "
+                + ", ".join(sorted(unknown))
+            )
+        if self.provider == "openai" and not self.api_base_url.strip():
+            raise ValueError(
+                "gateway.api_base_url is required when provider = 'openai'."
+            )
+        return self
 
 
 class UIConfig(BaseModel):

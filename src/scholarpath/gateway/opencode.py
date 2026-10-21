@@ -42,6 +42,8 @@ from scholarpath.gateway.base import (
     GatewayTimeout,
     GatewayUnavailable,
 )
+from scholarpath.gateway.credentials import CredentialStore, configured_account_keys
+from scholarpath.gateway.failover import ModelChain, free_tier_alternatives
 from scholarpath.gateway.registry import ModelRef, ModelRegistry, parse_model_ref
 
 logger = logging.getLogger("scholarpath.gateway.opencode")
@@ -49,6 +51,16 @@ logger = logging.getLogger("scholarpath.gateway.opencode")
 AUTH_USER = "opencode"
 PASSWORD_ENV = "OPENCODE_SERVICE_PASSWORD"
 DEFAULT_TITLE = "ScholarPath chat"
+
+# How many accounts one model may be tried on before the chain moves on.
+ACCOUNT_ROTATIONS_PER_MODEL = 1
+
+# How long a model stays skipped after this account hit its quota.
+EXHAUSTED_COOLDOWN_SECONDS = 300.0
+
+# How many accounts a model may fail on before it is treated as out of quota
+# for this setup as a whole.
+MODEL_FAILURE_LIMIT = 2
 
 SYSTEM_PROMPT = (
     "You are ScholarPath AI, a scholarship assistant for students.\n"
@@ -145,6 +157,26 @@ def _error_message(body: str) -> str:
     return cleaned[:300]
 
 
+def _is_quota_error(detail: Any) -> bool:
+    """True when the provider refused because a quota or rate limit was hit."""
+    if not isinstance(detail, dict):
+        return False
+    kind = str(detail.get("type") or "").casefold()
+    message = str(detail.get("message") or "").casefold()
+    if "quota" in kind or "rate" in kind:
+        return True
+    return any(
+        token in message
+        for token in ("rate limit", "rate-limit", "too many requests", "quota", "insufficient")
+    )
+
+
+class _EmptyReply(GatewayProtocolError):
+    """The model answered with nothing usable - another model may do better."""
+
+    retryable = True
+
+
 class OpenCodeGateway:
     """ModelGateway backed by the local OpenCode HTTP server."""
 
@@ -184,6 +216,14 @@ class OpenCodeGateway:
         self._location = (config.location_dir or str(Path.cwd())).strip()
         self._registry: ModelRegistry | None = None
         self._catalog_error: GatewayError | None = None
+        self._chain = ModelChain.from_ids(config.models)
+        self._max_attempts = int(config.failover_attempts)
+        self._rotator: CredentialStore | None = None
+        self._tried_credentials: set[str] = set()
+        self._active_account: str = ""
+        self._exhausted: dict[tuple[str, str], float] = {}
+        self._model_failures: dict[str, tuple[int, float]] = {}
+        self._keys_registered = False
         logger.info("opencode gateway ready at %s (%s)", self._base_url, self._endpoint_source)
 
     # -- public ------------------------------------------------------------
@@ -199,8 +239,52 @@ class OpenCodeGateway:
         return self._registry
 
     def complete(self, request: ChatRequest) -> ChatResponse:
+        """One completion, with failover over models and accounts.
+
+        A rate-limited model is not the end of the turn: the service is asked
+        to switch account first, and when that does not help the next model in
+        the chain is tried. Only when every option is exhausted does the caller
+        get an honest error.
+        """
         prompt = self._compose_prompt(request)
-        ref = self._resolve_model(request)
+        plan = self._model_plan(request)
+        self._register_configured_keys()
+
+        attempts = 0
+        last_error: GatewayError | None = None
+        for ref in plan:
+            # One account per attempt, at most two accounts per model, so a
+            # single stubborn model cannot use up the whole budget.
+            for _ in range(ACCOUNT_ROTATIONS_PER_MODEL + 1):
+                if attempts >= self._max_attempts:
+                    break
+                attempts += 1
+                try:
+                    return self._complete_with(ref, prompt)
+                except GatewayRateLimited as exc:
+                    last_error = exc
+                    logger.info("model %s is rate limited (%s)", ref, exc.message)
+                    self._mark_exhausted(ref)
+                    if not self._rotate_credential():
+                        break  # no account left - next model
+                except GatewayError as exc:
+                    if not exc.retryable:
+                        raise
+                    last_error = exc
+                    break  # next model
+            if attempts >= self._max_attempts:
+                break
+
+        if isinstance(last_error, GatewayRateLimited):
+            raise GatewayRateLimited(
+                "The model service is rate limited on every model and account tried "
+                f"({attempts} attempts). Wait a few minutes and try again."
+            ) from last_error
+        if isinstance(last_error, GatewayError):
+            raise last_error
+        raise GatewayUnavailable("No model answered the request.")
+
+    def _complete_with(self, ref: ModelRef, prompt: str) -> ChatResponse:
         session_id: str | None = None
         try:
             session_id = self._create_session(ref)
@@ -211,6 +295,158 @@ class OpenCodeGateway:
         finally:
             if session_id:
                 self._delete_session(session_id)
+
+    # -- failover ----------------------------------------------------------
+    def _model_plan(self, request: ChatRequest) -> tuple[ModelRef, ...]:
+        """The models to try, in order.
+
+        Primary model first (request override, then configuration, then the
+        first configured chain entry), then the configured chain, then the
+        provider's free-tier alternatives. Paid models are never entered
+        automatically - an unexpected switch must never cost money.
+
+        Models this account has just proved exhausted are skipped: repeating a
+        known-failing model costs a slow round trip and never succeeds.
+        """
+        primary = parse_model_ref(request.model or self._config.model)
+        if primary is None and self._chain.refs:
+            primary = self._chain.refs[0]
+        if primary is None:
+            primary = self._resolve_model(request)
+
+        plan = list(self._chain.plan(primary))
+        for alternative in free_tier_alternatives(self._catalogue_pairs(), exclude=primary):
+            if alternative not in plan:
+                plan.append(alternative)
+
+        usable = [ref for ref in plan if not self._is_exhausted(ref)]
+        if usable:
+            return tuple(usable)
+        raise GatewayRateLimited(
+            "The model service is rate limited on every model it offers right now. "
+            "It was checked a moment ago - try again in a few minutes."
+        )
+
+    def _is_exhausted(self, ref: ModelRef) -> bool:
+        """True when this model is known to be out of quota right now."""
+        if self._account_exhausted(ref):
+            return True
+        failures = self._model_failures.get(ref.id)
+        if failures is None:
+            return False
+        count, first_seen = failures
+        if time.monotonic() - first_seen > EXHAUSTED_COOLDOWN_SECONDS:
+            self._model_failures.pop(ref.id, None)
+            return False
+        # The model failed on more than one account: it is out of quota for
+        # this setup, not just for one account.
+        return count >= MODEL_FAILURE_LIMIT
+
+    def _account_exhausted(self, ref: ModelRef) -> bool:
+        account = self._account_id()
+        if not account:
+            return False
+        until = self._exhausted.get((account, ref.id))
+        if until is None:
+            return False
+        if until <= time.monotonic():
+            self._exhausted.pop((account, ref.id), None)
+            return False
+        return True
+
+    def _account_id(self) -> str:
+        """The account the service is currently using ("" when unknown)."""
+        if self._active_account:
+            return self._active_account
+        store = self._credential_store()
+        try:
+            credentials = store.list()
+        except GatewayError:
+            return ""
+        for credential in credentials:
+            if credential.active:
+                self._active_account = credential.id
+                break
+        return self._active_account
+
+    def _mark_exhausted(self, ref: ModelRef) -> None:
+        """Remember that this model is out of quota."""
+        account = self._account_id()
+        if account:
+            self._exhausted[(account, ref.id)] = time.monotonic() + EXHAUSTED_COOLDOWN_SECONDS
+        count, first_seen = self._model_failures.get(ref.id, (0, time.monotonic()))
+        self._model_failures[ref.id] = (count + 1, first_seen)
+        logger.info(
+            "model %s is out of quota (failure %d); skipping it for %d seconds",
+            ref.id,
+            count + 1,
+            EXHAUSTED_COOLDOWN_SECONDS,
+        )
+
+    def _catalogue_pairs(self) -> list[tuple[str, str]]:
+        """(provider, model id) pairs the service advertises."""
+        try:
+            entries = self.registry.all()
+        except GatewayError:
+            return []
+        return [(entry.provider, entry.id) for entry in entries if entry.enabled]
+
+    def _credential_store(self) -> CredentialStore:
+        if self._rotator is None:
+            self._rotator = CredentialStore(self._request)
+        return self._rotator
+
+    def _rotate_credential(self) -> bool:
+        """Ask the service to use another stored account. True when it did.
+
+        When the app has its own key pool (``gateway.account_keys``), only
+        those accounts are ever used - the service may know more, but the app
+        stays inside the pool the owner configured.
+        """
+        if not self._config.rotate_credentials:
+            return False
+        pool = configured_account_keys(self._config)
+        store = self._credential_store()
+        try:
+            credentials = store.list()
+        except GatewayError as exc:
+            logger.info("cannot read stored accounts: %s", exc.message)
+            return False
+        for credential in credentials:
+            if not credential.id or credential.id in self._tried_credentials:
+                continue
+            if pool and credential.key not in pool:
+                continue  # not one of the accounts the app may use
+            if credential.active:
+                # The account in use is the one that just failed.
+                self._tried_credentials.add(credential.id)
+                continue
+            try:
+                store.activate(credential.id)
+            except GatewayError as exc:
+                logger.info("cannot switch account: %s", exc.message)
+                continue
+            self._tried_credentials.add(credential.id)
+            self._active_account = credential.id
+            logger.info("switched to another account (label=%s)", credential.label)
+            return True
+        return False
+
+    def _register_configured_keys(self) -> None:
+        """Store the app's own keys with the service, once, without duplicates."""
+        if self._keys_registered:
+            return
+        keys = configured_account_keys(self._config)
+        if not keys:
+            self._keys_registered = True
+            return
+        self._keys_registered = True
+        store = self._credential_store()
+        for key in keys:
+            try:
+                store.register(key)
+            except GatewayError as exc:
+                logger.info("could not register an account key: %s", exc.message)
 
     # -- request composition ----------------------------------------------
     @staticmethod
@@ -308,10 +544,15 @@ class OpenCodeGateway:
                 if isinstance(text, str):
                     parts.append(text)
         text = "".join(parts).strip()
+        detail = message.get("error")
         if not text:
-            detail = message.get("error")
+            if _is_quota_error(detail):
+                raise GatewayRateLimited(
+                    "The model service refused the request because a quota or "
+                    "rate limit was reached."
+                )
             suffix = f" Provider detail: {detail}" if detail else ""
-            raise GatewayProtocolError(
+            raise _EmptyReply(
                 "OpenCode returned an assistant message with no text." + suffix
             )
 

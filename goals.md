@@ -47,6 +47,9 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G124 | 23 | Voice engine switched to the Python SpeechRecognition library (no Windows speech toggle, no model download); UI copy states that audio is sent to the transcription service | `[x]` |
 | G125 | 24 | While the mic is recording, the mic button shows an animated listening ripple; the button stays clickable to stop | `[x]` |
 | G126 | 25 | Live voice conversation mode: hands-free listen → reply → speak loop in the chat, with a visible state and a stop control | `[ ]` |
+| G127 | 26 | Model failover: when the selected model is rate-limited, the chat continues automatically with the next model in a configured chain instead of showing a raw rate-limit error | `[ ]` |
+| G128 | 27 | OpenAI-compatible gateway provider: the chat can be served directly by any OpenAI-compatible endpoint (e.g. a local router that serves DeepSeek), with its own key and model chain | `[ ]` |
+| G129 | 28 | Key rotation inside the app: console keys are registered with the model service and rotated between accounts when a model quota is exhausted | `[ ]` |
 
 ---
 

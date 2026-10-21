@@ -21,12 +21,22 @@ log_level = "INFO"
 [gateway]
 # "stub"     = offline placeholder, no network (Milestone 1 behaviour)
 # "opencode" = real model replies through a running OpenCode service (Milestone 2)
+# "openai"   = direct replies from any OpenAI-compatible endpoint
 provider = "stub"
 
 # Model identifier. Use "provider/model" (for example
 # "opencode/minimax-m3.1-flash-free") or a bare model id. Empty = the default
 # model that OpenCode reports.
 model = ""
+
+# Failover chain, tried in order when a model is rate-limited. Empty = the
+# provider's own choice first, then its free-tier models. Paid models are
+# never entered automatically - name them here if you want them tried.
+models = []
+
+# How many model/account attempts one chat turn may make before the app
+# reports an honest error instead of a raw rate-limit message.
+failover_attempts = 6
 
 # Per-request timeout in seconds. Also bounds how long a reply may take.
 timeout_seconds = 30.0
@@ -45,6 +55,19 @@ service_file = ""
 
 # Working directory attached to OpenCode sessions. Empty = the app's directory.
 location_dir = ""
+
+# Ask the service to switch to another stored account when a model quota is
+# exhausted. The app rotates between the accounts the service already knows.
+rotate_credentials = true
+
+# --- OpenAI-compatible adapter (only used when provider = "openai") ----------
+# The endpoint that serves /chat/completions, for example
+# http://127.0.0.1:4182/v1 for a local router.
+api_base_url = ""
+
+# The app's own API keys, tried in order. Keep them in THIS local file or in
+# the SCHOLARPATH_API_KEYS environment variable - never in the repository.
+api_keys = []
 
 # --- Interface ---------------------------------------------------------------
 [ui]
