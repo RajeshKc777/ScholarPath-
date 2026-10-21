@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from dataclasses import dataclass, field
 
 from scholarpath.gateway.base import (
@@ -95,40 +96,183 @@ def _whole_tokens(value: str) -> list[str]:
     return re.findall(r"[\w'-]+", value.lower())
 
 
-def verbatim_in_source(value: str, source_text: str) -> bool:
-    """Case- and whitespace-insensitive containment, or exact word tokens.
+# -- normalisation (tolerant, but never inventing) -------------------------
 
-    Numbers verify through a digit-group pattern so separator variants
-    ("3.62/4" vs "3.62 / 4.00") still count, but a digit inside a larger
-    number never does ("105" does not match "1050").
+_QUOTE_MAP = {
+    ord("‘"): "'", ord("’"): "'", ord("‚"): "'", ord("‛"): "'",
+    ord("“"): '"', ord("”"): '"', ord("„"): '"', ord("‟"): '"',
+    ord("′"): "'", ord("″"): '"', ord("‹"): "'", ord("›"): "'",
+}
+_DASH_MAP = {
+    ord("‐"): "-", ord("‑"): "-", ord("‒"): "-", ord("–"): "-",
+    ord("—"): "-", ord("−"): "-", ord("﹘"): "-", ord("﹣"): "-",
+}
+# A word broken across a line by a hyphen ("exam-\nple" -> "example").
+_HYPHEN_BREAK_RE = re.compile(r"(\w)[-‐‑‒–—]\s*\n\s*(\w)")
+_WHITESPACE_RE = re.compile(r"\s+")
+_ORDINAL_RE = re.compile(r"(\d{1,2})(st|nd|rd|th)\b", re.IGNORECASE)
+
+_MONTHS = {
+    "january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6,
+    "july": 7, "august": 8, "september": 9, "october": 10, "november": 11,
+    "december": 12, "jan": 1, "feb": 2, "mar": 3, "apr": 4, "jun": 6, "jul": 7,
+    "aug": 8, "sep": 9, "sept": 9, "oct": 10, "nov": 11, "dec": 12,
+}
+
+
+def _normalize(text: str) -> str:
+    """The text as a reader would hear it: one spelling, one spacing.
+
+    NFKC folds the unicode variants (full-width digits, ligatures), quote and
+    dash styles are unified, words split by a hyphen at a line break are
+    joined, and all whitespace becomes a single space. Nothing is added and
+    nothing is dropped - only the differences that no reader would notice.
     """
-    source_lower = " ".join(source_text.lower().split())
-    cleaned = " ".join(value.split()).lower()
+    if not text:
+        return ""
+    out = unicodedata.normalize("NFKC", text)
+    out = out.translate(_QUOTE_MAP).translate(_DASH_MAP)
+    out = _HYPHEN_BREAK_RE.sub(r"\1\2", out)
+    out = _WHITESPACE_RE.sub(" ", out)
+    return out.strip()
+
+
+# -- dates -----------------------------------------------------------------
+
+def _date_parts(text: str) -> tuple[int | None, int | None, int | None] | None:
+    """(year, month, day) for a date-like string, or None when it is not one.
+
+    A numeric date whose day and month could both be <= 12 is ambiguous
+    (05/11/2025) and is deliberately not parsed: guessing would not be honest.
+    """
+    cleaned = _ORDINAL_RE.sub(r"\1", text.strip().rstrip("."))
+    if not cleaned:
+        return None
+
+    iso = re.fullmatch(r"(\d{4})-(\d{1,2})-(\d{1,2})", cleaned)
+    if iso:
+        year, month, day = (int(part) for part in iso.groups())
+        if 1 <= month <= 12 and 1 <= day <= 31:
+            return (year, month, day)
+        return None
+
+    numeric = re.fullmatch(r"(\d{1,2})[/-](\d{1,2})[/-](\d{4})", cleaned)
+    if numeric:
+        first, second, year = (int(part) for part in numeric.groups())
+        if first > 12 and second <= 12:
+            return (year, second, first)
+        if second > 12 and first <= 12:
+            return (year, first, second)
+        return None
+
+    day_month = re.fullmatch(r"(\d{1,2})\s+([A-Za-z]{3,9})\.?(?:\s+(\d{4}))?", cleaned)
+    if day_month:
+        month = _MONTHS.get(day_month.group(2).casefold())
+        if month:
+            year = int(day_month.group(3)) if day_month.group(3) else None
+            return (year, month, int(day_month.group(1)))
+
+    month_day = re.fullmatch(r"([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:,)?(?:\s+(\d{4}))?", cleaned)
+    if month_day:
+        month = _MONTHS.get(month_day.group(1).casefold())
+        if month:
+            year = int(month_day.group(3)) if month_day.group(3) else None
+            return (year, month, int(month_day.group(2)))
+
+    return None
+
+
+def _dates_in(text: str) -> list[tuple[int | None, int | None, int | None]]:
+    """Every date-like phrase in the text, as (year, month, day)."""
+    found: list[tuple[int | None, int | None, int | None]] = []
+    pattern = re.compile(
+        r"\d{4}-\d{1,2}-\d{1,2}"
+        r"|\d{1,2}[/-]\d{1,2}[/-]\d{4}"
+        r"|\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]{3,9}\.?(?:\s+\d{4})?"
+        r"|[A-Za-z]{3,9}\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,)?(?:\s+\d{4})?",
+        re.IGNORECASE,
+    )
+    for match in pattern.finditer(text):
+        parts = _date_parts(match.group(0))
+        if parts is not None:
+            found.append(parts)
+    return found
+
+
+def _same_date(
+    value_parts: tuple[int | None, int | None, int | None],
+    source_parts: tuple[int | None, int | None, int | None],
+) -> bool:
+    """True when both describe the same day, with nothing added by the value."""
+    for index, name in enumerate(("year", "month", "day")):
+        mine = value_parts[index]
+        theirs = source_parts[index]
+        if mine is None:
+            continue
+        if theirs is None:
+            return False  # the value states a part the page does not
+        if mine != theirs:
+            return False
+    return True
+
+
+def verbatim_in_source(value: str, source_text: str) -> bool:
+    """Is this value really on the page, as a reader would see it?
+
+    Both sides are normalised first (unicode, quotes, dashes, hyphenated line
+    breaks, spacing), so "Deadline: 5th November 2025" verifies against
+    "Deadline: 5 November 2025" and "Chevening's" against "Chevening’s".
+    Dates are compared by value, not by spelling. Nothing is accepted that is
+    not in the source after that normalisation.
+    """
+    source = _normalize(source_text)
+    cleaned = _normalize(value)
     if not cleaned:
         return False
+    source_lower = source.casefold()
+    cleaned_lower = cleaned.casefold()
+
     # literal containment, but never inside a larger word ("Nepal" vs "Nepali")
-    if re.search(r"(?<!\w)" + re.escape(cleaned) + r"(?!\w)", source_lower):
+    if re.search(r"(?<!\w)" + re.escape(cleaned_lower) + r"(?!\w)", source_lower):
         return True
 
-    tokens = _whole_tokens(value)
+    # a date verifies by value, not by spelling
+    value_date = _date_parts(cleaned)
+    if value_date is not None:
+        for source_date in _dates_in(source):
+            if _same_date(value_date, source_date):
+                return True
+
+    tokens = _whole_tokens(cleaned_lower)
     source_tokens = set(_whole_tokens(source_lower))
+    has_letters = any(character.isalpha() for character in cleaned)
     if tokens and all(token in source_tokens for token in tokens):
-        if any(ch.isdigit() for ch in value):
-            return _digits_match(value, source_lower)
+        if any(ch.isdigit() for ch in cleaned):
+            return _digits_match(cleaned, source_lower)
         return True
 
-    if any(ch.isdigit() for ch in value):
-        return _digits_match(value, source_lower)
+    if any(ch.isdigit() for ch in cleaned) and not has_letters:
+        # Only a purely numeric value may verify on its digits alone: a value
+        # that also names something ("December 2025") must have every word on
+        # the page, so a year that appears elsewhere cannot carry it.
+        return _digits_match(cleaned, source_lower)
     return False
 
 
 def _digits_match(value: str, source_lower: str) -> bool:
-    """Every digit group of the value appears, in order, with numeric bounds."""
+    """Every digit group of the value appears, in order, with numeric bounds.
+
+    The matched span must carry exactly the value's digit groups, so "1 2"
+    never matches a source that merely contains "12".
+    """
     groups = re.findall(r"\d+", value)
     if not groups:
         return False
     pattern = r"(?<!\d)" + r"\D*?".join(re.escape(g) for g in groups) + r"(?!\d)"
-    return re.search(pattern, source_lower) is not None
+    match = re.search(pattern, source_lower)
+    if match is None:
+        return False
+    return re.findall(r"\d+", match.group(0)) == groups
 
 
 def parse_model_json(
