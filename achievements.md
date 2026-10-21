@@ -128,6 +128,41 @@ start-up.
 
 ---
 
+### 2026-10-21 — A25 — Hardening, honesty and the last features (G139-G143)
+
+**Satisfies:** G139 (tolerant but honest verification), G140 (privacy
+switches), G141 (official-domain allowlist), G142 (Re-check action) and G143
+(SSRF-hardened fetching) - one commit each, with tests.
+
+| Change | Commit | Tests |
+| ------ | ------ | ----- |
+| SSRF-hardened fetching (resolve, validate, re-check redirects, pin the address) | `699a6ce` | `tests/test_sources.py` (+8) |
+| Normalised verbatim verification, dates by value | `7fc7527` | `tests/test_verbatim.py` (13) |
+| `[privacy]` switches, gated and disclosed | `c0655b4` | `tests/test_privacy.py` (8) |
+| Exact registrable-domain allowlist + `trusted_domains` | `8f66cf5` | `tests/test_official_domains.py` (9) |
+| Re-check: changed pages and passed deadlines | `55bd12a` | `tests/test_recheck.py` (10) |
+| README status, feature list, architecture tree | `fc7cff5` | - |
+
+**Evidence:** 360 tests passing. The SSRF tests cover loopback, private,
+link-local, metadata (AWS/Alibaba/ECS), IPv6 and IPv4-mapped addresses, a
+public-looking name that resolves to a private address, a redirect to a
+metadata address, and a hostile second DNS answer that must never be used.
+The verification tests cover NFKC, quote and dash styles, hyphenated line
+breaks, dates in five spellings, an ambiguous numeric date, and a value that
+must stay rejected. The privacy tests prove no search runs while the switch
+is off and that the model is told. The re-check tests cover unchanged,
+changed, deadline-passed and unreachable pages.
+
+**Known limits:** the loopback escape hatch is a test-only flag (it never
+allows a private or metadata address); the official-domain rule is a
+heuristic on the registrable domain and not proof of officiality; a re-check
+fetches the page the record was built from, so a record whose address moved
+is reported as "could not check" rather than followed; voice input, the
+spoken reply and web search are now **off by default** and must be switched
+on in `[privacy]`.
+
+---
+
 ### 2026-10-21 — A24 — Saving the profile is now unmistakable (G137)
 
 **Satisfies:** G137 (the owner clicked Save profile and "nothing happened").

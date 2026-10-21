@@ -59,6 +59,11 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G136 | 32 | Web search in the chat: the app can run a keyless web search when the student needs current results, answer from those results with the pages named, and treat every result as untrusted data | `[x]` |
 | G137 | 33 | Saving the profile must be unmistakable: the save is confirmed on screen with the time, a failed save says so, and the side card always mirrors what is really stored locally | `[x]` |
 | G138 | 33 | A packaged Windows build: ScholarPath ships as a self-contained app that starts on a clean Windows, keeps all user data and secrets outside the bundle, and passes a security and performance review | `[x]` |
+| G139 | 34 | Verbatim verification tolerates spelling differences (unicode, quotes, dashes, hyphenated line breaks, dates compared by value) without ever accepting a value the page does not state | `[x]` |
+| G140 | 34 | Privacy switches: voice input, the spoken reply and web search are off by default, each is gated on its own switch, and the Settings page states exactly which third party receives what | `[x]` |
+| G141 | 34 | Official pages are recognised by an exact suffix allowlist on the registrable domain (.edu, .ac.xx, .gov, .gov.xx), plus the student's own trusted_domains - never by a substring | `[x]` |
+| G142 | 34 | A Re-check action on saved records: the page is fetched again, the sha256 compared, and changed pages and passed deadlines are flagged on the eligibility and saved pages | `[x]` |
+| G143 | 34 | Page fetching is hardened against SSRF: the host is resolved and checked before connecting, private, loopback, link-local and metadata addresses are refused with a typed error, every redirect hop is checked again, and the checked address is the one that is connected to | `[x]` |
 
 ---
 
@@ -1033,3 +1038,42 @@ Two requirements from the owner, dated, after seeing the running app leak
   the packaged build; it was not tested on a freshly installed Windows with
   no Python, and there is no installer (no signed `.msi`/Inno Setup yet) -
   the folder build is copied to the target machine as-is.
+
+---
+
+## 19t. Hardening, honesty and the remaining features (G139-G143, 2026-10-21)
+
+Six changes, each with its own commit and tests.
+
+1. **G143 - fetching is hardened against SSRF.** The host is resolved *before*
+   the connection; every resolved address must be public (loopback, private,
+   link-local, carrier-grade NAT, multicast, reserved and cloud-metadata
+   addresses are refused with the typed `BlockedRequest` error); every
+   redirect hop is resolved and checked again; and the address that was
+   checked is the address that is connected to, so DNS cannot change the
+   answer underneath the request. The only escape hatch is a narrow
+   `allow_loopback` flag for the local test server - it never allows a
+   private or metadata address.
+2. **G139 - verbatim verification is tolerant but still honest.** Both sides
+   are normalised first (NFKC, quote and dash styles, words split by a hyphen
+   at a line break, spacing), so "5th November 2025" verifies against
+   "5 November 2025" and "Chevening's" against "Chevening’s". Dates are
+   compared by value, and an ambiguous numeric date (05/11/2025) is not
+   guessed. A value that names something ("December 2025") must have every
+   word on the page - a year that appears elsewhere cannot carry it.
+3. **G140 - privacy switches.** `[privacy]` with `voice_stt`, `voice_tts` and
+   `web_search`, all **off by default**. Each feature is gated on its own
+   switch, the model is told when search is unavailable (so it never claims
+   to have searched), and the Settings page states exactly what each switch
+   sends and to whom.
+4. **G141 - official pages are an exact allowlist.** A domain counts as
+   official-looking when its *registrable* domain ends in `.edu`, `.ac.<cc>`,
+   `.gov`, `.gov.<cc>`, `.int` or `.mil`; nothing is matched as a substring
+   ("university.edu.example.com" is not official). The student adds their own
+   `trusted_domains` in config, matched exactly.
+5. **G142 - a Re-check action.** On the Eligibility and Saved pages: every
+   record's page is fetched again, the sha256 is compared with the copy that
+   was saved, and the card is flagged when the page changed or when the
+   stated deadline has passed. A page that cannot be reached says so.
+6. **README** - the status banner, the "does not do yet" list and the
+   architecture tree now match what the app really does.
