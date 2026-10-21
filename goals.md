@@ -75,7 +75,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G152 | 37 | A background re-check job: saved records first, then recent catalog records, re-fetched with the guarded fetch (conditional requests, one request per second per host); the page hash decides unchanged vs changed, and a changed page is re-extracted, re-verified against the page text, stored as a new version with the old one kept | `[x]` |
 | G153 | 37 | A field-by-field difference is shown in the UI for every changed field: the old value, the new value, and the page text the new value was taken from | `[x]` |
 | G154 | 37 | A record is EXPIRED only when its stored, unambiguous deadline_date is earlier than today; an ambiguous or missing date stays "no date" and is never guessed | `[x]` |
-| G155 | 37 | A failed re-check says "could not re-check, last verified <date>" and never presents the old copy as fresh | `[x]` |
+| G155 | 37 | A failed re-check says "could not re-check, last verified &lt;date&gt;" and never presents the old copy as fresh | `[x]` |
 | G156 | 37 | Deadline reminders: an opt-in Windows notification at 30, 14, 7 and 1 days before a saved record's unambiguous deadline, off by default, never repeated for the same day | `[x]` |
 | G157 | 37 | Export: the saved list as CSV and as an ICS calendar file, each carrying the source URL, the deadline text exactly as the page wrote it, and the date the page was last verified | `[x]` |
 | G158 | 37 | Warning signs: payment/fee wording on the page, a domain that is neither official nor trusted (exact registrable-domain match, never a substring), a missing source and a missing deadline are shown on the cards and in the why panel; nothing is hidden or deleted, and the wording never calls a page a scam or safe | `[x]` |
@@ -1188,7 +1188,7 @@ see the warning signs without being told what to think.
    is a single unambiguous day that lies before today. A date the page words
    ambiguously stays "no date" - it is never guessed into a day.
 4. **G155 - a failed check says so.** When the page cannot be fetched, the
-   record reads "could not re-check, last verified <date>". The old copy is
+   record reads "could not re-check, last verified &lt;date&gt;". The old copy is
    never presented as fresh.
 5. **G156 - reminders.** A Windows notification at 30, 14, 7 and 1 days before a
    saved record's unambiguous deadline. Opt-in (`[reminders] enabled`), off by
@@ -1230,7 +1230,7 @@ arrow may describe something the code does not do. Five diagrams:
    diagram cannot carry every rule.
 4. **The re-check decision** - 304 or same sha256 = unchanged; a different
    hash = re-extract and verify; unreachable = "could not re-check, last
-   verified <date>"; EXPIRED only from a stored `deadline_date`.
+   verified &lt;date&gt;"; EXPIRED only from a stored `deadline_date`.
 5. **What crosses the device boundary** - the local box, the model service the
    student configures, and the three off-by-default third parties
    (Google speech, Microsoft speech, DuckDuckGo).

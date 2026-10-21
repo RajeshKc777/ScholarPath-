@@ -164,7 +164,7 @@ value is re-verified against the new text, both versions are kept in
 sentence the new value came from) is stored with the record so it survives a
 restart. **EXPIRED** comes only from the stored `deadline_date`; an ambiguous
 "05/11/2026" stays "no date". A page that cannot be read or re-read reads
-"could not re-check, last verified <date>" and the old copy is never shown as
+"could not re-check, last verified &lt;date&gt;" and the old copy is never shown as
 fresh. Reminders are opt-in, local, once per day, only at 30/14/7/1 days and
 only for saved records with a clear date. CSV/ICS carry the source URL, the
 deadline text **exactly as the page wrote it** and the last verified date; only

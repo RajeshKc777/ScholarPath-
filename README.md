@@ -246,7 +246,7 @@ flowchart LR
   changed** lists each field as old → new with the sentence the new value came
   from. A record is marked **EXPIRED** only when its stored, unambiguous
   deadline date lies before today — an ambiguous date stays "no date". A page
-  that cannot be reached says **"could not re-check, last verified <date>"**
+  that cannot be reached says **"could not re-check, last verified &lt;date&gt;"**
   and is never presented as fresh. **Re-check pages** on the Saved page runs it
   on demand; `[freshness]` decides whether it also runs at startup.
 
