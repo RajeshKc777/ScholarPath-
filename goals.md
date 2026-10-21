@@ -54,6 +54,8 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G131 | 29 | Replies read like a person wrote them: no markdown symbols (bold asterisks, `--`, headings, tables) in the chat bubble or the voice, and the model is asked to answer in plain, warm, conversational prose | `[x]` |
 | G132 | 29 | Live voice mode survives a failed reply: the app says what happened out loud and keeps listening, and stopping a capture really releases the microphone | `[x]` |
 | G133 | 29 | The spoken reply must actually be audible: the neural audio is played as a WAV file through the Windows audio engine (the route the local voice uses), and if playback does not run the app falls back to the offline voice instead of silence | `[ ]` |
+| G134 | 30 | Find scholarships on a site the student trusts: the app lists the scholarship/funding links published on a page (same site only, no guessing), and one click reads and verifies the chosen page | `[x]` |
+| G135 | 31 | Let the chat use MCP tools: when a read-only MCP tool is configured and enabled, the chat can call it during a turn, with tool output treated as untrusted data, size-capped and never obeying instructions inside it | `[ ]` |
 
 ---
 
@@ -915,3 +917,31 @@ Two requirements from the owner, dated, after seeing the running app leak
 - **Still open:** the final audible confirmation is the owner's ear - the
   previous route was reported silent, the new one is mechanically verified
   (Windows rendered the whole 3.62 s stream) but nobody has heard it yet.
+
+---
+
+## 19p. Finding scholarship pages on a trusted site (G134, 2026-10-21)
+
+- **Owner ask:** build the remaining features, starting with the biggest gap:
+  the Scholarships page only read URLs the student pasted.
+- **What "discovery" means here.** There is still **no open web search** and no
+  search API, so the app cannot go looking for scholarships by itself. What it
+  can do honestly: take one page the student trusts (a university's
+  scholarships page, a government funding portal, a listing page) and list the
+  scholarship/funding links that page itself publishes.
+- **Rules** (`discovery.py`): http(s) only; same site only (the page's host or
+  its subdomains); documents (PDF/DOC/DOCX/...) skipped because the reading
+  pipeline only accepts web pages; `mailto:`, `tel:`, `javascript:` and
+  in-page anchors ignored; duplicates dropped; the list capped at 12; links
+  are untrusted web content and are treated as data.
+- **Ranking:** a scholarship word in the visible link text ranks above one
+  that only appears in the URL; page order breaks ties. A label is always
+  available (the URL's last segment, prettified) when the link has no text.
+- **UI:** "Find pages" on the Scholarship pages screen. The results appear in
+  a "Links published on that page" card; clicking one fills the address box
+  and runs the existing read-and-verify flow (fetch -> model proposes ->
+  verbatim check -> student confirms). Nothing is saved without the student.
+- **Fetching:** `sources.fetch_html` was added so link discovery can see the
+  raw HTML under the same guardrails as `fetch_page` (both now share one
+  `_download` step: scheme/credential/address checks, content-type allow-list,
+  2 MB cap).

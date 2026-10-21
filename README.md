@@ -12,7 +12,7 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 ![Status](https://img.shields.io/badge/status-Milestone%204-4f8cff?style=flat-square)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Qt](https://img.shields.io/badge/Qt-6.12-41CD52?style=flat-square&logo=qt&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-264%20passing-2ea043?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-278%20passing-2ea043?style=flat-square)
 ![License](https://img.shields.io/badge/license-view--only%20%C2%B7%20all%20rights%20reserved-b3261e?style=flat-square)
 
 </div>
@@ -48,9 +48,10 @@ built on the opposite rule set.
 > **Milestone 4 of 7 is complete.** Chat runs **live through the local OpenCode
 > service**, profiles/documents work locally, and you can **verify a scholarship
 > page**: paste the official URL, and only values that literally appear in the
-> page text are offered — every saved record carries its source URL, retrieval
-> time and page hash. There is **no automatic search yet**: you pick the pages.
-> Eligibility checks are next.
+> page text are offered - every saved record carries its source URL, retrieval
+> time and page hash. You can also point it at a site's scholarships page and
+> let it list that page's own scholarship links. There is **no open web search
+> yet**: you choose the sites. Eligibility checks are next.
 
 | # | Milestone | Status |
 | - | --------- | :----: |
@@ -77,11 +78,16 @@ Full specification: [`goals.md`](goals.md) · Build log: [`achievements.md`](ach
   (PDF text layer, or Windows OCR for pictures); the model proposes fields; each
   proposal is checked **verbatim** against the document text and shown with a
   found / not-found marker; only rows you tick (and may edit) are merged.
-- **Scholarship pages page** — paste the official scholarship URL: the page is
+- **Scholarship pages page** - paste the official scholarship URL: the page is
   fetched with strict guardrails (http/https only, HTML only, 2 MB cap,
   redirect-aware provenance, sha256 + retrieval timestamp), fields are proposed
-  and must be **verbatim** in the page text; untick the ones you distrust. There
-  is no automatic search in this build — by design, you choose the sources.
+  and must be **verbatim** in the page text; untick the ones you distrust.
+- **Find pages on a site** - paste a university's (or a funding portal's)
+  scholarships page and press **Find pages**: the app lists the scholarship
+  and funding links that page itself publishes, same site only, documents
+  skipped, capped and de-duplicated. Click one and it goes straight through
+  the same read-and-verify flow. Nothing is guessed - every link is read from
+  the page, and there is still no open web search.
 - **Eligibility page** — every saved record is checked by pure rule-based code
   against your local profile (nationality, degree level, language thresholds,
   grade average on a matching scale only, unambiguous deadlines). Results are
@@ -179,7 +185,7 @@ scholarpath --init-config   # write the configuration template, then exit
 scholarpath --config path\to\config.toml
 scholarpath --version
 python -m scholarpath       # equivalent to the console script
-pytest                      # 264 tests, no network required (fake server on loopback)
+pytest                      # 278 tests, no network required (fake server on loopback)
 ```
 
 </details>

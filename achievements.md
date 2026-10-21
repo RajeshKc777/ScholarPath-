@@ -93,6 +93,38 @@ timer stop, review notice shows.
 
 ---
 
+### 2026-10-21 — A22 — Find scholarship pages on a trusted site (G134)
+
+**Satisfies:** G134 (the Scholarships page only read URLs the student pasted).
+
+Built:
+
+| Area | File(s) |
+| ---- | ------- |
+| Link discovery: same-site scholarship/funding links from a page's own HTML | `src/scholarpath/discovery.py` (new) |
+| `fetch_html` sharing the strict guardrails with `fetch_page` | `src/scholarpath/sources.py` |
+| "Find pages" action + "Links published on that page" card + click-to-verify | `src/scholarpath/ui/research_page.py` |
+| Tests | `tests/test_discovery.py` (14 tests) |
+
+Behaviour: paste a university's or funding portal's scholarships page and
+press **Find pages**. The app lists the scholarship and funding links that
+page itself publishes - same site only, documents skipped, deduplicated,
+capped at 12, with link text ranked above URL-only matches. Clicking one fills
+the address box and runs the existing read-and-verify flow, so the student
+still confirms every value before anything is saved.
+
+**Evidence:** 278 tests passing. End-to-end against a local site: an index
+page with five links (two scholarships, one "About us", one off-site, one PDF)
+produced exactly the two scholarship links; clicking the first read the page
+and returned "3 field(s) proposed, 3 verbatim on the page".
+
+**Known limits:** this is discovery *within a site the student chose*, not an
+open web search - there is still no search API, so the app cannot find
+scholarship portals on its own; links behind JavaScript menus are not seen;
+one page is scanned per press (no crawling of linked index pages).
+
+---
+
 ### 2026-10-21 — A21 — Neural voice that is actually audible (G133)
 
 **Satisfies:** G133 (the model replied, the bar said "Speaking…", and no

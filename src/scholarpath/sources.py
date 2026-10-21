@@ -145,10 +145,14 @@ def _decode(body: bytes, charset: str | None) -> str:
     return body.decode("utf-8", errors="replace")
 
 
-def fetch_page(
-    url: str, timeout: float = DEFAULT_TIMEOUT, max_bytes: int = MAX_BYTES
-) -> Page:
-    """Download one page and reduce it to verified-provenance text."""
+def _download(
+    url: str, timeout: float, max_bytes: int
+) -> tuple[bytes, str, str | None]:
+    """Fetch one URL under the app's strict rules.
+
+    Returns (body, final_url, charset). The body may be one byte longer than
+    `max_bytes` so the caller can detect truncation.
+    """
     _assert_public_html_url(url)
 
     request = urlrequest.Request(
@@ -157,7 +161,6 @@ def fetch_page(
     try:
         with urlrequest.urlopen(request, timeout=timeout) as response:
             final_url = response.geturl()
-            status = getattr(response, "status", 200)
             content_type = (response.headers.get("Content-Type") or "").split(";")[
                 0
             ].strip().lower()
@@ -176,6 +179,27 @@ def fetch_page(
         raise FetchError(
             f"That link is not a web page (server said '{content_type or 'unknown type'}')."
         )
+    return body, final_url, charset
+
+
+def fetch_html(
+    url: str, timeout: float = DEFAULT_TIMEOUT, max_bytes: int = MAX_BYTES
+) -> tuple[str, str]:
+    """Download one page and return (html, final_url) for link discovery.
+
+    The HTML is untrusted web content: callers must treat it as data only.
+    """
+    body, final_url, charset = _download(url, timeout, max_bytes)
+    if len(body) > max_bytes:
+        body = body[:max_bytes]
+    return _decode(body, charset), final_url
+
+
+def fetch_page(
+    url: str, timeout: float = DEFAULT_TIMEOUT, max_bytes: int = MAX_BYTES
+) -> Page:
+    """Download one page and reduce it to verified-provenance text."""
+    body, final_url, charset = _download(url, timeout, max_bytes)
 
     warnings: list[str] = []
     truncated = len(body) > max_bytes

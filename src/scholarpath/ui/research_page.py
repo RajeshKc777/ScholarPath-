@@ -13,7 +13,7 @@ import logging
 from dataclasses import dataclass
 from typing import Callable
 
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from scholarpath.discovery import Discovery, discover
 from scholarpath.gateway.base import ChatRequest, GatewayError, Message, ModelGateway
 from scholarpath.research import (
     SCHOLARSHIP_FIELD_NAMES,
@@ -41,6 +42,27 @@ from scholarpath.storage import Database
 from scholarpath.ui.confirm_row import ConfirmRow
 
 logger = logging.getLogger("scholarpath.ui.research")
+
+
+class _DiscoveryWorker(QThread):
+    """Look for scholarship links on one page, off the UI thread."""
+
+    found = Signal(object, str)  # Discovery | None, error ("")
+
+    def __init__(self, url: str) -> None:
+        super().__init__()
+        self._url = url
+
+    def run(self) -> None:
+        try:
+            result = discover(self._url)
+        except FetchError as exc:
+            self.found.emit(None, str(exc))
+        except Exception:  # noqa: BLE001 - discovery must never crash the app
+            logger.exception("discovery crashed for %s", self._url)
+            self.found.emit(None, "The page could not be searched for links.")
+        else:
+            self.found.emit(result, "")
 
 
 class _VerifyWorker(QThread):
@@ -325,6 +347,7 @@ class ResearchPage(QWidget):
         self._model = model
         self._on_saved = on_saved
         self._worker: _VerifyWorker | None = None
+        self._discovery_worker: _DiscoveryWorker | None = None
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -335,9 +358,11 @@ class ResearchPage(QWidget):
         title = QLabel("Scholarship pages", self)
         title.setObjectName("PageTitle2")
         lead = QLabel(
-            "Paste the official scholarship page URL. The page is read locally, "
-            "the model proposes values, and only values that literally appear in "
-            "the page text can be kept. No automatic search exists in this build.",
+            "Paste an official scholarship page and the app reads it, or paste "
+            "a site's scholarships/funding page and use Find pages to list the "
+            "scholarship links that page itself publishes. Only text that "
+            "literally appears on a page can be kept. There is still no open "
+            "web search.",
             self,
         )
         lead.setObjectName("PageLead")
@@ -351,6 +376,15 @@ class ResearchPage(QWidget):
         self.url_input.setObjectName("PField")
         self.url_input.setPlaceholderText("https://university.edu/scholarship\u2026")
         row.addWidget(self.url_input, 1)
+        self.find_button = QPushButton("Find pages", self)
+        self.find_button.setObjectName("GhostButton")
+        self.find_button.setToolTip(
+            "List the scholarship and funding links published on that page "
+            "(same site only). Nothing is guessed: every link is read from the "
+            "page itself."
+        )
+        self.find_button.clicked.connect(self._on_find)
+        row.addWidget(self.find_button)
         self.read_button = QPushButton("Read page", self)
         self.read_button.setObjectName("PrimaryButton")
         self.read_button.clicked.connect(self._on_read)
@@ -361,6 +395,21 @@ class ResearchPage(QWidget):
         self._status.setObjectName("PageLead")
         self._status.setWordWrap(True)
         outer.addWidget(self._status)
+
+        # -- links found on the page (G134) -----------------------------------
+        self._suggestions = QFrame(self)
+        self._suggestions.setObjectName("PanelCard")
+        suggestions_layout = QVBoxLayout(self._suggestions)
+        suggestions_layout.setContentsMargins(12, 10, 12, 12)
+        suggestions_layout.setSpacing(6)
+        suggestions_title = QLabel("Links published on that page", self._suggestions)
+        suggestions_title.setObjectName("CardTitle")
+        suggestions_layout.addWidget(suggestions_title)
+        self._suggestions_layout = QVBoxLayout()
+        self._suggestions_layout.setSpacing(6)
+        suggestions_layout.addLayout(self._suggestions_layout)
+        self._suggestions.hide()
+        outer.addWidget(self._suggestions)
 
         scroll = QScrollArea(self)
         scroll.setObjectName("DocScroll")
@@ -376,6 +425,90 @@ class ResearchPage(QWidget):
         outer.addWidget(scroll, 1)
 
         self.reload()
+
+    # -- finding links on a page (G134) --------------------------------------
+    def _on_find(self) -> None:
+        url = self.url_input.text().strip()
+        if not url:
+            QMessageBox.information(
+                self,
+                "No address",
+                "Paste the page to look at first, for example a university's "
+                "scholarships or funding page.",
+            )
+            return
+        if self._discovery_worker is not None and self._discovery_worker.isRunning():
+            return
+        if self._worker is not None and self._worker.isRunning():
+            QMessageBox.information(
+                self, "Already working", "A page is still being read. One moment."
+            )
+            return
+        self._clear_suggestions()
+        self._status.setText("Looking for scholarship links on that page\u2026")
+        self.find_button.setEnabled(False)
+        self.read_button.setEnabled(False)
+        self.url_input.setEnabled(False)
+        self._discovery_worker = _DiscoveryWorker(url)
+        self._discovery_worker.found.connect(self._on_discovered)
+        self._discovery_worker.finished.connect(self._clear_discovery_worker)
+        self._discovery_worker.start()
+
+    def _clear_discovery_worker(self) -> None:
+        self._discovery_worker = None
+
+    def _on_discovered(self, result: Discovery | None, error: str) -> None:
+        self.find_button.setEnabled(True)
+        self.read_button.setEnabled(True)
+        self.url_input.setEnabled(True)
+        if error or result is None:
+            self._status.setText("")
+            QMessageBox.warning(
+                self,
+                "Could not look at that page",
+                error or "The page is unreachable.",
+            )
+            return
+        if result.empty:
+            self._status.setText(
+                "No scholarship links were published on that page. Try the "
+                "site's own scholarships, funding or financial aid page."
+            )
+            return
+        title = result.title or result.final_url
+        self._status.setText(
+            f"Found {len(result.candidates)} scholarship link(s) on {title!r}. "
+            "Click one to read and verify it."
+        )
+        self._show_suggestions(result)
+
+    def _show_suggestions(self, result: Discovery) -> None:
+        self._clear_suggestions()
+        for candidate in result.candidates:
+            button = QPushButton(
+                f"{candidate.label}\n{candidate.url}", self._suggestions
+            )
+            button.setObjectName("ActionTile")
+            button.setCursor(Qt.PointingHandCursor)
+            button.setToolTip("Read this page and verify its values")
+            button.clicked.connect(
+                lambda _checked=False, url=candidate.url: self._open_candidate(url)
+            )
+            self._suggestions_layout.addWidget(button)
+        self._suggestions.show()
+
+    def _clear_suggestions(self) -> None:
+        while self._suggestions_layout.count():
+            item = self._suggestions_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        self._suggestions.hide()
+
+    def _open_candidate(self, url: str) -> None:
+        self.url_input.setText(url)
+        self._clear_suggestions()
+        self._on_read()
 
     # -- verification flow ---------------------------------------------------
     def _on_read(self) -> None:
