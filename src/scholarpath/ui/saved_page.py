@@ -32,8 +32,10 @@ from scholarpath.eligibility import (
     evaluate_all,
 )
 from scholarpath.profiles import Profile
+from scholarpath.recheck import RecheckStore
 from scholarpath.research import draft_checklist
 from scholarpath.storage import Database
+from scholarpath.ui.recheck import RecheckWorker
 
 logger = logging.getLogger("scholarpath.ui.saved")
 
@@ -115,10 +117,17 @@ class ChecklistsPanel(QWidget):
 
 
 class SavedPage(QWidget):
-    def __init__(self, database: Database, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        database: Database,
+        recheck_store: RecheckStore | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self._database = database
         self._compare_ids: set[int] = set()
+        self._recheck = recheck_store or RecheckStore()
+        self._worker: RecheckWorker | None = None
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -149,6 +158,18 @@ class SavedPage(QWidget):
         self._compare_hint = QLabel("Tick 2\u20134 records to compare.", self)
         self._compare_hint.setObjectName("PageLead")
         actions.addWidget(self._compare_hint)
+        self._recheck_button = QPushButton("Re-check pages", self)
+        self._recheck_button.setObjectName("GhostButton")
+        self._recheck_button.setToolTip(
+            "Fetch every saved record's page again and flag the ones that "
+            "changed or whose deadline has passed."
+        )
+        self._recheck_button.clicked.connect(self._start_recheck)
+        actions.addWidget(self._recheck_button)
+        self._recheck_status = QLabel("", self)
+        self._recheck_status.setObjectName("PageLead")
+        self._recheck_status.setWordWrap(True)
+        actions.addWidget(self._recheck_status, 1)
         actions.addStretch(1)
         outer.addLayout(actions)
 
@@ -218,6 +239,29 @@ class SavedPage(QWidget):
         self._body.addWidget(filler, 1)
         self._update_compare_actions()
 
+    # -- re-check (G142) -----------------------------------------------------
+    def _start_recheck(self) -> None:
+        if self._worker is not None and self._worker.isRunning():
+            return
+        records = list(self._database.scholarships())
+        if not records:
+            self._recheck_status.setText("There are no records to check yet.")
+            return
+        self._recheck_button.setEnabled(False)
+        self._recheck_status.setText("Checking the pages again\u2026")
+        self._worker = RecheckWorker(records, self._recheck)
+        self._worker.checked.connect(self._on_rechecked)
+        self._worker.finished.connect(self._on_recheck_finished)
+        self._worker.start()
+
+    def _on_rechecked(self, results) -> None:
+        self._recheck_status.setText(self._recheck.summary())
+        self.reload()
+
+    def _on_recheck_finished(self) -> None:
+        self._worker = None
+        self._recheck_button.setEnabled(True)
+
     def _update_compare_actions(self) -> None:
         count = len(self._compare_ids)
         self._compare_button.setEnabled(2 <= count <= 4)
@@ -252,6 +296,12 @@ class SavedPage(QWidget):
         saved_on = QLabel(f"saved {report.retrieved_at}", card)
         saved_on.setObjectName("DocMeta")
         actions.addWidget(saved_on)
+        recheck = self._recheck.get(record_id)
+        if recheck is not None:
+            flag = QLabel(f"re-check: {recheck.flag}", card)
+            flag.setObjectName("DocMeta")
+            flag.setToolTip(recheck.detail)
+            actions.addWidget(flag)
         actions.addStretch(1)
 
         record_id = report.scholarship_id

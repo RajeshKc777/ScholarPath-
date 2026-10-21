@@ -31,7 +31,9 @@ from scholarpath.eligibility import (
     evaluate_all,
 )
 from scholarpath.profiles import Profile
+from scholarpath.recheck import RecheckStore
 from scholarpath.storage import Database
+from scholarpath.ui.recheck import RecheckWorker
 
 logger = logging.getLogger("scholarpath.ui.eligibility")
 
@@ -85,6 +87,7 @@ class ReportCard(QFrame):
         open_source: Callable[[str], None],
         on_save: Callable[[int, bool], None],
         is_saved: bool = False,
+        recheck=None,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -112,6 +115,11 @@ class ReportCard(QFrame):
         meta = QLabel(f"record retrieved {report.retrieved_at}", self)
         meta.setObjectName("DocMeta")
         foot.addWidget(meta)
+        if recheck is not None:
+            flag = QLabel(f"re-check: {recheck.flag}", self)
+            flag.setObjectName("DocMeta")
+            flag.setToolTip(recheck.detail)
+            foot.addWidget(flag)
         foot.addStretch(1)
         record_id = report.scholarship_id
         save = QPushButton("Save ★" if not is_saved else "Saved ✓ (remove)", self)
@@ -138,11 +146,14 @@ class EligibilityPage(QWidget):
         self,
         database: Database,
         on_open_profile: Callable[[], None] | None = None,
+        recheck_store: RecheckStore | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._database = database
         self._on_open_profile = on_open_profile
+        self._recheck = recheck_store or RecheckStore()
+        self._worker: RecheckWorker | None = None
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -163,6 +174,21 @@ class EligibilityPage(QWidget):
         header.addWidget(title)
         header.addWidget(lead)
         outer.addLayout(header)
+
+        actions = QHBoxLayout()
+        self._recheck_button = QPushButton("Re-check pages", self)
+        self._recheck_button.setObjectName("GhostButton")
+        self._recheck_button.setToolTip(
+            "Fetch every record's page again and flag the ones that changed "
+            "or whose deadline has passed."
+        )
+        self._recheck_button.clicked.connect(self._start_recheck)
+        actions.addWidget(self._recheck_button)
+        self._recheck_status = QLabel("", self)
+        self._recheck_status.setObjectName("PageLead")
+        self._recheck_status.setWordWrap(True)
+        actions.addWidget(self._recheck_status, 1)
+        outer.addLayout(actions)
 
         self._summary = QLabel("", self)
         self._summary.setObjectName("PageLead")
@@ -231,8 +257,33 @@ class EligibilityPage(QWidget):
                 self._open_url,
                 self._toggle_save,
                 is_saved=self._database.is_saved(report.scholarship_id),
+                recheck=self._recheck.get(report.scholarship_id),
             )
             self._list.insertWidget(self._list.count() - 1, card)
+
+    # -- re-check (G142) -----------------------------------------------------
+    def _start_recheck(self) -> None:
+        if self._worker is not None and self._worker.isRunning():
+            return
+        records = list(self._database.scholarships())
+        if not records:
+            self._recheck_status.setText("There are no records to check yet.")
+            return
+        self._recheck_button.setEnabled(False)
+        self._recheck_status.setText("Checking the pages again\u2026")
+        self._worker = RecheckWorker(records, self._recheck)
+        self._worker.checked.connect(self._on_rechecked)
+        self._worker.finished.connect(self._on_recheck_finished)
+        self._worker.start()
+
+    def _on_rechecked(self, results) -> None:
+        summary = self._recheck.summary()
+        self._recheck_status.setText(summary)
+        self.reload()
+
+    def _on_recheck_finished(self) -> None:
+        self._worker = None
+        self._recheck_button.setEnabled(True)
 
     def _toggle_save(self, record_id: int, save: bool) -> None:
         if save:

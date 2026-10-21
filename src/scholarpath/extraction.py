@@ -139,6 +139,15 @@ def _normalize(text: str) -> str:
 
 # -- dates -----------------------------------------------------------------
 
+def date_parts(text: str) -> tuple[int | None, int | None, int | None] | None:
+    """(year, month, day) for a date-like string, or None when it is not one.
+
+    A numeric date whose day and month could both be <= 12 is ambiguous
+    (05/11/2025) and is deliberately not parsed: guessing would not be honest.
+    """
+    return _date_parts(text)
+
+
 def _date_parts(text: str) -> tuple[int | None, int | None, int | None] | None:
     """(year, month, day) for a date-like string, or None when it is not one.
 

@@ -41,6 +41,7 @@ from scholarpath.chat_profile import merge_selected
 from scholarpath.config import AppConfig, config_path
 from scholarpath.profiles import Profile
 from scholarpath.prose import humanize_reply
+from scholarpath.recheck import RecheckStore
 from scholarpath.storage import Database, database_path
 from scholarpath.ui import theme
 from scholarpath.ui.chat_controller import ChatController, Turn
@@ -709,14 +710,20 @@ class MainWindow(QMainWindow):
 
         from scholarpath.ui.eligibility_page import EligibilityPage
 
+        self._recheck_store = RecheckStore()
         self._eligibility_page = EligibilityPage(
-            self._database, on_open_profile=lambda: self.select_page("profile"), parent=self
+            self._database,
+            on_open_profile=lambda: self.select_page("profile"),
+            recheck_store=self._recheck_store,
+            parent=self,
         )
         self._pages.addWidget(self._eligibility_page)
 
         from scholarpath.ui.saved_page import SavedPage
 
-        self._saved_page = SavedPage(self._database, parent=self)
+        self._saved_page = SavedPage(
+            self._database, recheck_store=self._recheck_store, parent=self
+        )
         self._pages.addWidget(self._saved_page)
 
         from scholarpath.ui.settings_page import SettingsPage
