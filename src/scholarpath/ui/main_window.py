@@ -44,7 +44,7 @@ from scholarpath.ui.chat_controller import ChatController, Turn
 from scholarpath.ui.mic_button import MicButton
 from scholarpath.ui.profile_page import DEGREE_LABELS
 from scholarpath.ui.profile_suggestion import ProfileSuggestionCard, _ProfileScanWorker
-from scholarpath.tts import Speaker, to_speech
+from scholarpath.tts import Speaker, engine_label, to_speech
 from scholarpath.voice import availability, cancel_active, listen_once
 
 GLYPH_EDUCATION = "\uE7BE"
@@ -57,6 +57,20 @@ GLYPH_SEND = "\uE724"
 GLYPH_ATTACH = "\uE723"
 GLYPH_MIC = "\uE720"
 GLYPH_GLOBE = "\uE774"
+
+# How close to the bottom still counts as "following the conversation".
+SCROLL_STICK_THRESHOLD = 12
+
+
+def should_stick_to_bottom(
+    maximum: int, value: int, threshold: int = SCROLL_STICK_THRESHOLD
+) -> bool:
+    """True when the scroll position is close enough to the bottom.
+
+    The chat follows new messages while the student is at the bottom, and
+    stops yanking the view when they scroll up to read earlier turns.
+    """
+    return (maximum - value) <= threshold
 GLYPH_CHECK = "\uE73E"
 
 ACTION_TILES = (
@@ -441,6 +455,9 @@ class MainWindow(QMainWindow):
         self._turns = 0
         self._page_name = "chat"
         self._database = Database(database_path())
+        self._scroll_timer = QTimer(self)  # deferred auto-scroll (G130)
+        self._scroll_timer.setSingleShot(True)
+        self._scroll_timer.timeout.connect(self._apply_scroll_to_bottom)
 
         self.setWindowTitle("ScholarPath AI")
         self.resize(config.ui.window_width, config.ui.window_height)
@@ -621,8 +638,9 @@ class MainWindow(QMainWindow):
         self.voice_mode_button.setCursor(Qt.PointingHandCursor)
         self.voice_mode_button.setToolTip(
             "Live voice mode - talk hands-free: the app listens, sends your "
-            "words to the model, and speaks the reply aloud (Windows speech, "
-            "offline). Click again to end."
+            "words to the model, and speaks the reply aloud. The voice is a "
+            "neural one (Microsoft Edge voices, online, no key); if that is "
+            "unavailable the offline Windows voice is used. Click again to end."
         )
         self.voice_mode_button.clicked.connect(self._toggle_voice_mode)
         row.addWidget(self.voice_mode_button, 0, Qt.AlignVCenter)
@@ -726,9 +744,42 @@ class MainWindow(QMainWindow):
         self.empty_state = self._build_empty_state(body)
         self._turns_layout.insertWidget(0, self.empty_state)
         self.transcript.setWidget(body)
+        self._stick_to_bottom = True
+        scrollbar = self.transcript.verticalScrollBar()
+        scrollbar.valueChanged.connect(self._on_transcript_scrolled)
+        scrollbar.rangeChanged.connect(self._on_transcript_range_changed)
         column.addWidget(self.transcript, 1)
         column.addWidget(self._build_composer())
         return column_widget
+
+    # -- transcript auto-scroll (G130) ---------------------------------------
+    def _on_transcript_scrolled(self, value: int) -> None:
+        """Remember whether the student is parked at the bottom of the chat."""
+        scrollbar = self.transcript.verticalScrollBar()
+        self._stick_to_bottom = should_stick_to_bottom(
+            scrollbar.maximum(), value
+        )
+        if not self._stick_to_bottom:
+            # The student scrolled up to read: cancel any pending re-pin, so
+            # a late layout change cannot yank the view back down.
+            self._scroll_timer.stop()
+
+    def _on_transcript_range_changed(self, minimum: int, maximum: int) -> None:
+        """Follow new content while the student is at the bottom (G130)."""
+        if getattr(self, "_stick_to_bottom", True):
+            self._scroll_transcript_to_bottom()
+
+    def _scroll_transcript_to_bottom(self) -> None:
+        """Scroll after the layout has grown, so the newest line is visible."""
+        if not getattr(self, "_stick_to_bottom", True):
+            return
+        self._scroll_timer.start(0)  # single shot, cancelled if the user scrolls
+
+    def _apply_scroll_to_bottom(self) -> None:
+        if not getattr(self, "_stick_to_bottom", True):
+            return
+        scrollbar = self.transcript.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
 
     def _build_empty_state(self, parent: QWidget) -> QWidget:
         holder = QWidget(parent)
@@ -1176,6 +1227,7 @@ class MainWindow(QMainWindow):
         self._speaker = Speaker(self)
         self._speaker.finished.connect(self._on_speech_finished)
         self._speaker.failed.connect(self._on_speech_failed)
+        self._speaker.engine_changed.connect(self._on_voice_engine)
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt API
         """Flush and release the local database; stop ingest threads."""
@@ -1220,9 +1272,8 @@ class MainWindow(QMainWindow):
             self._last_user_text = turn.text
         widget = TurnWidget(turn, self.transcript.widget())
         self._turns_layout.insertWidget(self._turns_layout.count() - 1, widget)
-        self.transcript.verticalScrollBar().setValue(
-            self.transcript.verticalScrollBar().maximum()
-        )
+        if getattr(self, "_stick_to_bottom", True):
+            self._scroll_transcript_to_bottom()  # follow the conversation (G130)
         if turn.role == "assistant" and not turn.error:
             self._maybe_scan_profile()
             if self._voice_mode_active():
@@ -1354,6 +1405,7 @@ class MainWindow(QMainWindow):
         self._voice_misses = 0
         self.mic_button.setEnabled(False)  # the voice bar owns the mic now
         self.voice_bar.show()
+        self._scroll_transcript_to_bottom()  # the bar changed the viewport
         self._set_voice_state("Listening \u2014 speak now", "Click End to stop.")
         self._voice_mode_listen()
 
@@ -1432,6 +1484,14 @@ class MainWindow(QMainWindow):
         self._set_voice_state("Speaking\u2026", detail)
         self._speaker.say(speech)
 
+    def _on_voice_engine(self, engine: str) -> None:
+        """Name the voice that is really speaking (G130)."""
+        if not self._voice_mode_active():
+            return
+        self.voice_detail.setText(
+            f"Speaking with the {engine_label(engine)}. Click End to stop."
+        )
+
     def _end_voice_mode(self, notice: str) -> None:
         if not self._voice_mode_active():
             return
@@ -1439,6 +1499,7 @@ class MainWindow(QMainWindow):
         cancel_active()  # stop any listening capture
         self._speaker.stop()  # silence the current utterance
         self.voice_bar.hide()
+        self._scroll_transcript_to_bottom()  # the bar changed the viewport
         self.voice_mode_button.setChecked(False)
         self.mic_button.setEnabled(True)
         if notice:

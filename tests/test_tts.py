@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from scholarpath.tts import (
     DEFAULT_SPEECH_LIMIT,
+    ENGINE_OFFLINE,
     Speaker,
     clean_speech,
     to_speech,
@@ -81,7 +82,7 @@ def test_speak_runs_uses_a_passed_engine_and_always_finishes() -> None:
     speaker = Speaker()
     done: list[bool] = []
     speaker.finished.connect(lambda: done.append(True))
-    speaker._speak("hello there", init=lambda: FakeEngine())
+    speaker._speak("hello there", init=lambda: FakeEngine(), engine=ENGINE_OFFLINE)
     assert calls == ["say:hello there", "run", "stop"]
     assert done == [True]
 
@@ -93,5 +94,5 @@ def test_speak_failure_reports_and_still_finishes() -> None:
     speaker = Speaker()
     failures: list[str] = []
     speaker.failed.connect(failures.append)
-    speaker._speak("text", init=boom)
+    speaker._speak("text", init=boom, engine=ENGINE_OFFLINE)
     assert failures and "could not be spoken" in failures[0]

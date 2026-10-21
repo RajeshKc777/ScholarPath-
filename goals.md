@@ -50,6 +50,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G127 | 26 | Model failover: when the selected model is rate-limited, the chat continues automatically with the next model in a configured chain instead of showing a raw rate-limit error | `[ ]` |
 | G128 | 27 | OpenAI-compatible gateway provider: the chat can be served directly by any OpenAI-compatible endpoint (e.g. a local router that serves DeepSeek), with its own key and model chain | `[ ]` |
 | G129 | 28 | Key rotation inside the app: console keys are registered with the model service and rotated between accounts when a model quota is exhausted | `[ ]` |
+| G130 | 29 | Spoken replies use a natural neural voice (free Edge neural TTS, no API key) with the offline Windows voice as automatic fallback; the transcript auto-scrolls as the conversation grows | `[x]` |
 
 ---
 
@@ -825,3 +826,25 @@ Two requirements from the owner, dated, after seeing the running app leak
   "listening" state. Three empty captures in a row stop the mode with a plain
   notice. Voice mode needs the live model connection; offline it refuses
   with a reason instead of pretending.
+
+---
+
+## 19m. Natural spoken voice + sticky auto-scroll (G130, 2026-10-21)
+
+- **Owner ask:** the spoken reply sounded robotic, and the conversation view
+  stopped following the new messages.
+- **Voice:** the only voices on this machine were the old SAPI ones (David,
+  Zira, Mark), which is why it sounded robotic. The reply is now spoken with
+  the free **Edge neural voice** (`edge-tts`, no API key, needs internet) and
+  played locally through `winsound`; if the neural engine is missing or the
+  network is down, the app **falls back automatically** to the offline
+  Windows voice instead of going mute. The voice bar names the engine that
+  really spoke - it is never guessed.
+- **Auto-scroll:** the transcript follows new messages while the student is at
+  the bottom (`should_stick_to_bottom`, 12 px threshold). Scrolling up to
+  read earlier turns stops the following, and any pending re-pin is
+  cancelled so a late layout change cannot yank the view back down.
+  Scrolling back to the bottom re-arms it.
+- **Honest cost:** the neural voice sends the reply text to Microsoft's speech
+  service (no key, no account). The offline fallback keeps the app usable
+  without a network.

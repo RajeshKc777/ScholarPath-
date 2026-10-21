@@ -93,6 +93,40 @@ timer stop, review notice shows.
 
 ---
 
+### 2026-10-21 — A19 — Natural voice + sticky transcript auto-scroll (G130)
+
+**Satisfies:** G130 (owner ask: the voice sounded robotic; the conversation
+view stopped following new messages).
+
+Built:
+
+| Area | File(s) |
+| ---- | ------- |
+| Neural voice (Edge TTS, no key) with automatic offline SAPI fallback; engine reporting | `src/scholarpath/tts.py` |
+| Sticky auto-scroll (threshold helper, cancellable re-pin timer) | `src/scholarpath/ui/main_window.py` |
+| Engine/scroll tests | `tests/test_voice_quality.py` (5 tests) |
+
+Behaviour: replies are spoken with the free Edge neural voice (Aria, with
+Jenny/Guy as fallbacks) and played locally through `winsound`; if the neural
+engine is unavailable or fails, the offline Windows voice speaks instead -
+the app never goes mute - and the voice bar states which engine really
+spoke. The transcript now follows new messages while the student is at the
+bottom; scrolling up to read history stops the following, cancels any pending
+re-pin, and scrolling back down re-arms it.
+
+**Evidence:** 249 tests passing. Live: a real neural utterance was
+synthesised and played (3.7-4.2 s, engine reported "neural"); the fallback
+path was proven by breaking the neural engine (the offline voice spoke and
+the engine switched to "offline"). Scroll: after eight exchanges the view
+settles at the newest message; scrolling up then adding a turn leaves the
+view where the student put it.
+
+**Known limits:** the neural voice needs the internet and sends the reply
+text to Microsoft's speech service; the offline fallback sounds rougher; the
+voice is still turn-based (no barge-in).
+
+---
+
 ### 2026-10-21 — A18 — Live voice agent (G126)
 
 **Satisfies:** G126 (owner ask: a live voice agent that talks back like
