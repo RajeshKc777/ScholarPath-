@@ -564,3 +564,41 @@ def test_deleting_a_record_removes_its_sources(temp_db: Database) -> None:
     assert temp_db.delete_scholarship(int(record["id"])) is True
     assert temp_db.sources_for(int(record["id"])) == []
     assert list(temp_db.catalog_records()) == []
+
+# -- the record card (Phase 3) ------------------------------------------------
+
+def test_the_catalog_card_shows_the_kept_difference() -> None:
+    from PySide6.QtWidgets import QApplication, QLabel, QPushButton
+
+    from scholarpath.ui.catalog_page import RecordCard
+
+    QApplication.instance() or QApplication([])
+    record = {
+        "id": 1,
+        "title": "OPEN GRANT 2026",
+        "provider": PROVIDER,
+        "provider_domain": "example.gov",
+        "retrieved_at": "2026-10-21T10:00:00",
+        "deadline_text": "30 November 2026",
+        "page_text": "Deadline: 30 November 2026",
+        "data": {
+            "values": {"deadline": "30 November 2026"},
+            "last_diff": [
+                {
+                    "field": "deadline",
+                    "old": "5 November 2026",
+                    "new": "30 November 2026",
+                    "evidence": "Deadline: 30 November 2026",
+                }
+            ],
+        },
+    }
+
+    card = RecordCard(record, [])
+
+    texts = " ".join(label.text() for label in card.findChildren(QLabel))
+    buttons = [button.text() for button in card.findChildren(QPushButton)]
+    assert "the page changed - 1 field(s) differ" in texts
+    assert "was \"5 November 2026\"" in texts
+    assert "Deadline: 30 November 2026" in texts
+    assert "Show what changed" in buttons

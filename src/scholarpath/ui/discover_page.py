@@ -43,6 +43,7 @@ from scholarpath.search import (
 )
 from scholarpath.storage import Database
 from scholarpath.ui.eligibility_dialog import EligibilityDialog
+from scholarpath.ui.warnings import WarningSignsPanel
 
 logger = logging.getLogger("scholarpath.ui.discover")
 
@@ -67,6 +68,7 @@ class RecordCard(QFrame):
         on_save: Callable[[int, bool], None],
         on_check: Callable[[dict], None],
         on_open: Callable[[str], None],
+        trusted_domains=(),
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -145,6 +147,14 @@ class RecordCard(QFrame):
             warn.setWordWrap(True)
             column.addWidget(warn)
 
+        column.addWidget(
+            WarningSignsPanel(
+                self.record,
+                trusted_domains=trusted_domains,
+                parent=self,
+            )
+        )
+
         foot = QHBoxLayout()
         pages = QLabel(f"{source_count} page(s) behind this record", self)
         pages.setObjectName("DocMeta")
@@ -186,10 +196,12 @@ class DiscoverPage(QWidget):
     def __init__(
         self,
         database: Database,
+        trusted_domains=(),
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._database = database
+        self._trusted_domains = tuple(trusted_domains or ())
         self._dialog: EligibilityDialog | None = None
 
         outer = QVBoxLayout(self)
@@ -381,6 +393,7 @@ class DiscoverPage(QWidget):
                 on_save=self._toggle_save,
                 on_check=self._check,
                 on_open=self._open,
+                trusted_domains=self._trusted_domains,
                 parent=self,
             )
             self._list.insertWidget(self._list.count() - 1, card)
@@ -404,6 +417,8 @@ class DiscoverPage(QWidget):
             is_saved=self._database.is_saved(record_id),
             on_save=self._toggle_save,
             profile_empty=not filled,
+            record=record,
+            trusted_domains=self._trusted_domains,
             parent=self,
         )
         self._dialog = dialog

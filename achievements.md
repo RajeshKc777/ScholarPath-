@@ -28,15 +28,74 @@ is finished, not when it is started. Each entry names the goal it satisfies
   card. **Phase 1 of the discovery roadmap** adds the sources registry, the
   crawler and the background catalog run (A26); **phase 2** adds the Discover
   page - search and filters over the stored records with an eligibility
-  hand-off (A27).
+  hand-off (A27); **phase 3** adds the freshness job, the version history and
+  its difference view, opt-in reminders, CSV/ICS export and the warning signs
+  (A28).
 - Licence: proprietary, source-available, view-only (`LICENSE`).
-- Tests: **488 passing** (`pytest`, ~42 s).
-- Next: **Phase 3** of the owner roadmap (to be scoped with the owner before
-  any code); M7 packaging and the security review remain in place.
+- Tests: **558 passing** (`pytest`, ~43 s).
+- Next: **Phase 4** of the owner roadmap (README fixes, database encryption,
+  OCR/TTS interfaces, GitHub Actions) — not started. M7 packaging and the
+  security review remain in place.
 
 ---
 
 ## Log (newest first)
+
+### 2026-10-21 — A28 — Phase 3: freshness, reminders, export and warning signs (G152-G159)
+
+**Satisfies:** G152 (the re-check job), G153 (the difference), G154 (expiry
+only from a stored date), G155 (a failed check says so), G156 (reminders),
+G157 (CSV + ICS export), G158 (warning signs), G159 (privacy switches).
+Builds on A26's catalog records and A27's Discover page.
+
+| Area | File(s) |
+| ---- | ------- |
+| The job: saved first, hash compare, re-read + verbatim verify, versions, expiry | `src/scholarpath/freshness.py` |
+| Version + page-text storage, `apply_refresh`, `mark_checked`, reminder log | `src/scholarpath/storage.py` |
+| Official-domain rule moved to one place (websearch re-exports it) | `src/scholarpath/official.py` |
+| Warning signs: payment wording, lookalike domain, missing source/deadline | `src/scholarpath/scam_flags.py` |
+| The reminder schedule (30/14/7/1) and its wording | `src/scholarpath/reminders.py` |
+| The saved list as CSV and as ICS (RFC 5545 escaping + folding) | `src/scholarpath/export.py` |
+| `[freshness]` + `[reminders]` config, shipped template updated | `src/scholarpath/config.py`, `config.example.toml` |
+| Background re-check worker, Windows notification service | `src/scholarpath/ui/freshness.py`, `src/scholarpath/ui/reminders.py` |
+| Shared warning-sign panel on every record card | `src/scholarpath/ui/warnings.py` |
+| Saved page: state line, "Show what changed", "Why this record?", export buttons | `src/scholarpath/ui/saved_page.py` |
+| Warning signs on the Discover, Eligibility and Catalog cards | `src/scholarpath/ui/discover_page.py`, `ui/eligibility_page.py`, `ui/catalog_page.py` |
+| Settings: freshness/reminders card and the local-notification note | `src/scholarpath/ui/settings_page.py` |
+| Startup + every-half-hour re-check, reminders on the Saved page | `src/scholarpath/ui/main_window.py` |
+| Tests | `tests/test_freshness.py` (15), `tests/test_scam_flags.py` (14), `tests/test_reminders.py` (11), `tests/test_export.py` (9), `tests/test_saved_page.py` (10), `tests/test_privacy_toggles.py` (10), `tests/test_catalog.py` (1 card test) |
+
+Behaviour: the re-check job looks at the **saved records first**, then the most
+recent catalog records. It reuses the guarded fetch (conditional GET, one
+request per second per host) and the stored sha256 decides the outcome. An
+unchanged page is recorded as checked; a **changed** page is read again, every
+value is re-verified against the new text, both versions are kept in
+`scholarship_version`, and the field-by-field difference (old → new + the
+sentence the new value came from) is stored with the record so it survives a
+restart. **EXPIRED** comes only from the stored `deadline_date`; an ambiguous
+"05/11/2026" stays "no date". A page that cannot be read or re-read reads
+"could not re-check, last verified <date>" and the old copy is never shown as
+fresh. Reminders are opt-in, local, once per day, only at 30/14/7/1 days and
+only for saved records with a clear date. CSV/ICS carry the source URL, the
+deadline text **exactly as the page wrote it** and the last verified date; only
+records with a readable date become calendar events. Warning signs cover
+payment wording (quoting the sentence), a domain that is neither official nor
+trusted (exact registrable-domain match, so `harvard.edu.fake.com` and
+`chevening-scholarships.org` are caught), a missing source and a missing
+deadline; nothing is hidden or deleted, and "scam"/"safe" appear nowhere (a
+test enforces it).
+
+**Evidence:** **558 passing** in ~43 s (70 new tests, still no network: the
+fetcher and the model are fakes, the loopback server is unchanged). An
+off-screen render of the Saved page showed an EXPIRED chip, a "could not
+re-check, last verified 2026-10-01" line, a "the page changed - 1 field(s)
+differ" line and "2 warning sign(s) to read" with the "Why this record?"
+panel; the Discover render showed the same sign line on both cards.
+
+**Known limits:** the job runs only while the app is open (startup + every half
+hour); a changed page needs the model service to be re-read; the payment check
+is phrase-based, so unusual wording is not flagged — the signs point at a page,
+they never clear it; reminders are Windows notifications only (no email).
 
 ### 2026-10-21 — A27 — Phase 2: Discover search, filters and the profile hand-off (G149-G151)
 

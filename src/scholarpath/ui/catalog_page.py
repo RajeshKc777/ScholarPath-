@@ -31,6 +31,8 @@ from scholarpath.catalog import CatalogEvent, CatalogRunner, CatalogStats
 from scholarpath.gateway.base import ModelGateway
 from scholarpath.registry import RegistryError, Source, load_registry, user_registry_path
 from scholarpath.storage import Database
+from scholarpath.ui.freshness import DifferencePanel
+from scholarpath.ui.warnings import WarningSignsPanel
 
 logger = logging.getLogger("scholarpath.ui.catalog")
 
@@ -105,7 +107,13 @@ class SourceRow(QWidget):
 class RecordCard(QFrame):
     """One stored catalog record, with the page it came from."""
 
-    def __init__(self, record: dict, sources: list[dict], parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        record: dict,
+        sources: list[dict],
+        trusted_domains=(),
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self.setObjectName("DocCard")
         column = QVBoxLayout(self)
@@ -153,6 +161,22 @@ class RecordCard(QFrame):
             warn.setWordWrap(True)
             column.addWidget(warn)
 
+        column.addWidget(
+            WarningSignsPanel(record, trusted_domains=trusted_domains, parent=self)
+        )
+
+        stored_diff = (record.get("data") or {}).get("last_diff") or []
+        if stored_diff:
+            changed = QLabel(
+                f"the page changed - {len(stored_diff)} field(s) differ "
+                f"(last verified {str(record.get('retrieved_at') or '')[:10]})",
+                self,
+            )
+            changed.setObjectName("DocMeta")
+            changed.setWordWrap(True)
+            column.addWidget(changed)
+            column.addWidget(DifferencePanel(record, parent=self))
+
         foot = QHBoxLayout()
         pages = QLabel(f"{len(sources)} page(s) behind this record", self)
         pages.setObjectName("DocMeta")
@@ -183,12 +207,14 @@ class CatalogPage(QWidget):
         database: Database,
         gateway: ModelGateway,
         model: str | None = None,
+        trusted_domains=(),
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._database = database
         self._gateway = gateway
         self._model = model
+        self._trusted_domains = tuple(trusted_domains or ())
         self._job: CatalogJob | None = None
         self._cancel = threading.Event()
         self._rows: list[SourceRow] = []
@@ -368,7 +394,10 @@ class CatalogPage(QWidget):
         for record in records:
             sources = self._database.sources_for(int(record["id"]))
             self._records.insertWidget(
-                self._records.count() - 1, RecordCard(record, sources, self)
+                self._records.count() - 1,
+                RecordCard(
+                    record, sources, self._trusted_domains, parent=self
+                ),
             )
 
     def _open_registry(self) -> None:

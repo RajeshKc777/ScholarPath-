@@ -72,6 +72,14 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G149 | 36 | A Discover page over the stored catalog: free-text search plus level, country, field, provider and deadline filters, deterministic ordering (open first, then undated, then closed), each result showing the page's own deadline wording beside the parsed state, and honest empty states - browsing changes nothing | `[x]` |
 | G150 | 36 | Eligibility hand-off: from a search result, the deterministic engine runs on that record's verified values against the local profile and shows the same report card as the Eligibility page, and the record can be saved to Saved Opportunities; nothing is ever called eligible | `[x]` |
 | G151 | 36 | Search and filters are local-only: no query leaves the device, no record is modified by browsing, and a match is labelled a reading aid rather than a verdict | `[x]` |
+| G152 | 37 | A background re-check job: saved records first, then recent catalog records, re-fetched with the guarded fetch (conditional requests, one request per second per host); the page hash decides unchanged vs changed, and a changed page is re-extracted, re-verified against the page text, stored as a new version with the old one kept | `[x]` |
+| G153 | 37 | A field-by-field difference is shown in the UI for every changed field: the old value, the new value, and the page text the new value was taken from | `[x]` |
+| G154 | 37 | A record is EXPIRED only when its stored, unambiguous deadline_date is earlier than today; an ambiguous or missing date stays "no date" and is never guessed | `[x]` |
+| G155 | 37 | A failed re-check says "could not re-check, last verified <date>" and never presents the old copy as fresh | `[x]` |
+| G156 | 37 | Deadline reminders: an opt-in Windows notification at 30, 14, 7 and 1 days before a saved record's unambiguous deadline, off by default, never repeated for the same day | `[x]` |
+| G157 | 37 | Export: the saved list as CSV and as an ICS calendar file, each carrying the source URL, the deadline text exactly as the page wrote it, and the date the page was last verified | `[x]` |
+| G158 | 37 | Warning signs: payment/fee wording on the page, a domain that is neither official nor trusted (exact registrable-domain match, never a substring), a missing source and a missing deadline are shown on the cards and in the why panel; nothing is hidden or deleted, and the wording never calls a page a scam or safe | `[x]` |
+| G159 | 37 | Privacy toggles: voice_stt, voice_tts and web_search stay off by default, each feature is gated on its own switch, and the Settings page names the third party and the data for each | `[x]` |
 
 ---
 
@@ -1153,3 +1161,48 @@ ever pretending to judge them.
 4. **Wording.** The page lead says "a match is not a verdict", the result count
    says "N of M record(s) match", and the dialog repeats that nothing is a
    probability and every requirement must be confirmed on the official page.
+
+## 19w. Freshness and safety — Phase 3 (G152-G159, 2026-10-21)
+
+Phase 3 of the discovery roadmap, specified by the owner on 2026-10-21. The
+catalog is only worth anything if it stays true, and a student must be able to
+see the warning signs without being told what to think.
+
+1. **G152 - the re-check job.** A background job re-fetches records: the saved
+   ones first, then the most recent catalog records. It reuses the guarded
+   fetch (public addresses only, conditional requests with the stored ETag /
+   Last-Modified, one request per second per host). The stored sha256 decides
+   the outcome: the same hash means unchanged; a different hash means the page
+   changed, so the page is re-extracted with the model, every proposed value is
+   re-verified word-for-word against the new page text, the new version is
+   stored and the previous version is kept.
+2. **G153 - the difference.** For a changed page the UI shows every field that
+   differs: the old value, the new value and the sentence of the new page the
+   new value was taken from. Nothing is updated behind the student's back
+   without a visible difference.
+3. **G154 - expiry.** A record is EXPIRED only when its stored `deadline_date`
+   is a single unambiguous day that lies before today. A date the page words
+   ambiguously stays "no date" - it is never guessed into a day.
+4. **G155 - a failed check says so.** When the page cannot be fetched, the
+   record reads "could not re-check, last verified <date>". The old copy is
+   never presented as fresh.
+5. **G156 - reminders.** A Windows notification at 30, 14, 7 and 1 days before a
+   saved record's unambiguous deadline. Opt-in (`[reminders] enabled`), off by
+   default, and never repeated for the same record on the same day. Records
+   without a readable deadline are never reminded about.
+6. **G157 - export.** The saved list exports as CSV and as an ICS calendar
+   file. Both carry the source URL, the deadline text exactly as the page wrote
+   it, and the date the page was last verified. Only records with a readable
+   deadline become calendar events.
+7. **G158 - warning signs.** Four signs are looked for: payment or fee wording
+   on the page, a domain that is neither official nor trusted, a missing source
+   and a missing deadline. A domain is official when its registrable domain
+   matches exactly - `.edu`, `.ac.xx`, `.gov`, `.gov.xx` - or the student's own
+   `trusted_domains`; a lookalike such as `harvard.edu.fake.com` or
+   `chevening-scholarships.org` is not official. Signs appear on the cards and
+   in the why panel. A record is never hidden or deleted, and the wording says
+   "warning sign" - never "scam", never "safe".
+8. **G159 - privacy switches.** `voice_stt`, `voice_tts` and `web_search` stay
+   off by default, each feature is gated on its own switch, and the Settings
+   page states which third party receives which data when a switch is on. The
+   deadline reminder is a local Windows notification and sends nothing.

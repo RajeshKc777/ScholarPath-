@@ -148,6 +148,36 @@ class SearchConfig(BaseModel):
     trusted_domains: list[str] = []
 
 
+class FreshnessConfig(BaseModel):
+    """How often the stored records are checked against their pages (G152).
+
+    The check re-fetches the pages (the guarded fetch, one request per second
+    per host), compares the page hash, and re-reads a page that changed. It
+    never invents a deadline: a record is expired only when its stored date
+    lies before today.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Check in the background when the app starts and a record is due.
+    auto: bool = True
+    # How old a record's last check may be before it is due again.
+    interval_hours: int = Field(default=24, ge=1, le=720)
+    # How many records one run may read (the saved ones are always included).
+    max_per_run: int = Field(default=20, ge=1, le=200)
+
+
+class RemindersConfig(BaseModel):
+    """Deadline reminders (G156). Off until the student asks for them."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # A Windows notification at 30, 14, 7 and 1 days before a saved record's
+    # deadline. Nothing leaves the device; the notification is drawn by
+    # Windows on this machine.
+    enabled: bool = False
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -156,6 +186,8 @@ class AppConfig(BaseModel):
     mcp: McpConfig = Field(default_factory=McpConfig)
     privacy: PrivacyConfig = Field(default_factory=PrivacyConfig)
     search: SearchConfig = Field(default_factory=SearchConfig)
+    freshness: FreshnessConfig = Field(default_factory=FreshnessConfig)
+    reminders: RemindersConfig = Field(default_factory=RemindersConfig)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
 

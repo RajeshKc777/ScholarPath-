@@ -348,10 +348,58 @@ class SettingsPage(QWidget):
         always.setObjectName("StateWhat")
         always.setWordWrap(True)
         privacy_layout.addWidget(always)
+        reminders_note = QLabel(
+            "The deadline reminder is a notification Windows draws on this "
+            "device. No third party receives anything, and it is off until "
+            "you turn it on.",
+            self,
+        )
+        reminders_note.setObjectName("StateWhat")
+        reminders_note.setWordWrap(True)
+        privacy_layout.addWidget(reminders_note)
         open_config = QPushButton("Open config file", self)
         open_config.setObjectName("GhostButton")
         open_config.clicked.connect(self._open_config)
         privacy_layout.addWidget(open_config)
+
+        # -- freshness and reminders (Phase 3) ------------------------------
+        fresh_layout = card("Freshness and reminders")
+        freshness = self._config.freshness
+        reminders = self._config.reminders
+        fresh_state = QLabel(
+            f"Background re-check: {'on' if freshness.auto else 'off'}. "
+            f"A record is checked again when its last check is more than "
+            f"{freshness.interval_hours} hour(s) old, and one run reads at "
+            f"most {freshness.max_per_run} record(s). The saved records are "
+            "always checked first. A page that changed is read again and "
+            "verified word-for-word against the new page text; the older "
+            "version is kept.",
+            self,
+        )
+        fresh_state.setObjectName("StateWhy")
+        fresh_state.setWordWrap(True)
+        fresh_layout.addWidget(fresh_state)
+        fresh_key = QLabel("switch: freshness.auto in config.toml", self)
+        fresh_key.setObjectName("DocMeta")
+        fresh_key.setWordWrap(True)
+        fresh_layout.addWidget(fresh_key)
+
+        reminder_switch = "on" if reminders.enabled else "off (the default)"
+        reminder_state = QLabel(
+            f"Deadline reminders: {reminder_switch}. When on, Windows shows a "
+            "local notification at 30, 14, 7 and 1 days before the deadline "
+            "of a saved record. Only a record with a clear deadline date is "
+            "reminded about, and the same reminder is not shown twice on "
+            "one day.",
+            self,
+        )
+        reminder_state.setObjectName("StateWhy")
+        reminder_state.setWordWrap(True)
+        fresh_layout.addWidget(reminder_state)
+        reminder_key = QLabel("switch: reminders.enabled in config.toml", self)
+        reminder_key.setObjectName("DocMeta")
+        reminder_key.setWordWrap(True)
+        fresh_layout.addWidget(reminder_key)
 
     def _open_folder(self) -> None:
         folder = config_path().parent

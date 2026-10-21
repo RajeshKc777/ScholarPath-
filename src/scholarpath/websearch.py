@@ -23,6 +23,8 @@ from urllib import request as urlrequest
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlencode, urljoin, urlsplit
 
+from scholarpath import official
+
 logger = logging.getLogger("scholarpath.websearch")
 
 DEFAULT_ENDPOINT = "https://lite.duckduckgo.com/lite/"
@@ -33,15 +35,8 @@ MAX_BYTES = 400_000
 DEFAULT_TIMEOUT = 15.0
 
 # --- official-looking domains -------------------------------------------------
-# A domain is "official-looking" when its *registrable* domain ends in an
-# academic or government suffix. The check is on the registrable domain only,
-# so "university.edu.example.com" is not official and "notgov.example" is
-# not a government domain. ".ac.<cc>" and ".gov.<cc>" cover the country
-# variants (university.ac.uk, daad.de-style bodies are trusted by the user
-# through search.trusted_domains instead).
-_OFFICIAL_TLDS = ("edu", "gov", "int", "mil")
-_OFFICIAL_SECOND_LEVEL = ("ac", "gov", "edu")
-_EUROPA_SUFFIX = "europa.eu"
+# The rule itself lives in `scholarpath.official` so that the web search and
+# the warning signs on a record can never disagree about a domain.
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/131.0 Safari/537.36"
@@ -136,21 +131,11 @@ def _unwrap(href: str, base_url: str = DEFAULT_ENDPOINT) -> str | None:
     return parts.geturl()
 
 
+# The domain rules live in `scholarpath.official`; they are re-exported here
+# so the existing call sites (and their tests) keep working unchanged.
 def registrable_domain(host: str) -> str:
-    """The domain a site owns: "university.ac.uk" for "www.university.ac.uk".
-
-    Two labels normally ("example.co.uk" is three, because "co.uk" is a
-    country suffix), which is enough to compare a domain exactly.
-    """
-    host = (host or "").strip().lower().rstrip(".")
-    if not host:
-        return ""
-    labels = host.split(".")
-    if len(labels) <= 2:
-        return host
-    if len(labels[-1]) == 2 and labels[-1].isalpha():
-        return ".".join(labels[-3:])
-    return ".".join(labels[-2:])
+    """The domain a site owns: "university.ac.uk" for "www.university.ac.uk"."""
+    return official.registrable_domain(host)
 
 
 def is_official_domain(host: str) -> bool:
@@ -159,36 +144,12 @@ def is_official_domain(host: str) -> bool:
     "scholarships.university.edu" is official; "university.edu.example.com"
     and "notgov.example" are not. Nothing is matched as a substring.
     """
-    host = (host or "").split("/", 1)[0].split("?", 1)[0]
-    registrable = registrable_domain(host)
-    if not registrable or "." not in registrable:
-        return False
-    if registrable == _EUROPA_SUFFIX or registrable.endswith("." + _EUROPA_SUFFIX):
-        return True
-    labels = registrable.split(".")
-    top = labels[-1]
-    second = labels[-2]
-    if top in _OFFICIAL_TLDS:
-        return True
-    if second in _OFFICIAL_SECOND_LEVEL and len(top) == 2 and top.isalpha():
-        return True
-    return False
+    return official.is_official_domain(host)
 
 
 def _trusted_domains(values: object) -> set[str]:
     """The user's own trusted domains, reduced to registrable domains."""
-    if not values:
-        return set()
-    if isinstance(values, str):
-        values = [values]
-    trusted: set[str] = set()
-    for value in values:
-        if not isinstance(value, str):
-            continue
-        candidate = registrable_domain(value.strip())
-        if candidate:
-            trusted.add(candidate)
-    return trusted
+    return official.trusted_domains(values)
 
 
 def _official_looking(url: str) -> bool:

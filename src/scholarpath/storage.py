@@ -87,6 +87,32 @@ CREATE TABLE IF NOT EXISTS checklist_item (
     created_at TEXT NOT NULL,
     UNIQUE (scholarship_id, text)
 );
+
+-- Phase 3 (freshness): every copy of a record's page, so a changed page can
+-- be compared with the one that was verified before. The old version is kept.
+CREATE TABLE IF NOT EXISTS scholarship_version (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scholarship_id INTEGER NOT NULL,
+    version INTEGER NOT NULL,
+    retrieved_at TEXT NOT NULL DEFAULT '',
+    source_url TEXT NOT NULL DEFAULT '',
+    final_url TEXT NOT NULL DEFAULT '',
+    page_sha256 TEXT NOT NULL DEFAULT '',
+    page_title TEXT NOT NULL DEFAULT '',
+    field_values TEXT NOT NULL DEFAULT '{}',
+    page_text TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    UNIQUE (scholarship_id, version)
+);
+
+-- Phase 3 (reminders): a reminder is shown once per record per day.
+CREATE TABLE IF NOT EXISTS reminder_log (
+    scholarship_id INTEGER NOT NULL,
+    days_before INTEGER NOT NULL,
+    shown_on TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE (scholarship_id, days_before, shown_on)
+);
 """
 
 
@@ -121,7 +147,13 @@ _MIGRATION_COLUMNS: dict[str, str] = {
     "language_req": "TEXT NOT NULL DEFAULT ''",
     "apply_url": "TEXT NOT NULL DEFAULT ''",
     "canonical_key": "TEXT NOT NULL DEFAULT ''",
+    "page_text": "TEXT NOT NULL DEFAULT ''",
 }
+
+#: How much of the page's own text is kept with a record. Enough to show a
+#: warning sign's sentence and a changed value's origin; small enough to keep
+#: the database light.
+MAX_PAGE_TEXT = 50_000
 
 
 def canonical_key(title: str, provider_domain: str, fallback: str = "") -> str:
@@ -318,6 +350,7 @@ class Database:
         page_sha256: str,
         page_title: str,
         warnings: list[str],
+        page_text: str = "",
     ) -> int:
         """Persist a page-verified scholarship record (values only, verbatim).
 
@@ -341,9 +374,10 @@ class Database:
                 "requested_url, final_url, retrieved_at, page_sha256, page_title, "
                 "status, data, provider, provider_domain, level, countries, "
                 "fields_of_study, funding_type, amount_text, deadline_text, "
-                "deadline_date, language_req, apply_url, canonical_key) "
+                "deadline_date, language_req, apply_url, canonical_key, "
+                "page_text) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
-                "?, ?, ?, ?)",
+                "?, ?, ?, ?, ?)",
                 (
                     datetime.now(timezone.utc).isoformat(timespec="seconds"),
                     title,
@@ -367,6 +401,7 @@ class Database:
                     (columns.get("language_req") or "")[:200],
                     (columns.get("apply_url") or "")[:300],
                     key,
+                    page_text[:MAX_PAGE_TEXT],
                 ),
             )
             record_id = int(cursor.lastrowid)  # type: ignore[arg-type]
@@ -385,7 +420,10 @@ class Database:
         with self._lock:
             rows = self._connection.execute(
                 "SELECT id, created_at, title, institution, requested_url, "
-                "final_url, retrieved_at, page_sha256, page_title, status, data "
+                "final_url, retrieved_at, page_sha256, page_title, status, data, "
+                "page_text, provider, provider_domain, level, countries, "
+                "fields_of_study, funding_type, amount_text, deadline_text, "
+                "deadline_date, language_req, apply_url "
                 "FROM scholarship ORDER BY id"
             ).fetchall()
         for row in rows:
@@ -402,7 +440,8 @@ class Database:
                 "provider_domain, level, countries, fields_of_study, "
                 "funding_type, amount_text, deadline_text, deadline_date, "
                 "language_req, apply_url, canonical_key, requested_url, "
-                "final_url, retrieved_at, page_sha256, page_title, status, data "
+                "final_url, retrieved_at, page_sha256, page_title, status, data, "
+                "page_text "
                 "FROM scholarship ORDER BY id"
             ).fetchall()
         for row in rows:
@@ -444,6 +483,7 @@ class Database:
         country: str = "",
         etag: str = "",
         last_modified: str = "",
+        page_text: str = "",
     ) -> tuple[int, str]:
         """Store one verified page, merging it into the record it belongs to.
 
@@ -481,6 +521,7 @@ class Database:
                 provider=provider,
                 provider_domain=provider_domain,
                 key=key,
+                page_text=page_text,
             )
             self.add_source(
                 record_id,
@@ -539,6 +580,7 @@ class Database:
             provider=provider,
             provider_domain=provider_domain,
             key=key,
+            page_text=page_text,
         )
         added = self.add_source(
             int(existing["id"]),
@@ -573,6 +615,7 @@ class Database:
         provider: str,
         provider_domain: str,
         key: str,
+        page_text: str = "",
     ) -> int:
         payload = {
             "values": dict(values),
@@ -586,9 +629,9 @@ class Database:
                 "page_title, status, data, provider, provider_domain, level, "
                 "countries, fields_of_study, funding_type, amount_text, "
                 "deadline_text, deadline_date, language_req, apply_url, "
-                "canonical_key) "
+                "canonical_key, page_text) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
-                "?, ?, ?)",
+                "?, ?, ?, ?)",
                 (
                     datetime.now(timezone.utc).isoformat(timespec="seconds"),
                     values.get("title", "")[:200],
@@ -612,6 +655,7 @@ class Database:
                     (columns.get("language_req") or "")[:200],
                     (columns.get("apply_url") or "")[:300],
                     key,
+                    page_text[:MAX_PAGE_TEXT],
                 ),
             )
             return int(cursor.lastrowid)  # type: ignore[arg-type]
@@ -630,6 +674,7 @@ class Database:
         provider: str,
         provider_domain: str,
         key: str,
+        page_text: str = "",
     ) -> None:
         with self._write() as cursor:
             cursor.execute(
@@ -638,7 +683,9 @@ class Database:
                 "page_title = ?, data = ?, provider = ?, provider_domain = ?, "
                 "level = ?, countries = ?, fields_of_study = ?, funding_type = ?, "
                 "amount_text = ?, deadline_text = ?, deadline_date = ?, "
-                "language_req = ?, apply_url = ?, canonical_key = ? WHERE id = ?",
+                "language_req = ?, apply_url = ?, canonical_key = ?, "
+                "page_text = CASE WHEN ? = '' THEN page_text ELSE ? END "
+                "WHERE id = ?",
                 (
                     values.get("title", "")[:200],
                     values.get("institution", "")[:200],
@@ -659,6 +706,8 @@ class Database:
                     (columns.get("language_req") or "")[:200],
                     (columns.get("apply_url") or "")[:300],
                     key,
+                    page_text[:MAX_PAGE_TEXT],
+                    page_text[:MAX_PAGE_TEXT],
                     record_id,
                 ),
             )
@@ -743,6 +792,210 @@ class Database:
                 (scholarship_id,),
             )
             cursor.execute("DELETE FROM scholarship WHERE id = ?", (scholarship_id,))
+            return cursor.rowcount > 0
+
+    # -- freshness (Phase 3) ------------------------------------------------
+    def record(self, scholarship_id: int) -> dict[str, Any] | None:
+        """One record with all of its columns, or None."""
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM scholarship WHERE id = ?", (scholarship_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        item = dict(row)
+        item["data"] = json.loads(row["data"] or "{}")
+        return item
+
+    def store_version(
+        self,
+        scholarship_id: int,
+        *,
+        retrieved_at: str = "",
+        source_url: str = "",
+        final_url: str = "",
+        page_sha256: str = "",
+        page_title: str = "",
+        values: dict[str, str] | None = None,
+        page_text: str = "",
+    ) -> int:
+        """Keep one version of a record's page. Returns the version number.
+
+        The old version is never overwritten: a changed page is added, so the
+        student can still read what was verified before.
+        """
+        with self._write() as cursor:
+            row = cursor.execute(
+                "SELECT MAX(version) FROM scholarship_version WHERE "
+                "scholarship_id = ?",
+                (scholarship_id,),
+            ).fetchone()
+            version = int(row[0] or 0) + 1
+            cursor.execute(
+                "INSERT INTO scholarship_version (scholarship_id, version, "
+                "retrieved_at, source_url, final_url, page_sha256, page_title, "
+                "field_values, page_text, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    scholarship_id,
+                    version,
+                    retrieved_at,
+                    source_url,
+                    final_url,
+                    page_sha256,
+                    page_title[:200],
+                    json.dumps(dict(values or {}), ensure_ascii=False),
+                    page_text[:MAX_PAGE_TEXT],
+                    datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                ),
+            )
+        return version
+
+    def versions_for(self, scholarship_id: int) -> list[dict[str, Any]]:
+        """Every kept version of a record, oldest first."""
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT id, scholarship_id, version, retrieved_at, source_url, "
+                "final_url, page_sha256, page_title, field_values, page_text, "
+                "created_at FROM scholarship_version WHERE scholarship_id = ? "
+                "ORDER BY version",
+                (scholarship_id,),
+            ).fetchall()
+        versions = []
+        for row in rows:
+            item = dict(row)
+            item["values"] = json.loads(row["field_values"] or "{}")
+            versions.append(item)
+        return versions
+
+    def apply_refresh(
+        self,
+        record_id: int,
+        *,
+        values: dict[str, str],
+        page_sha256: str,
+        retrieved_at: str,
+        page_text: str = "",
+        page_title: str = "",
+        final_url: str = "",
+        checked_at: str = "",
+        deadline_state: str = "",
+        status: str = "changed",
+        diffs: list[dict[str, str]] | None = None,
+    ) -> None:
+        """Write a re-checked page onto the record.
+
+        The new page's verified values replace the old ones for the fields the
+        page states now. A field the new page no longer states keeps its old
+        value and is listed under ``stale_fields``, so nothing disappears
+        quietly.
+        """
+        record = self.record(record_id)
+        if record is None:
+            return
+        data = dict(record.get("data") or {})
+        old_values = dict(data.get("values") or {})
+        merged = dict(old_values)
+        merged.update({name: value for name, value in values.items() if value})
+        stale = sorted(
+            name
+            for name, value in old_values.items()
+            if value and not (values.get(name) or "")
+        )
+        payload = {
+            "values": merged,
+            "unknown": list(data.get("unknown") or []),
+            "warnings": list(data.get("warnings") or []),
+        }
+        for key in ("conflicts", "stale_fields"):
+            if data.get(key):
+                payload[key] = data[key]
+        if stale:
+            payload["stale_fields"] = stale
+        payload["last_checked_at"] = checked_at or retrieved_at
+        payload["last_check_status"] = status
+        if deadline_state:
+            payload["deadline_state"] = deadline_state
+        if diffs:
+            # The difference is kept with the record, so it is still readable
+            # after a restart (the full versions stay in scholarship_version).
+            payload["last_diff"] = [dict(diff) for diff in diffs]
+
+        columns = catalog_columns(merged)
+        with self._write() as cursor:
+            cursor.execute(
+                "UPDATE scholarship SET title = ?, institution = ?, "
+                "final_url = ?, retrieved_at = ?, page_sha256 = ?, "
+                "page_title = ?, data = ?, level = ?, countries = ?, "
+                "fields_of_study = ?, funding_type = ?, amount_text = ?, "
+                "deadline_text = ?, deadline_date = ?, language_req = ?, "
+                "apply_url = ?, page_text = ? WHERE id = ?",
+                (
+                    merged.get("title", "")[:200],
+                    merged.get("institution", "")[:200],
+                    final_url or record.get("final_url", ""),
+                    retrieved_at,
+                    page_sha256,
+                    (page_title or record.get("page_title", ""))[:200],
+                    json.dumps(payload, ensure_ascii=False),
+                    (columns.get("level") or "")[:200],
+                    (columns.get("countries") or "")[:200],
+                    (columns.get("fields_of_study") or "")[:400],
+                    (columns.get("funding_type") or "")[:200],
+                    (columns.get("amount_text") or "")[:200],
+                    (columns.get("deadline_text") or "")[:200],
+                    columns.get("deadline_date"),
+                    (columns.get("language_req") or "")[:200],
+                    (columns.get("apply_url") or "")[:300],
+                    (page_text or record.get("page_text", ""))[:MAX_PAGE_TEXT],
+                    record_id,
+                ),
+            )
+
+    def mark_checked(
+        self,
+        record_id: int,
+        *,
+        checked_at: str,
+        status: str,
+        detail: str = "",
+        deadline_state: str = "",
+    ) -> None:
+        """Remember that a page was checked (or could not be), changing nothing.
+
+        A record that could not be checked keeps its old copy; the status says
+        so, so the old data is never presented as fresh.
+        """
+        record = self.record(record_id)
+        if record is None:
+            return
+        data = dict(record.get("data") or {})
+        data["last_checked_at"] = checked_at
+        data["last_check_status"] = status
+        if detail:
+            data["last_check_detail"] = detail
+        if deadline_state:
+            data["deadline_state"] = deadline_state
+        with self._write() as cursor:
+            cursor.execute(
+                "UPDATE scholarship SET data = ? WHERE id = ?",
+                (json.dumps(data, ensure_ascii=False), record_id),
+            )
+
+    def reminder_shown(self, scholarship_id: int, days_before: int, shown_on: str) -> bool:
+        """True when the reminder was not shown before (and is recorded now)."""
+        with self._write() as cursor:
+            cursor.execute(
+                "INSERT INTO reminder_log (scholarship_id, days_before, "
+                "shown_on, created_at) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(scholarship_id, days_before, shown_on) DO NOTHING",
+                (
+                    scholarship_id,
+                    days_before,
+                    shown_on,
+                    datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                ),
+            )
             return cursor.rowcount > 0
 
     # -- saved opportunities -------------------------------------------------

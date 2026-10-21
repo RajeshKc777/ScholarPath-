@@ -34,6 +34,7 @@ from scholarpath.profiles import stored_profile_payload
 from scholarpath.recheck import RecheckStore
 from scholarpath.storage import Database
 from scholarpath.ui.recheck import RecheckWorker
+from scholarpath.ui.warnings import WarningSignsPanel
 
 logger = logging.getLogger("scholarpath.ui.eligibility")
 
@@ -88,6 +89,8 @@ class ReportCard(QFrame):
         on_save: Callable[[int, bool], None],
         is_saved: bool = False,
         recheck=None,
+        record: dict | None = None,
+        trusted_domains=(),
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -106,6 +109,11 @@ class ReportCard(QFrame):
         verdict.setWordWrap(True)
         head.addWidget(verdict)
         column.addLayout(head)
+
+        if record is not None:
+            column.addWidget(
+                WarningSignsPanel(record, trusted_domains=trusted_domains, parent=self)
+            )
 
         for result in report.requirements:
             row = RequirementRow(result, self)
@@ -147,12 +155,14 @@ class EligibilityPage(QWidget):
         database: Database,
         on_open_profile: Callable[[], None] | None = None,
         recheck_store: RecheckStore | None = None,
+        trusted_domains=(),
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._database = database
         self._on_open_profile = on_open_profile
         self._recheck = recheck_store or RecheckStore()
+        self._trusted_domains = tuple(trusted_domains or ())
         self._worker: RecheckWorker | None = None
 
         outer = QVBoxLayout(self)
@@ -247,6 +257,7 @@ class EligibilityPage(QWidget):
             )
             self._summary.setText(f"Checking against your profile \u2014 {shown}.")
         reports = evaluate_all(payload, rows)
+        by_id = {int(row["id"]): row for row in rows}
         for report in reports:
             card = ReportCard(
                 report,
@@ -254,6 +265,8 @@ class EligibilityPage(QWidget):
                 self._toggle_save,
                 is_saved=self._database.is_saved(report.scholarship_id),
                 recheck=self._recheck.get(report.scholarship_id),
+                record=by_id.get(int(report.scholarship_id)),
+                trusted_domains=self._trusted_domains,
             )
             self._list.insertWidget(self._list.count() - 1, card)
 

@@ -40,6 +40,8 @@ class EligibilityDialog(QDialog):
         is_saved: bool = False,
         on_save: Callable[[int, bool], None] | None = None,
         profile_empty: bool = False,
+        record: dict | None = None,
+        trusted_domains=(),
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -90,6 +92,8 @@ class EligibilityDialog(QDialog):
             _open_url,
             self._toggle_save,
             is_saved=is_saved,
+            record=record,
+            trusted_domains=trusted_domains,
             parent=self,
         )
         scroll = QScrollArea(self)

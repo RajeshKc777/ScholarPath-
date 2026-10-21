@@ -9,12 +9,14 @@ verbatim values; ticks persist.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Callable
 
 from PySide6.QtCore import QUrl, Qt
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox,
+    QFileDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -31,11 +33,23 @@ from scholarpath.eligibility import (
     UNKNOWN,
     evaluate_all,
 )
+from scholarpath.export import csv_text, ics_event_count, ics_text
+from scholarpath.freshness import (
+    STATE_EXPIRED,
+    STATUS_CHANGED,
+    STATUS_FAILED,
+    STATUS_UNCHANGED,
+    FieldDiff,
+    RefreshResult,
+    deadline_state,
+)
 from scholarpath.profiles import Profile
 from scholarpath.recheck import RecheckStore
 from scholarpath.research import draft_checklist
 from scholarpath.storage import Database
+from scholarpath.ui.freshness import DifferencePanel, RefreshWorker
 from scholarpath.ui.recheck import RecheckWorker
+from scholarpath.ui.warnings import WarningSignsPanel
 
 logger = logging.getLogger("scholarpath.ui.saved")
 
@@ -121,6 +135,9 @@ class SavedPage(QWidget):
         self,
         database: Database,
         recheck_store: RecheckStore | None = None,
+        gateway=None,
+        model: str | None = None,
+        trusted_domains: tuple[str, ...] | list[str] = (),
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -128,6 +145,11 @@ class SavedPage(QWidget):
         self._compare_ids: set[int] = set()
         self._recheck = recheck_store or RecheckStore()
         self._worker: RecheckWorker | None = None
+        self._refresh_worker: RefreshWorker | None = None
+        self._refresh_results: dict[int, RefreshResult] = {}
+        self._gateway = gateway
+        self._model = model
+        self._trusted_domains = tuple(trusted_domains or ())
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -161,11 +183,27 @@ class SavedPage(QWidget):
         self._recheck_button = QPushButton("Re-check pages", self)
         self._recheck_button.setObjectName("GhostButton")
         self._recheck_button.setToolTip(
-            "Fetch every saved record's page again and flag the ones that "
-            "changed or whose deadline has passed."
+            "Fetch the pages again - the saved records first, then the most "
+            "recent ones - and show what changed, field by field."
         )
-        self._recheck_button.clicked.connect(self._start_recheck)
+        self._recheck_button.clicked.connect(self._start_refresh)
         actions.addWidget(self._recheck_button)
+        self._export_csv_button = QPushButton("Export CSV", self)
+        self._export_csv_button.setObjectName("GhostButton")
+        self._export_csv_button.setToolTip(
+            "Write the saved list to a CSV file: the source URL, the deadline "
+            "text exactly as the page wrote it, and the last verified date."
+        )
+        self._export_csv_button.clicked.connect(self._export_csv)
+        actions.addWidget(self._export_csv_button)
+        self._export_ics_button = QPushButton("Export calendar", self)
+        self._export_ics_button.setObjectName("GhostButton")
+        self._export_ics_button.setToolTip(
+            "Write the saved list to a calendar file (.ics). Only records with "
+            "a readable deadline become events."
+        )
+        self._export_ics_button.clicked.connect(self._export_ics)
+        actions.addWidget(self._export_ics_button)
         self._recheck_status = QLabel("", self)
         self._recheck_status.setObjectName("PageLead")
         self._recheck_status.setWordWrap(True)
@@ -262,6 +300,91 @@ class SavedPage(QWidget):
         self._worker = None
         self._recheck_button.setEnabled(True)
 
+    # -- the freshness job (G152-G155) ---------------------------------------
+    def _start_refresh(self) -> None:
+        """Check the pages again: the saved records first, then recent ones."""
+        if self._refresh_worker is not None and self._refresh_worker.isRunning():
+            return
+        records = list(self._database.catalog_records())
+        if not records:
+            self._recheck_status.setText("There are no records to check yet.")
+            return
+        self._recheck_button.setEnabled(False)
+        self._recheck_status.setText("Checking the pages again\u2026")
+        self._refresh_worker = RefreshWorker(
+            self._database,
+            gateway=self._gateway,
+            model=self._model,
+            max_records=20,
+        )
+        self._refresh_worker.checked.connect(self._on_refresh_result)
+        self._refresh_worker.finished_run.connect(self._on_refresh_finished)
+        self._refresh_worker.start()
+
+    def _on_refresh_result(self, result: RefreshResult) -> None:
+        self._refresh_results[int(result.scholarship_id)] = result
+
+    def _on_refresh_finished(self, stats) -> None:
+        self._refresh_worker = None
+        self._recheck_button.setEnabled(True)
+        self._recheck_status.setText(stats.summary() if stats else "")
+        self.reload()
+
+    # -- export (G157) -------------------------------------------------------
+    def _saved_records(self) -> list[dict]:
+        records = {int(row["id"]): row for row in self._database.catalog_records()}
+        return [
+            records[record_id]
+            for record_id in self._database.saved_opportunity_ids()
+            if record_id in records
+        ]
+
+    def _write_file(self, path: str, text: str) -> None:
+        try:
+            with open(path, "w", encoding="utf-8", newline="") as handle:
+                handle.write(text)
+        except OSError as exc:
+            self._recheck_status.setText(f"The file could not be written: {exc}")
+            return
+        self._recheck_status.setText(f"Written: {path}")
+
+    def _export_csv(self) -> None:
+        records = self._saved_records()
+        if not records:
+            self._recheck_status.setText("There is nothing saved to export.")
+            return
+        path, _filter = QFileDialog.getSaveFileName(
+            self,
+            "Export the saved list",
+            str(Path.home() / "scholarpath-saved.csv"),
+            "CSV files (*.csv)",
+        )
+        if not path:
+            return
+        self._write_file(path, csv_text(records))
+
+    def _export_ics(self) -> None:
+        records = self._saved_records()
+        if not records:
+            self._recheck_status.setText("There is nothing saved to export.")
+            return
+        events = ics_event_count(records)
+        if not events:
+            self._recheck_status.setText(
+                "None of the saved records has a readable deadline, so there "
+                "is nothing to put in a calendar."
+            )
+            return
+        path, _filter = QFileDialog.getSaveFileName(
+            self,
+            "Export the saved list as a calendar",
+            str(Path.home() / "scholarpath-saved.ics"),
+            "Calendar files (*.ics)",
+        )
+        if not path:
+            return
+        self._write_file(path, ics_text(records))
+
     def _update_compare_actions(self) -> None:
         count = len(self._compare_ids)
         self._compare_button.setEnabled(2 <= count <= 4)
@@ -274,12 +397,96 @@ class SavedPage(QWidget):
         else:
             self._compare_hint.setText(f"{count} selected \u2014 ready to compare.")
 
+    # -- what the record says about itself (G154, G155) ---------------------
+    def _state_line(self, record_id: int, record: dict) -> QWidget:
+        """One line about the record's freshness: expired, changed, or checked."""
+        holder = QWidget(self)
+        row = QHBoxLayout(holder)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+
+        data = record.get("data") or {}
+        status = str(data.get("last_check_status") or "")
+        checked_at = str(data.get("last_checked_at") or "")[:10]
+        verified_on = str(record.get("retrieved_at") or "")[:10]
+        detail = str(data.get("last_check_detail") or "")
+        diffs = self._diffs(record_id, record)
+
+        def line(text: str) -> QLabel:
+            label = QLabel(text, holder)
+            label.setObjectName("DocMeta")
+            label.setWordWrap(True)
+            if detail:
+                label.setToolTip(detail)
+            return label
+
+        if status == STATUS_FAILED:
+            row.addWidget(line(f"could not re-check, last verified {verified_on or 'unknown'}"))
+        elif diffs:
+            text = (
+                f"the page changed - {len(diffs)} field(s) differ "
+                f"(last verified {verified_on or 'unknown'})"
+            )
+            row.addWidget(line(text))
+        elif status == STATUS_UNCHANGED and checked_at:
+            row.addWidget(line(f"checked again on {checked_at} - unchanged"))
+        elif verified_on:
+            row.addWidget(line(f"last verified {verified_on}"))
+
+        if deadline_state(record) == STATE_EXPIRED:
+            chip = QLabel("EXPIRED", holder)
+            chip.setObjectName("CapFail")
+            row.addWidget(chip)
+            note = QLabel(
+                "The stored deadline lies before today. Check the page - the "
+                "scholarship may have been re-opened.",
+                holder,
+            )
+            note.setObjectName("StateWhat")
+            note.setWordWrap(True)
+            row.addWidget(note, 1)
+        row.addStretch(1)
+        return holder
+
+    # -- what changed (G153) -------------------------------------------------
+    def _diffs(self, record_id: int, record: dict) -> list[FieldDiff]:
+        """The changed fields: this run's result first, then the stored copy."""
+        refresh = self._refresh_results.get(int(record_id))
+        if refresh is not None and refresh.status == STATUS_CHANGED and refresh.diffs:
+            return refresh.diffs
+        stored = (record.get("data") or {}).get("last_diff") or []
+        diffs: list[FieldDiff] = []
+        for item in stored:
+            if not isinstance(item, dict):
+                continue
+            diffs.append(
+                FieldDiff(
+                    field=str(item.get("field") or ""),
+                    old=str(item.get("old") or ""),
+                    new=str(item.get("new") or ""),
+                    evidence=str(item.get("evidence") or ""),
+                )
+            )
+        return diffs
+
+    def _difference_panel(self, record_id: int, record: dict, card: QWidget) -> QWidget:
+        """The old value, the new value and the page text behind each change."""
+        return DifferencePanel(
+            record, diffs=self._diffs(record_id, record), parent=card
+        )
+
+    # -- the warning signs (G158) --------------------------------------------
+    def _signs_panel(self, record_id: int, record: dict, card: QWidget) -> QWidget:
+        """The warning signs of this record, and why each one is there."""
+        return WarningSignsPanel(record, trusted_domains=self._trusted_domains, parent=card)
+
     def _build_card(self, report, record: dict) -> QFrame:
         card = QFrame(self)
         card.setObjectName("DocCard")
         column = QVBoxLayout(card)
         column.setContentsMargins(14, 12, 14, 12)
         column.setSpacing(6)
+        record_id = report.scholarship_id
 
         head = QHBoxLayout()
         name = QLabel(report.title, card)
@@ -304,7 +511,7 @@ class SavedPage(QWidget):
             actions.addWidget(flag)
         actions.addStretch(1)
 
-        record_id = report.scholarship_id
+        column.addWidget(self._state_line(record_id, record))
         compare_box = QCheckBox("Compare", card)
         compare_box.setChecked(record_id in self._compare_ids)
         compare_box.toggled.connect(
@@ -338,6 +545,9 @@ class SavedPage(QWidget):
             label.setWordWrap(True)
             row.addWidget(label, 1)
             column.addLayout(row)
+
+        column.addWidget(self._difference_panel(record_id, record, card))
+        column.addWidget(self._signs_panel(record_id, record, card))
 
         toggle = QPushButton("Application checklist", card)
         toggle.setObjectName("LinkButton")

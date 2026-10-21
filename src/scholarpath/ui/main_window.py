@@ -9,6 +9,8 @@ feature tiles are explicitly marked as not built yet.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
+from datetime import timedelta
 
 from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import (
@@ -470,6 +472,8 @@ class MainWindow(QMainWindow):
         self._voice_mode = False
         self._voice_misses = 0
         self._voice_workers: set[QThread] = set()  # held until each thread ends
+        self._refresh_worker = None  # the background re-check job (G152)
+        self._reminders = None  # the deadline reminder service (G156)
 
         self.setWindowTitle("ScholarPath AI")
         self.resize(config.ui.window_width, config.ui.window_height)
@@ -496,6 +500,9 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
         self._connect()
         self._refresh_status()
+        self._start_background_refresh()
+        self._start_refresh_timer()
+        QTimer.singleShot(2000, self._show_due_reminders)
 
     # -- sidebar ----------------------------------------------------------
     def _build_sidebar(self) -> QWidget:
@@ -735,6 +742,7 @@ class MainWindow(QMainWindow):
             self._database,
             on_open_profile=lambda: self.select_page("profile"),
             recheck_store=self._recheck_store,
+            trusted_domains=self._config.search.trusted_domains,
             parent=self,
         )
         self._pages.addWidget(self._eligibility_page)
@@ -745,19 +753,29 @@ class MainWindow(QMainWindow):
             self._database,
             self._controller.gateway,
             self._config.gateway.model or None,
+            trusted_domains=self._config.search.trusted_domains,
             parent=self,
         )
         self._pages.addWidget(self._catalog_page)
 
         from scholarpath.ui.discover_page import DiscoverPage
 
-        self._discover_page = DiscoverPage(self._database, parent=self)
+        self._discover_page = DiscoverPage(
+            self._database,
+            trusted_domains=self._config.search.trusted_domains,
+            parent=self,
+        )
         self._pages.addWidget(self._discover_page)
 
         from scholarpath.ui.saved_page import SavedPage
 
         self._saved_page = SavedPage(
-            self._database, recheck_store=self._recheck_store, parent=self
+            self._database,
+            recheck_store=self._recheck_store,
+            gateway=self._controller.gateway,
+            model=self._config.gateway.model or None,
+            trusted_domains=self._config.search.trusted_domains,
+            parent=self,
         )
         self._pages.addWidget(self._saved_page)
 
@@ -1227,6 +1245,7 @@ class MainWindow(QMainWindow):
         }
         if name == "saved" and self._saved_page is not None:
             self._saved_page.reload()  # data may have changed since last visit
+            self._show_due_reminders()  # a deadline may have come due (G156)
         if name == "discover" and self._discover_page is not None:
             self._discover_page.reload()  # a catalog run may have added records
         self._page_title.setText(titles.get(name, titles["chat"]))
@@ -1313,6 +1332,73 @@ class MainWindow(QMainWindow):
         self._speaker.failed.connect(self._on_speech_failed)
         self._speaker.engine_changed.connect(self._on_voice_engine)
 
+    # -- freshness and reminders (Phase 3) ----------------------------------
+    def _records_due(self, records: list[dict]) -> bool:
+        """True when a record's last check is older than the configured age."""
+        limit = datetime.now(timezone.utc) - timedelta(
+            hours=self._config.freshness.interval_hours
+        )
+        for record in records:
+            checked = str((record.get("data") or {}).get("last_checked_at") or "")
+            if not checked:
+                return True
+            try:
+                moment = datetime.fromisoformat(checked)
+            except ValueError:
+                return True
+            if moment.tzinfo is None:
+                moment = moment.replace(tzinfo=timezone.utc)
+            if moment < limit:
+                return True
+        return False
+
+    def _start_background_refresh(self) -> None:
+        """Check the stored records in the background when one is due."""
+        if not self._config.freshness.auto:
+            return
+        worker = getattr(self, "_refresh_worker", None)
+        if worker is not None and worker.isRunning():
+            return
+        try:
+            records = list(self._database.catalog_records())
+        except Exception:  # noqa: BLE001 - a background job must never break the app
+            return
+        if not records or not self._records_due(records):
+            return
+        from scholarpath.ui.freshness import RefreshWorker
+
+        self._refresh_worker = RefreshWorker(
+            self._database,
+            gateway=self._controller.gateway,
+            model=self._config.gateway.model or None,
+            max_records=self._config.freshness.max_per_run,
+            parent=self,
+        )
+        self._refresh_worker.finished_run.connect(self._on_background_refresh)
+        self._refresh_worker.start()
+
+    def _start_refresh_timer(self) -> None:
+        """Look again while the app stays open (a record becomes due over time)."""
+        self._refresh_timer = QTimer(self)
+        self._refresh_timer.setInterval(30 * 60 * 1000)  # every half hour
+        self._refresh_timer.timeout.connect(self._start_background_refresh)
+        self._refresh_timer.start()
+
+    def _on_background_refresh(self, stats) -> None:
+        self._refresh_worker = None
+        logger.info("background refresh: %s", stats.summary() if stats else "")
+
+    def _show_due_reminders(self) -> None:
+        """Show the deadline reminders that are due (opt-in, local)."""
+        if not self._config.reminders.enabled:
+            return
+        from scholarpath.ui.reminders import ReminderService
+
+        service = ReminderService(self._database, enabled=True)
+        shown = service.show_due()
+        if shown:
+            logger.info("shown %d deadline reminder(s)", len(shown))
+
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt API
         """Flush and release the local database; stop ingest threads."""
         if self._documents_page is not None:
@@ -1323,6 +1409,8 @@ class MainWindow(QMainWindow):
             self._catalog_page.shutdown()
         if getattr(self, "_settings_page", None) is not None:
             self._settings_page.shutdown()
+        if getattr(self, "_refresh_worker", None) is not None:
+            self._refresh_worker.wait(5000)
         if getattr(self, "_profile_scan_worker", None) is not None:
             self._profile_scan_worker.wait(5000)
         if getattr(self, "_voice_worker", None) is not None:

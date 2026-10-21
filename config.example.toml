@@ -95,6 +95,26 @@ web_search = false
 [search]
 trusted_domains = []
 
+# --- Freshness: keeping the stored records true --------------------------------
+# The saved records are checked first, then the most recent ones. A page that
+# changed is read again and every value is verified against the new page
+# text; the older version is kept so you can still read it.
+[freshness]
+# Check in the background when the app starts and a record is due.
+auto = true
+# How old the last check of a record may be before it is due again.
+interval_hours = 24
+# How many records one run may read (saved records are always included).
+max_per_run = 20
+
+# --- Reminders ------------------------------------------------------------------
+# OFF by default. When on, Windows shows a local notification at 30, 14, 7 and
+# 1 days before the deadline of a saved record. Nothing is sent anywhere: the
+# notification is drawn by Windows on this device. Only records with a clear
+# deadline date are reminded about.
+[reminders]
+enabled = false
+
 # --- Tools (MCP, optional) -----------------------------------------------------
 # MCP is opt-in and read-only by default. No server starts unless mcp.enabled
 # is true AND that server has enabled = true. With read_only = true, only
