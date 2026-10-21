@@ -93,7 +93,45 @@ timer stop, review notice shows.
 
 ---
 
-### 2026-10-20 — A16 — Voice engine swapped to SpeechRecognition (G124)
+### 2026-10-21 — A18 — Live voice agent (G126)
+
+**Satisfies:** G126 (owner ask: a live voice agent that talks back like
+ChatGPT voice).
+
+Built:
+
+| Area | File(s) |
+| ---- | ------- |
+| Spoken replies: markdown cleaning, sentence-boundary truncation, worker-thread speaker | `src/scholarpath/tts.py` |
+| Voice-mode loop, voice bar (state + End), "Live voice" toggle, speak hook on assistant turns | `src/scholarpath/ui/main_window.py` |
+| Styles for the voice bar and toggle | `src/scholarpath/ui/theme.py` |
+| Cleaning / truncation / speaker lifecycle tests | `tests/test_tts.py` (11 tests) |
+| Dependencies: `pyttsx3` + `pywin32` (Windows SAPI, offline) | `pyproject.toml` |
+
+Behaviour: "Live voice" starts a hands-free loop - listen (STT) -> the words
+become a normal chat message -> the model replies -> the reply is spoken
+aloud (SAPI, offline) -> listen again. The voice bar shows the real state
+(Listening / Thinking / Speaking / Nothing heard yet) and an End button that
+stops the capture and the speech. Spoken text is markdown-free and URLs are
+replaced by "link in the chat"; long replies are truncated at a sentence for
+speech only. Three empty captures stop the mode with an honest notice; the
+mode refuses to start without a live model connection or a working
+microphone/speaker, always with a reason.
+
+**Evidence:** 244 tests passing (11 new). E2E with a fake gateway: one
+transcribed phrase became the user turn, the reply was spoken as "Yes. You can
+apply for the Chevening Scholarship. Check the official page for dates."
+(markdown and URL removed), the loop returned to listening, and stopping
+restored the idle state with the mic usable again. Real SAPI utterance
+measured at 2.2 s (engine start + speech) on this machine.
+
+**Known limits:** turn-based (not full duplex) - the app listens after each
+reply, so it cannot be interrupted mid-sentence; English (`en-US`) input;
+speech output is the local SAPI voice, quality is the OS default.
+
+---
+
+### 2026-10-20 - A16 - Voice engine swapped to SpeechRecognition (G124)
 
 **Satisfies:** G124 (owner decision after seeing the Windows toggle requirement);
 supersedes the engine choice in A15, keeps G123's interaction.
@@ -582,4 +620,8 @@ pydantic 2.14.1, pytest 9.1.1 — all import-tested.
   filters), G109 (model-side tool use deferred), G111, G114 - product
   capabilities beyond the M6 pipeline.
 - G106 funding-type ranking policy (funding values stay descriptive).
+- G127, G128, G129 - provider chain, failover, OpenAI-compatible endpoint and
+  key rotation: **code and tests landed** in commit `fe51cb0` (recovered from
+  an interrupted session) and the suite is green, but no end-to-end run against
+  a live provider yet, so they stay unverified until that happens.
 - Milestone G207 (M7: security review, performance, Windows packaging).

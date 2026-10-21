@@ -46,7 +46,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G123 | 22 | Voice input in chat: speak a prompt or a voice message, speech becomes editable text, then is sent like a normal message (Windows Speech engine, honest privacy copy) | `[x]` |
 | G124 | 23 | Voice engine switched to the Python SpeechRecognition library (no Windows speech toggle, no model download); UI copy states that audio is sent to the transcription service | `[x]` |
 | G125 | 24 | While the mic is recording, the mic button shows an animated listening ripple; the button stays clickable to stop | `[x]` |
-| G126 | 25 | Live voice conversation mode: hands-free listen → reply → speak loop in the chat, with a visible state and a stop control | `[ ]` |
+| G126 | 25 | Live voice conversation mode: hands-free listen → reply → speak loop in the chat, with a visible state and a stop control | `[x]` |
 | G127 | 26 | Model failover: when the selected model is rate-limited, the chat continues automatically with the next model in a configured chain instead of showing a raw rate-limit error | `[ ]` |
 | G128 | 27 | OpenAI-compatible gateway provider: the chat can be served directly by any OpenAI-compatible endpoint (e.g. a local router that serves DeepSeek), with its own key and model chain | `[ ]` |
 | G129 | 28 | Key rotation inside the app: console keys are registered with the model service and rotated between accounts when a model quota is exhausted | `[ ]` |
@@ -798,3 +798,30 @@ Two requirements from the owner, dated, after seeing the running app leak
 - **Honest states:** the ripple runs only while a capture is real; every
   failure or result path ends it and restores the idle look - no animation
   left running, no fake "listening" state.
+
+---
+
+## 19l. Live voice agent (G126, 2026-10-21)
+
+- **Owner ask:** a live voice agent like ChatGPT voice - talk to the app and
+  it talks back, hands-free.
+- **Shape:** turn-based loop, not full duplex: **Listening -> Thinking ->
+  Speaking -> Listening**, started by the "Live voice" control in the top bar
+  and ended with the "End" button in the voice bar. The transcript shows every
+  spoken turn as a normal chat message, so the conversation stays readable
+  and searchable.
+- **Engines and API keys (owner question, answered):** speech **output** is
+  Windows SAPI through `pyttsx3` - fully offline, no key, no service, audio
+  never leaves the device. Speech **input** is the same `SpeechRecognition`
+  library as G124 (Google's free web endpoint, no key, internet needed). The
+  **model** still comes from the configured local OpenCode gateway - no new
+  key was introduced anywhere.
+- **Spoken text is cleaned, not raw:** markdown (bold, headings, bullets,
+  code ticks) is stripped and bare URLs become "link in the chat" so the voice
+  reads sentences. Long replies are truncated at a sentence boundary for
+  speech only; the full reply stays in the chat.
+- **Honest states:** the voice bar always shows what the app is doing
+  (Listening / Thinking / Speaking / Nothing heard yet) - never a fake
+  "listening" state. Three empty captures in a row stop the mode with a plain
+  notice. Voice mode needs the live model connection; offline it refuses
+  with a reason instead of pretending.
