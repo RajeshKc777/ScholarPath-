@@ -120,7 +120,9 @@ class ReportCard(QFrame):
             column.addWidget(row)
 
         foot = QHBoxLayout()
-        meta = QLabel(f"record retrieved {report.retrieved_at}", self)
+        meta = QLabel(
+            f"record retrieved {str(report.retrieved_at or '')[:10]}", self
+        )
         meta.setObjectName("DocMeta")
         foot.addWidget(meta)
         if recheck is not None:

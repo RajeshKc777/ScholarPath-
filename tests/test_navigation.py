@@ -8,13 +8,13 @@ build the real window and prove each name lands on its own page.
 from __future__ import annotations
 
 import pytest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QLabel
 
 import scholarpath.ui.main_window as main_window
 from scholarpath.config import AppConfig
 from scholarpath.gateway.stub import StubGateway
 from scholarpath.ui.chat_controller import ChatController
-from scholarpath.ui.main_window import MainWindow
+from scholarpath.ui.main_window import ActionTile, MainWindow
 
 
 @pytest.fixture
@@ -63,3 +63,30 @@ def test_discover_reloads_when_it_is_opened(window: MainWindow) -> None:
     window.select_page("discover")
 
     assert "1 of 1 record(s) match" in window._discover_page._summary.text()
+
+
+def test_explore_countries_quick_action_opens_discover(window: MainWindow) -> None:
+    """G162: the tile is no longer a "Soon" placeholder."""
+    target = None
+    for tile in window.findChildren(ActionTile):
+        titles = [
+            label.text()
+            for label in tile.findChildren(QLabel)
+            if label.objectName() == "TileTitle"
+        ]
+        if "Explore Countries" in titles:
+            target = tile
+    assert target is not None
+
+    target.click()
+
+    assert window._pages.currentWidget() is window._discover_page
+
+
+def test_no_quick_action_is_marked_soon(window: MainWindow) -> None:
+    badges = [
+        label.text()
+        for label in window.findChildren(QLabel)
+        if label.objectName() == "TileBadge"
+    ]
+    assert "Soon" not in badges

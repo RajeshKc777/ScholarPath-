@@ -32,9 +32,10 @@ is finished, not when it is started. Each entry names the goal it satisfies
   its difference view, opt-in reminders, CSV/ICS export and the warning signs
   (A28). The README now carries five Mermaid diagrams — the student journey,
   the system map, the record pipeline, the re-check decision and the device
-  trust boundary (A29).
+  trust boundary (A29). The README now also carries a banner, seven
+  badges and eight real screenshots of the shipped pages (A30).
 - Licence: proprietary, source-available, view-only (`LICENSE`).
-- Tests: **558 passing** (`pytest`, ~43 s).
+- Tests: **562 passing** (`pytest`, ~43 s).
 - Next: **Phase 4** of the owner roadmap (README fixes, database encryption,
   OCR/TTS interfaces, GitHub Actions) — not started. M7 packaging and the
   security review remain in place.
@@ -42,6 +43,59 @@ is finished, not when it is started. Each entry names the goal it satisfies
 ---
 
 ## Log (newest first)
+
+### 2026-10-21 - A30 - A visual README, eight real screenshots, and two fixes they exposed (G161-G163)
+
+**Satisfies:** G161 (the visual README), G162 (no stale "Soon" chip), G163
+(the Saved page holds four or more records).
+
+| Area | File(s) |
+| ---- | ------- |
+| Banner, badges, gallery, callouts, grouped features | `README.md` |
+| The eight page captures | `docs/screens/*.png`, `docs/screenshot.png` |
+| The banner | `docs/banner.svg` |
+| The quick actions open real pages (G162) | `src/scholarpath/ui/main_window.py` |
+| The Saved list scrolls, dates read as dates (G163) | `src/scholarpath/ui/saved_page.py` |
+| The Eligibility card's retrieved date | `src/scholarpath/ui/eligibility_page.py` |
+| The new tests | `tests/test_saved_page.py`, `tests/test_navigation.py` |
+| The requirement and what was checked | `goals.md` (section 19y) |
+
+**What the README looks like now:** a gradient banner with the wordmark, the
+tagline, seven badges (status, platform, Python, Qt, tests, local-first,
+licence), a nav row, the chat window as the hero image, a six-image gallery
+with captions under "A look inside", GitHub alert callouts, and the feature
+list grouped into six themed groups. The full config, the file map and the long
+command list are behind `<details>`; every diagram, table, command and limit of
+the previous README is still there.
+
+**The screenshots are real.** They are `MainWindow.grab()` renders of the
+shipped build, taken offscreen with `QT_QPA_PLATFORM=offscreen` and
+`QT_QPA_FONTDIR=C:\Windows\Fonts` (without the font directory the offscreen
+plugin draws every glyph as a box), against a throwaway `SCHOLARPATH_HOME`
+holding sample records. The real profile and database are never touched. The
+sample data uses fictional providers on reserved `.example` domains, and the
+README says so in a note next to the gallery.
+
+**Two fixes the screenshots forced (G162, G163).** The "Explore Countries" quick
+action still carried a "Soon" badge although Discover shipped in phase 2; it
+now opens Discover, and the four quick actions are a balanced 2 x 2 grid. The
+Saved Opportunities page had no scroll area, so four saved records were squeezed
+and clipped; the list now lives in a `QScrollArea`, resets to the top on reload,
+shows the saved, checked and retrieved dates as dates instead of raw ISO
+timestamps, and keeps the freshness line on one line.
+
+**Evidence:** 562 tests pass (`pytest`, exit 0) - four of them new: the Saved
+list is a scroll area, the saved date is a date, "Explore Countries" opens
+Discover, and no quick action carries a "Soon" badge. The five Mermaid blocks
+still parse with `mermaid.parse` (Mermaid 12.2). The banner was rendered in the
+system Edge to confirm the browser output, and every screenshot was inspected
+at full size.
+
+**Limits:** the screenshots are hand-maintained, like the diagrams: a UI change
+means re-taking them (the capture script lives in the temp folder, not in the
+repository). The banner is hand-written SVG with no web font, so it renders the
+same everywhere. The gallery is a plain HTML table, because GitHub strips inline
+CSS from Markdown.
 
 ### 2026-10-21 — A29 — README diagrams (G160)
 

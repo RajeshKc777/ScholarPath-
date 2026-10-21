@@ -6,7 +6,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-from PySide6.QtWidgets import QApplication, QLabel, QPushButton
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QScrollArea
 
 from scholarpath.freshness import (
     STATE_EXPIRED,
@@ -220,3 +220,33 @@ def test_a_nothing_saved_export_says_so(db: Database) -> None:
     page._export_csv()
 
     assert "nothing saved" in page._recheck_status.text().casefold()
+
+
+# -- the list holds up with more records (G163) -------------------------------
+
+
+def test_the_card_list_scrolls_with_more_records(db: Database) -> None:
+    for index in range(5):
+        seed(
+            db,
+            title=f"GRANT {index}",
+            url=f"https://example.gov/grant-{index}",
+        )
+
+    page = SavedPage(db)
+
+    assert isinstance(page._list, QScrollArea)
+    assert page._list.widgetResizable()
+    assert page._list.widget() is page._body.parentWidget()
+
+
+def test_the_saved_date_is_a_date_not_a_timestamp(db: Database) -> None:
+    record_id = seed(db)
+    db.save_opportunity(record_id)
+
+    page = SavedPage(db)
+
+    text = card_texts(page)
+    assert "saved 2026-10-01" in text
+    assert "2026-10-01T09:00:00" not in text
+

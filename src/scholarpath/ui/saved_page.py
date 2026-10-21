@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -211,8 +212,18 @@ class SavedPage(QWidget):
         actions.addStretch(1)
         outer.addLayout(actions)
 
-        self._body: QVBoxLayout = QVBoxLayout()
-        outer.addLayout(self._body, 1)
+        self._list = QScrollArea(self)
+        self._list.setObjectName("SavedList")
+        self._list.setWidgetResizable(True)
+        self._list.setFrameShape(QFrame.NoFrame)
+        self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        body = QWidget(self._list)
+        body.setObjectName("SavedListBody")
+        self._body: QVBoxLayout = QVBoxLayout(body)
+        self._body.setContentsMargins(0, 0, 6, 8)
+        self._body.setSpacing(12)
+        self._list.setWidget(body)
+        outer.addWidget(self._list, 1)
 
         self.reload()
 
@@ -239,6 +250,7 @@ class SavedPage(QWidget):
         self._compare_button.setVisible(True)
         self._compare_hint.setVisible(True)
         self._show_list()
+        self._list.verticalScrollBar().setValue(0)
 
     def _clear_body(self) -> None:
         while self._body.count():
@@ -421,17 +433,19 @@ class SavedPage(QWidget):
             return label
 
         if status == STATUS_FAILED:
-            row.addWidget(line(f"could not re-check, last verified {verified_on or 'unknown'}"))
+            row.addWidget(
+                line(f"could not re-check, last verified {verified_on or 'unknown'}"), 1
+            )
         elif diffs:
             text = (
                 f"the page changed - {len(diffs)} field(s) differ "
                 f"(last verified {verified_on or 'unknown'})"
             )
-            row.addWidget(line(text))
+            row.addWidget(line(text), 1)
         elif status == STATUS_UNCHANGED and checked_at:
-            row.addWidget(line(f"checked again on {checked_at} - unchanged"))
+            row.addWidget(line(f"checked again on {checked_at} - unchanged"), 1)
         elif verified_on:
-            row.addWidget(line(f"last verified {verified_on}"))
+            row.addWidget(line(f"last verified {verified_on}"), 1)
 
         if deadline_state(record) == STATE_EXPIRED:
             chip = QLabel("EXPIRED", holder)
@@ -500,7 +514,7 @@ class SavedPage(QWidget):
 
         actions = QHBoxLayout()
         actions.setSpacing(10)
-        saved_on = QLabel(f"saved {report.retrieved_at}", card)
+        saved_on = QLabel(f"saved {str(report.retrieved_at or '')[:10]}", card)
         saved_on.setObjectName("DocMeta")
         actions.addWidget(saved_on)
         recheck = self._recheck.get(record_id)

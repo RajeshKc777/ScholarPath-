@@ -1,6 +1,8 @@
 <div align="center">
+  <img src="docs/banner.svg" alt="ScholarPath AI — funded education, verified">
+</div>
 
-# ScholarPath AI
+<div align="center">
 
 **Find scholarships you can actually get — with sources you can actually check.**
 
@@ -9,25 +11,31 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 
 <br>
 
-![Status](https://img.shields.io/badge/status-catalog%20phase%201-4f8cff?style=flat-square)
+![Status](https://img.shields.io/badge/status-phase%203%20shipped-FF4500?style=flat-square)
+![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?style=flat-square&logo=windows&logoColor=white)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Qt](https://img.shields.io/badge/Qt-6.12-41CD52?style=flat-square&logo=qt&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-558%20passing-2ea043?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-562%20passing-2ea043?style=flat-square&logo=pytest&logoColor=white)
+![Local first](https://img.shields.io/badge/local--first-no%20cloud%20account-8B5CF6?style=flat-square)
 ![License](https://img.shields.io/badge/license-view--only%20%C2%B7%20all%20rights%20reserved-b3261e?style=flat-square)
+
+<br>
+
+[**Screenshots**](#-a-look-inside) · [**Features**](#-what-works-today) · [**Quick start**](#-quick-start) · [**Architecture**](#-architecture) · [**Privacy**](#-privacy)
 
 </div>
 
 <br>
 
 <div align="center">
-  <img src="docs/screenshot.png" alt="ScholarPath AI desktop window showing the Reddit-orange dashboard" width="880">
+  <img src="docs/screenshot.png" alt="ScholarPath AI: the chat page with a saved local profile and four quick actions" width="880">
   <br>
-  <sub><em>Scholarship pages verified against the page itself, live chat, web search, voice input and a spoken reply — no invented fields, no silent data sharing.</em></sub>
+  <sub><em>The real app, not a mock-up: chat, a local profile, catalog-backed discovery and page-verified records.</em></sub>
 </div>
 
 ---
 
-## Why this exists
+## 🎯 Why this exists
 
 Scholarship advice online is mostly guesses: unverified deadlines, invented
 funding amounts, "you're eligible!" with no source behind it. ScholarPath AI is
@@ -43,48 +51,99 @@ built on the opposite rule set.
 
 ---
 
-## Status
+## 📸 A look inside
 
+Eight screens, all rendered from the shipped build — no mock-ups. Click any
+image to open it full size.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screens/discover.png" alt="Discover page: filters and result cards with deadline chips" width="420">
+      <br>
+      <sub><b>Discover</b> — search the stored catalog by title, country, field, funder, amount or deadline. Every card keeps the page's own deadline sentence beside the parsed state.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screens/saved.png" alt="Saved Opportunities page with requirement rows, warning signs and export buttons" width="420">
+      <br>
+      <sub><b>Saved Opportunities</b> — rule-based requirement states, warning signs, per-record checklists, re-check state and CSV/calendar export.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screens/eligibility.png" alt="Eligibility page showing satisfied checks with the page sentence behind each one" width="420">
+      <br>
+      <sub><b>Eligibility</b> — satisfied, not satisfied, unknown or needs checking, each with the page sentence it was read from. No model, no probabilities.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screens/catalog.png" alt="Catalog page listing eight official portals and stored records" width="420">
+      <br>
+      <sub><b>Catalog</b> — eight official portals, each read only inside its allowed paths, at most one request per second per host.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screens/settings.png" alt="Settings page: privacy switches, local data counts and MCP status" width="420">
+      <br>
+      <sub><b>Settings</b> — what runs, what stays local, and exactly which third party receives each opt-in feature.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screens/profile.png" alt="My Profile page with a filled local academic profile" width="420">
+      <br>
+      <sub><b>My Profile</b> — local only, with completion tracking and no invented values.</sub>
+    </td>
+  </tr>
+</table>
+
+> [!NOTE]
+> The screenshots use **sample records created for this README**. The providers,
+> deadlines and amounts shown are fictional (the links use reserved `.example`
+> domains) and are not real scholarship data.
+
+---
+
+## 🚦 Status
+
+> [!IMPORTANT]
 > **All seven milestones are complete**, and **phases 1 to 3 of the discovery
 > roadmap** are in: the app now walks **official scholarship portals** itself,
-> lets you **search what they stated**, and **keeps those records true** -
-> a background re-check re-reads a page that changed, keeps both versions and
+> lets you **search what they stated**, and **keeps those records true** — a
+> background re-check re-reads a page that changed, keeps both versions and
 > shows the field-by-field difference, while **warning signs** (payment wording,
 > a lookalike domain, a missing source, a missing deadline) are shown next to
-> the record instead of a verdict. Chat runs **live through the local OpenCode
-> service**, profiles/documents work locally, and you can **verify a
-> scholarship page**: paste the official URL, and only values that literally
-> appear in the page text are offered - every saved record carries its source
-> URL, retrieval time and page hash. The **Catalog** page reads a registry of
-> official portals (sitemaps, feeds, same-site links, robots.txt, one request
-> per second per host) and stores what those pages state, merged into one
-> record per scholarship; the **Discover** page searches and filters those
-> records and hands one to the same deterministic eligibility checks. The chat
-> can also **search the web** for you (off by default), point it at a site's
-> scholarships page to list that page's own links, and the saved list
-> **exports to CSV and to a calendar file**, with **opt-in deadline reminders**.
-> Voice input and a spoken reply are available too — both **off by default**,
-> because they send data to a third party. There is a packaged Windows build
-> (`packaging\build.ps1`).
+> the record instead of a verdict.
+>
+> Chat runs **live through the local OpenCode service**, profiles and documents
+> work locally, and you can **verify a scholarship page**: paste the official
+> URL, and only values that literally appear in the page text are offered —
+> every saved record carries its source URL, retrieval time and page hash. The
+> **Catalog** page reads a registry of official portals and stores what those
+> pages state, merged into one record per scholarship; **Discover** searches and
+> filters those records and hands one to the same deterministic eligibility
+> checks. The chat can also **search the web** (off by default), list the
+> scholarship links a site publishes, and the saved list **exports to CSV and to
+> a calendar file**, with **opt-in deadline reminders**. Voice input and a spoken
+> reply are available too — both **off by default**, because they send data to a
+> third party. There is a packaged Windows build (`packaging\build.ps1`).
 
 | # | Milestone | Status |
 | - | --------- | :----: |
-| M1 | Repository, config, desktop shell, chat loop | **Done** |
-| M2 | OpenCode gateway adapter, model registry, task routing | **Done** |
-| M3 | Profiles, document ingestion, OCR, confirmed extraction | **Done** |
-| M4 | Source discovery, official-source verification, storage | **Done** |
-| M5 | Deterministic eligibility, explainable ranking | **Done** |
-| M6 | MCP tools behind adapter, comparison, saved opportunities, checklists | **Done** |
-| M7 | Security review, performance, Windows packaging | **Done** - packaged build produced and audited |
-| P1 | Catalog: sources registry, crawler, background run, dedup + sources | **Done** - 8 official portals shipped |
-| P2 | Discover: search + filters over the catalog, eligibility hand-off | **Done** |
-| P3 | Freshness + safety: re-check job with diffs, reminders, export, warning signs | **Done** |
+| M1 | Repository, config, desktop shell, chat loop | ✅ Done |
+| M2 | OpenCode gateway adapter, model registry, task routing | ✅ Done |
+| M3 | Profiles, document ingestion, OCR, confirmed extraction | ✅ Done |
+| M4 | Source discovery, official-source verification, storage | ✅ Done |
+| M5 | Deterministic eligibility, explainable ranking | ✅ Done |
+| M6 | MCP tools behind adapter, comparison, saved opportunities, checklists | ✅ Done |
+| M7 | Security review, performance, Windows packaging | ✅ Done — packaged build produced and audited |
+| P1 | Catalog: sources registry, crawler, background run, dedup + sources | ✅ Done — 8 official portals shipped |
+| P2 | Discover: search + filters over the catalog, eligibility hand-off | ✅ Done |
+| P3 | Freshness + safety: re-check job with diffs, reminders, export, warning signs | ✅ Done |
 
 Full specification: [`goals.md`](goals.md) · Build log: [`achievements.md`](achievements.md)
 
 ---
 
-## What works today
+## 🧰 What works today
 
 ### The student journey
 
@@ -100,26 +159,61 @@ flowchart LR
     save --> export["Export<br/>CSV or calendar"]
 ```
 
+### 💬 Chat, with guardrails
+
 - Native Qt window with a real chat loop (Enter to send, Shift+Enter for newline).
 - **Live model replies** through the local OpenCode service (stub still available
   and switchable in config).
+- **Chat captures your profile facts** — say "my name is …, I did IELTS 7.0"
+  and every value is verified word-for-word against your own message, shown
+  as an editable confirmation card in the transcript, and saved only to the
+  rows you tick.
+- **Replies read like a person wrote them** — the model is asked for plain,
+  warm sentences with no formatting, and anything that still arrives as
+  markdown is cleaned before you see it: no `**bold**`, no `--`, no headings,
+  no table bars, no dash bullets. The chat bubble, the copy button and the
+  spoken reply all get the same clean text.
+- **The model behind it stays anonymous** — identity questions ("which model
+  are you?") are answered deterministically without the model seeing them, a
+  provider-neutral system prompt forbids disclosure, and any reply that names
+  a model/provider token is withheld wholesale. Whichever provider is
+  configured, the guard derives its tokens from config.
+- **Web search in the chat** — ask for current scholarships ("scholarships in
+  the UK for a master's in engineering") and the app **searches the web** and
+  answers from what it found, naming the pages it used. The search is
+  keyless (no account, no API key). Results are treated as untrusted
+  third-party data, official-looking domains (universities, governments,
+  scholarship bodies) are listed first, and every result is marked as
+  official-looking or not — so you always know which page to trust and
+  confirm on. If the search cannot run, the app says so instead of answering
+  from memory.
+- **Tools (MCP) are opt-in and read-only** — off by default; configured in
+  `config.toml` per server. With `read_only = true`, only tools advertising
+  `readOnlyHint` may run; tool output is size-capped data, never instructions.
+  The Settings page shows honest status and can check a server's tool list.
+
+### 🎓 Your profile, on your machine
+
 - **My Profile page** — a local-only form (degree, GPA + scale, IELTS/TOEFL,
   countries, funding need) with completion tracking and no invented values.
 - **Documents page** — upload a PDF, text file or image; text is read locally
   (PDF text layer, or Windows OCR for pictures); the model proposes fields; each
   proposal is checked **verbatim** against the document text and shown with a
   found / not-found marker; only rows you tick (and may edit) are merged.
-- **Scholarship pages page** - paste the official scholarship URL: the page is
+
+### 🔎 Find and verify
+
+- **Scholarship pages** — paste the official scholarship URL: the page is
   fetched with strict guardrails (http/https only, HTML only, 2 MB cap,
   redirect-aware provenance, sha256 + retrieval timestamp), fields are proposed
   and must be **verbatim** in the page text; untick the ones you distrust.
-- **Find pages on a site** - paste a university's (or a funding portal's)
+- **Find pages on a site** — paste a university's (or a funding portal's)
   scholarships page and press **Find pages**: the app lists the scholarship
   and funding links that page itself publishes, same site only, documents
   skipped, capped and de-duplicated. Click one and it goes straight through
-  the same read-and-verify flow. Nothing is guessed - every link is read from
+  the same read-and-verify flow. Nothing is guessed — every link is read from
   the page, and the chat's own web search is a separate, opt-in feature.
-- **Catalog page** - a registry of **official portals** (8 shipped: Chevening,
+- **Catalog page** — a registry of **official portals** (8 shipped: Chevening,
   DAAD, Fulbright, Erasmus+, MEXT, Commonwealth, Korea GKS, Turkiye Burslari;
   your editable copy lives at `%APPDATA%\ScholarPath\sources_registry.toml`).
   Switch portals on, set how many pages each may contribute, and press
@@ -131,7 +225,7 @@ flowchart LR
   empty fields and adds a source** instead of duplicating the record, and a
   differing value is **kept** with the disagreement written down. The run shows
   progress, counts errors and can be cancelled between pages.
-- **Discover page** - search the catalog by what the pages state. One search
+- **Discover page** — search the catalog by what the pages state. One search
   box (title, country, field, funder, amount, deadline wording) plus filters
   for level, country, field of study, portal and deadline state ("still open",
   "closing within 90 days", "already closed", "no readable date"). Results are
@@ -140,6 +234,9 @@ flowchart LR
   sentence beside the parsed state. **Check against my profile** runs the same
   rule-based checks as the Eligibility page, and **Save** adds the record to
   Saved Opportunities. A match is a reading aid, never a verdict.
+
+### 🛡️ Keep every record true
+
 - **Re-check saved records** — the app re-fetches the stored pages in the
   background (the saved records first, then the most recent ones; guarded
   fetch, conditional requests, one request per second per host) and compares
@@ -152,24 +249,19 @@ flowchart LR
   that cannot be reached says **"could not re-check, last verified <date>"**
   and is never presented as fresh. **Re-check pages** on the Saved page runs it
   on demand; `[freshness]` decides whether it also runs at startup.
-- **Deadline reminders** — opt-in (`[reminders] enabled`, **off by default**):
-  Windows shows a local notification at 30, 14, 7 and 1 days before the
-  deadline of a saved record, once per day, and only when the deadline date is
-  unambiguous. Nothing is sent anywhere.
-- **Export** — the saved list writes to **CSV** and to an **ICS calendar file**,
-  both carrying the source URL, the deadline text **exactly as the page wrote
-  it**, and the last verified date. Only records with a readable deadline
-  become calendar events.
+
+<div align="center">
+  <img src="docs/screens/saved-diff.png" alt="A changed record: stipend was EUR 1,200, now EUR 1,350, with the page sentence behind each change" width="780">
+  <br>
+  <sub><em>A changed page: the old value, the new value and the sentence it came from. The old version is kept; a page that timed out says so.</em></sub>
+</div>
+
 - **Warning signs on every card** — payment/fee wording on the page (with the
   sentence quoted), a domain that is neither official nor in your
   `trusted_domains` (exact registrable-domain match, so `harvard.edu.fake.com`
   and `chevening-scholarships.org` are caught), a missing source and a missing
   deadline. **Why this record?** explains each one. Nothing is hidden or
   deleted, and the wording says "warning sign" — never "scam", never "safe".
-- **Privacy switches** — voice input, the spoken reply and web search are all
-  **off by default** (`[privacy]` in config.toml). The Settings page states
-  exactly what each one sends and to whom; nothing leaves the device until
-  you switch one on.
 - **Eligibility page** — every saved record is checked by pure rule-based code
   against your local profile (nationality, degree level, language thresholds,
   grade average on a matching scale only, unambiguous deadlines). Results are
@@ -183,10 +275,17 @@ flowchart LR
   application checklists drafted **only** from each page's own wording —
   if the page doesn't list documents or an application link, no steps are
   invented.
-- **Chat captures your profile facts** — say "my name is …, I did IELTS 7.0"
-  and every value is verified word-for-word against your own message, shown
-  as an editable confirmation card in the transcript, and saved only to the
-  rows you tick ("no need to re-enter or re-upload these later").
+- **Deadline reminders** — opt-in (`[reminders] enabled`, **off by default**):
+  Windows shows a local notification at 30, 14, 7 and 1 days before the
+  deadline of a saved record, once per day, and only when the deadline date is
+  unambiguous. Nothing is sent anywhere.
+- **Export** — the saved list writes to **CSV** and to an **ICS calendar file**,
+  both carrying the source URL, the deadline text **exactly as the page wrote
+  it**, and the last verified date. Only records with a readable deadline
+  become calendar events.
+
+### 🎙️ Voice, only when you allow it
+
 - **Voice input (speech to text)** — click the mic and speak; your words land
   as **editable text** in the composer for review before you press Enter
   (pause to finish, click again to stop early). While recording, the mic
@@ -201,33 +300,17 @@ flowchart LR
   listens again. The audio is synthesized by Microsoft's speech service and
   played on your own machine through the Windows audio engine. A voice bar
   always shows the real state (Listening / Thinking / Speaking) and names the
-  voice in use, with an End button.
-  Spoken text is markdown-free; the full reply stays in the chat, and the
-  transcript follows the conversation as it grows. If a reply cannot be
-  fetched, the app says so out loud and keeps listening instead of stopping.
-- **Web search in the chat** — ask for current scholarships ("scholarships in
-  the UK for a master's in engineering") and the app **searches the web** and
-  answers from what it found, naming the pages it used. The search is
-  keyless (no account, no API key). Results are treated as untrusted
-  third-party data, official-looking domains (universities, governments,
-  scholarship bodies) are listed first, and every result is marked as
-  official-looking or not — so you always know which page to trust and
-  confirm on. If the search cannot run, the app says so instead of answering
-  from memory.
-- **Replies read like a person wrote them** — the model is asked for plain,
-  warm sentences with no formatting, and anything that still arrives as
-  markdown is cleaned before you see it: no `**bold**`, no `--`, no headings,
-  no table bars, no dash bullets. The chat bubble, the copy button and the
-  spoken reply all get the same clean text.
-- **The model behind it stays anonymous** — identity questions ("which model
-  are you?") are answered deterministically without the model seeing them, a
-  provider-neutral system prompt forbids disclosure, and any reply that names
-  a model/provider token is withheld wholesale. Whichever provider is
-  configured, the guard derives its tokens from config.
-- **Tools (MCP) are opt-in and read-only** — off by default; configured in
-  `config.toml` per server. With `read_only = true`, only tools advertising
-  `readOnlyHint` may run; tool output is size-capped data, never instructions.
-  The Settings page shows honest status and can check a server's tool list.
+  voice in use, with an End button. Spoken text is markdown-free; the full
+  reply stays in the chat, and the transcript follows the conversation as it
+  grows. If a reply cannot be fetched, the app says so out loud and keeps
+  listening instead of stopping.
+- **Privacy switches** — voice input, the spoken reply and web search are all
+  **off by default** (`[privacy]` in config.toml). The Settings page states
+  exactly what each one sends and to whom; nothing leaves the device until
+  you switch one on.
+
+### ⚙️ Under the hood
+
 - Model registry + deterministic task routing (chat/classify/research/extract
   rules) built on the provider's advertised capabilities.
 - Strict configuration: unknown keys and bad values are rejected, not ignored.
@@ -236,12 +319,15 @@ flowchart LR
 - Typed error surfaces: rate limit, timeout, unavailable, protocol error.
 - Rotating logs that never contain message bodies or secrets.
 
-## What it deliberately does not do yet
+---
 
-- **Nothing leaves your device unless you turn it on.** Voice input, the
-  spoken reply and web search are all **off by default** (`[privacy]` in
-  config.toml). When you switch one on, the Settings page says exactly what
-  is sent and to whom.
+## 🚫 What it deliberately does not do yet
+
+> [!TIP]
+> **Nothing leaves your device unless you turn it on.** Voice input, the spoken
+> reply and web search are all off by default; the Settings page names the third
+> party and the data for each one.
+
 - Search results are **candidates, not proof**. A page is only "verified"
   when the values literally appear in its text; the app tells you which
   results come from an academic or government domain and which do not, and
@@ -263,7 +349,7 @@ flowchart LR
   record says the page changed but could not be re-read, and the old copy is
   kept. Warning signs are **phrase-based** (a listed payment wording, the
   domain rule, a missing source, a missing deadline), so a page that asks for
-  money in words the list does not contain is not flagged - the signs point at
+  money in words the list does not contain is not flagged — the signs point at
   a page, they never clear it.
 - Deadline reminders only fire while the app is running, only for saved records
   with an unambiguous stored date, and only at 30, 14, 7 and 1 days before it;
@@ -278,7 +364,7 @@ invents scholarships.
 
 ---
 
-## Quick start
+## ⚡ Quick start
 
 **Requirements:** Windows 10/11 · Python 3.11+ · a running OpenCode service for
 live replies (the stub provider and the test suite work offline).
@@ -300,14 +386,14 @@ scholarpath --init-config   # write the configuration template, then exit
 scholarpath --config path\to\config.toml
 scholarpath --version
 python -m scholarpath       # equivalent to the console script
-pytest                      # 558 tests, no network required (fake server on loopback)
+pytest                      # 562 tests, no network required (fake server on loopback)
 ```
 
 </details>
 
 ---
 
-## Build the Windows app
+## 📦 Build the Windows app
 
 The app also ships as a self-contained Windows build - no Python needed on
 the machine that runs it:
@@ -316,11 +402,10 @@ the machine that runs it:
 powershell -ExecutionPolicy Bypass -File packaging\build.ps1
 ```
 
-That installs PyInstaller, builds `dist\ScholarPathAI\ScholarPathAI.exe`
-(a folder build: the exe plus its `_internal` runtime), and then **audits the
-bundle** - it fails the build if a config, database, log, credential file or
-a secret-looking value ever ends up inside it. The audit can also be run on
-its own:
+That installs PyInstaller, builds `dist\ScholarPathAI` (a folder build: the exe
+plus its `_internal` runtime), and then **audits the bundle** - it fails the
+build if a config, database, log, credential file or a secret-looking value ever
+ends up inside it. The audit can also be run on its own:
 
 ```powershell
 .\.venv\Scripts\python.exe packaging\verify_bundle.py
@@ -338,7 +423,7 @@ Rules the build keeps:
 
 ---
 
-## Configuration
+## ⚙️ Configuration
 
 Config lives outside the package so it survives upgrades:
 
@@ -347,9 +432,12 @@ Config lives outside the package so it survives upgrades:
 ~/ScholarPath/config.toml             # other platforms
 ```
 
+<details>
+<summary><strong>Full config.toml template</strong></summary>
+
 ```toml
 [gateway]
-provider = "stub"     # or "opencode" (Milestone 2) - talks to a running OpenCode service
+provider = "stub"     # or "opencode" - talks to a running OpenCode service
 model = ""            # "provider/model" or bare id; empty = OpenCode's default
 timeout_seconds = 30.0
 retries = 1
@@ -387,6 +475,8 @@ enabled = false
 log_level = "INFO"
 ```
 
+</details>
+
 - `SCHOLARPATH_HOME` overrides the config folder; `--config` overrides the file.
 - A missing file falls back to safe defaults. An **invalid** file is fatal
   (exit `2`) and names the offending field.
@@ -415,7 +505,7 @@ shipped list.
 
 ---
 
-## Architecture
+## 🏗️ Architecture
 
 ### System map
 
@@ -493,7 +583,8 @@ flowchart TD
     expired -->|"no, or ambiguous or no date"| open["Open / no date<br/>never guessed"]
 ```
 
-### Files
+<details>
+<summary><strong>File map</strong> — the modules behind the diagrams</summary>
 
 ```
 src/scholarpath/
@@ -559,13 +650,15 @@ src/scholarpath/
     └── main_window.py     stacked pages, sidebar, transcript, status strip, voice mode
 ```
 
+</details>
+
 **Layering rule:** nothing outside `gateway/` may know which model provider is in
 use. Later milestones add `agents/`, `research/`, `storage/`, and `mcp/` behind
 the same discipline — business logic stays testable without a network or a model.
 
 ---
 
-## Quality gates
+## ✅ Quality gates
 
 | Gate | How it is enforced |
 | ---- | ------------------ |
@@ -580,7 +673,7 @@ the same discipline — business logic stays testable without a network or a mod
 
 ---
 
-## Privacy
+## 🔒 Privacy
 
 - Profiles, documents, and verified scholarship records are stored locally in
   `%APPDATA%\ScholarPath\scholarpath.db`; uploaded files are parsed on this
@@ -637,7 +730,7 @@ send nothing.
 
 ---
 
-## License
+## 📄 License
 
 **Proprietary — view only. All rights reserved.**
 

@@ -25,6 +25,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLayout,
@@ -85,7 +86,7 @@ GLYPH_CHECK = "\uE73E"
 ACTION_TILES = (
     ("Find Scholarships", "Official pages you paste", "M4", GLYPH_STAR, "#FFF1E8", "#FF4500"),
     ("Check Eligibility", "Rule-based, no gaps", "M5", GLYPH_CHECK, "#EAF9F0", "#10B981"),
-    ("Explore Countries", "Where to study?", "M6", GLYPH_GLOBE, "#EAF2FF", "#3B82F6"),
+    ("Explore Countries", "Search the catalog", "M6", GLYPH_GLOBE, "#EAF2FF", "#3B82F6"),
     ("Upload Documents", "Marksheets, IDs", "M3", GLYPH_DOCUMENT, "#F3EEFF", "#8B5CF6"),
 )
 
@@ -263,7 +264,9 @@ class ActionTile(QPushButton):
         super().__init__(parent)
         self.setObjectName("ActionTile")
         self.setCursor(Qt.PointingHandCursor)
-        self.setFixedSize(170, 88)
+        self.setMinimumWidth(170)
+        self.setFixedHeight(64)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         row = QHBoxLayout(self)
         row.setContentsMargins(10, 9, 9, 9)
@@ -288,6 +291,7 @@ class ActionTile(QPushButton):
         detail.setWordWrap(True)
         text.addWidget(name)
         text.addWidget(detail)
+        text.addStretch(1)
         row.addLayout(text, 1)
 
         if badge:
@@ -892,10 +896,21 @@ class MainWindow(QMainWindow):
         column.addWidget(hero)
 
         tiles = QWidget(holder)
-        flow = FlowLayout(tiles, spacing=10)
-        for title_text, subtitle, milestone, glyph, tint, accent in ACTION_TILES:
+        grid = QGridLayout(tiles)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(10)
+        for index, (
+            title_text,
+            subtitle,
+            milestone,
+            glyph,
+            tint,
+            accent,
+        ) in enumerate(ACTION_TILES):
             working = title_text in (
                 "Upload Documents", "Find Scholarships", "Check Eligibility",
+                "Explore Countries",
             )
             tile = ActionTile(
                 glyph,
@@ -922,6 +937,13 @@ class MainWindow(QMainWindow):
                 tile.clicked.connect(
                     lambda _checked=False: self.select_page("eligibility")
                 )
+            elif title_text == "Explore Countries":
+                tile.setToolTip(
+                    "Browse the stored catalog by country, level and deadline."
+                )
+                tile.clicked.connect(
+                    lambda _checked=False: self.select_page("discover")
+                )
             else:
                 tile.setToolTip(
                     f"{title_text} arrives in Milestone {milestone[1:]}. "
@@ -932,7 +954,7 @@ class MainWindow(QMainWindow):
                         name, m
                     )
                 )
-            flow.addWidget(tile)
+            grid.addWidget(tile, index // 2, index % 2)
         column.addWidget(tiles)
         column.addStretch(1)
         return holder
@@ -1466,7 +1488,7 @@ class MainWindow(QMainWindow):
             )
         self._refresh_status()
 
-    # -- chat → profile capture (G117) ---------------------------------------
+    # -- chat â†’ profile capture (G117) ---------------------------------------
     def _maybe_scan_profile(self) -> None:
         """Offer to save profile facts the student just stated in chat."""
         message = getattr(self, "_last_user_text", "").strip()
@@ -1909,3 +1931,4 @@ class _VoiceWorker(QThread):
 
     def run(self) -> None:
         listen_once(self.heard.emit, self.failed.emit)
+

@@ -81,6 +81,9 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G158 | 37 | Warning signs: payment/fee wording on the page, a domain that is neither official nor trusted (exact registrable-domain match, never a substring), a missing source and a missing deadline are shown on the cards and in the why panel; nothing is hidden or deleted, and the wording never calls a page a scam or safe | `[x]` |
 | G159 | 37 | Privacy toggles: voice_stt, voice_tts and web_search stay off by default, each feature is gated on its own switch, and the Settings page names the third party and the data for each | `[x]` |
 | G160 | 38 | The README carries Mermaid diagrams - the student journey, the layered system map, the record pipeline, the re-check decision and the device trust boundary - and every box and arrow describes shipped behaviour | `[x]` |
+| G161 | 39 | A visual README: a coloured banner, live badges, and a gallery of fresh screenshots of the shipped pages (Chat, Discover, Saved Opportunities, Eligibility, Catalog, Settings) with captions and a sample-data notice; the grouping of the feature list, the technical content and the honesty rules are unchanged | `[x]` |
+| G162 | 39 | The chat quick-action "Explore Countries" opens the Discover page instead of showing a stale "Soon" chip, so no screenshot or shortcut claims a shipped feature is missing | `[x]` |
+| G163 | 39 | The Saved Opportunities page holds up with four or more records: the card list scrolls, the saved and checked dates read as dates (not raw ISO timestamps), and the freshness line stays on one line | `[x]` |
 
 ---
 
@@ -1241,3 +1244,58 @@ changed, so the suite is still green: 558 tests.
 Limits: the diagrams are hand-maintained. A new page or module does not appear
 in the map until someone edits the Mermaid block; the file tree under
 "Architecture" stays the authoritative inventory.
+
+## 19y. A visual README, real screenshots, and the two things they exposed (G161-G163, 2026-10-21)
+
+The owner asked for more feature screenshots in the repository and a README that
+is colourful and inviting rather than a flat wall of text. Requirement G161: a
+banner, live badges, a gallery of fresh screenshots of the shipped pages, and
+the technical content plus the honesty rules unchanged.
+
+What shipped:
+
+1. **`docs/banner.svg`** - a self-contained banner (gradient, mortarboard mark,
+   tagline, no external fonts, no scripts), hand-written SVG so it stays sharp
+   at any width and needs no build step.
+2. **Eight screenshots in `docs/screens/`** - chat, Discover, Saved
+   Opportunities, Saved Opportunities with the difference panel open,
+   Eligibility, Catalog, Settings and My Profile; `docs/screenshot.png` is the
+   new chat capture and is the hero image. They are real `MainWindow` grabs
+   rendered offscreen (`QT_QPA_PLATFORM=offscreen`, plus `QT_QPA_FONTDIR` so the
+   Windows fonts load) from the shipped build, seeded with sample records in a
+   throwaway `SCHOLARPATH_HOME`; the real profile and database are never
+   touched.
+3. **README structure** - banner, tagline, seven badges (the status badge now
+   reads "phase 3 shipped"), nav links, the screenshot gallery with captions
+   and a sample-data notice, GitHub alert callouts, and the 30-bullet feature
+   list grouped under Chat / Profile / Find and verify / Keep every record true
+   / Voice / Under the hood. The full config, the file map and the long
+   command list moved into `<details>`; the misplaced privacy bullet moved out
+   of the limits list into Privacy, where it belongs. Every diagram, table,
+   command and limit of the previous README is retained.
+4. **G162 - the stale "Soon" chip.** The "Explore Countries" quick action
+   still said "coming in Milestone 6" although Discover shipped in phase 2. It
+   now opens Discover, and the four quick actions are a balanced 2 x 2 grid
+   instead of a 3 + 1 flow.
+5. **G163 - the Saved page with four or more records.** Its card list had no
+   scroll area, so the cards were squeezed and clipped; it now lives in a
+   `QScrollArea` and returns to the top on reload. The saved, checked and
+   retrieved dates read as dates (`2026-10-20`) instead of raw ISO timestamps,
+   and the freshness line no longer wraps into three words per line.
+
+Why G162 and G163 are in this task: both were found by rendering the
+screenshots. A screenshot that shows a "Soon" chip on a shipped feature, or a
+saved list that clips its own cards, would misrepresent the build.
+
+Verification: **562 tests pass** (`pytest`, exit 0), including four new ones -
+the Saved list is a scroll area, the saved date is a date, "Explore Countries"
+opens Discover, and no quick action carries a "Soon" badge. The five Mermaid
+blocks still parse with `mermaid.parse` (Mermaid 12.2). Every screenshot was
+inspected at full size, and the banner was rendered in the system Edge to
+confirm the browser output (the SVG uses no web font).
+
+Limits: the screenshots show fictional providers on reserved `.example`
+domains, which the README states; they are regenerated by a throwaway script in
+the temp folder, not by a tool in the repository, so a future UI change means
+re-taking them by hand. The banner and the gallery are maintained like the
+diagrams.
