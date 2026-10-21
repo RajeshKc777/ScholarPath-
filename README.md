@@ -12,7 +12,7 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 ![Status](https://img.shields.io/badge/status-Milestone%204-4f8cff?style=flat-square)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Qt](https://img.shields.io/badge/Qt-6.12-41CD52?style=flat-square&logo=qt&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-300%20passing-2ea043?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-360%20passing-2ea043?style=flat-square)
 ![License](https://img.shields.io/badge/license-view--only%20%C2%B7%20all%20rights%20reserved-b3261e?style=flat-square)
 
 </div>
@@ -22,7 +22,7 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 <div align="center">
   <img src="docs/screenshot.png" alt="ScholarPath AI desktop window showing the Reddit-orange dashboard" width="880">
   <br>
-  <sub><em>Milestone 4 — documents and scholarship pages: local parsing and verbatim verification, no invented fields.</em></sub>
+  <sub><em>Scholarship pages verified against the page itself, live chat, web search, voice input and a spoken reply — no invented fields, no silent data sharing.</em></sub>
 </div>
 
 ---
@@ -45,13 +45,16 @@ built on the opposite rule set.
 
 ## Status
 
-> **Milestone 4 of 7 is complete.** Chat runs **live through the local OpenCode
-> service**, profiles/documents work locally, and you can **verify a scholarship
-> page**: paste the official URL, and only values that literally appear in the
-> page text are offered - every saved record carries its source URL, retrieval
-> time and page hash. The chat can also search the web for you, and you can
-> point it at a site's scholarships page and let it list that page's own
-> scholarship links. Eligibility checks are next.
+> **All seven milestones are complete.** Chat runs **live through the local
+> OpenCode service**, profiles/documents work locally, and you can **verify a
+> scholarship page**: paste the official URL, and only values that literally
+> appear in the page text are offered - every saved record carries its source
+> URL, retrieval time and page hash. The chat can also **search the web** for
+> you (off by default), point it at a site's scholarships page to list that
+> page's own links, and **re-check** saved records to see whether a page
+> changed or a deadline has passed. Voice input and a spoken reply are
+> available too — both **off by default**, because they send data to a
+> third party. There is a packaged Windows build (`packaging\build.ps1`).
 
 | # | Milestone | Status |
 | - | --------- | :----: |
@@ -61,7 +64,7 @@ built on the opposite rule set.
 | M4 | Source discovery, official-source verification, storage | **Done** |
 | M5 | Deterministic eligibility, explainable ranking | **Done** |
 | M6 | MCP tools behind adapter, comparison, saved opportunities, checklists | **Done** |
-| M7 | Security review, performance, Windows packaging | In progress - packaged build produced and audited |
+| M7 | Security review, performance, Windows packaging | **Done** - packaged build produced and audited |
 
 Full specification: [`goals.md`](goals.md) · Build log: [`achievements.md`](achievements.md)
 
@@ -87,7 +90,16 @@ Full specification: [`goals.md`](goals.md) · Build log: [`achievements.md`](ach
   and funding links that page itself publishes, same site only, documents
   skipped, capped and de-duplicated. Click one and it goes straight through
   the same read-and-verify flow. Nothing is guessed - every link is read from
-  the page, and there is still no open web search.
+  the page, and the chat's own web search is a separate, opt-in feature.
+- **Re-check saved records** — press **Re-check pages** on the Eligibility or
+  Saved page: every record's page is fetched again, the sha256 is compared
+  with the copy that was saved, and the card is flagged when the page
+  **changed** or when its stated **deadline has passed**. A page that cannot
+  be reached says so instead of pretending.
+- **Privacy switches** — voice input, the spoken reply and web search are all
+  **off by default** (`[privacy]` in config.toml). The Settings page states
+  exactly what each one sends and to whom; nothing leaves the device until
+  you switch one on.
 - **Eligibility page** — every saved record is checked by pure rule-based code
   against your local profile (nationality, degree level, language thresholds,
   grade average on a matching scale only, unambiguous deadlines). Results are
@@ -156,10 +168,14 @@ Full specification: [`goals.md`](goals.md) · Build log: [`achievements.md`](ach
 
 ## What it deliberately does not do yet
 
-- No scholarship search, no recommendations — there is no topic search in this
-  build; you supply official pages. Eligibility checks read only what a page
-  literally states; anything else is unknown or flagged for manual checking,
-  and nothing is presented as verified advice beyond the page text.
+- **Nothing leaves your device unless you turn it on.** Voice input, the
+  spoken reply and web search are all **off by default** (`[privacy]` in
+  config.toml). When you switch one on, the Settings page says exactly what
+  is sent and to whom.
+- Search results are **candidates, not proof**. A page is only "verified"
+  when the values literally appear in its text; the app tells you which
+  results come from an academic or government domain and which do not, and
+  you can add the domains you trust yourself.
 - GPA scale conversion, funding-type ranking, and deadline-reminder features
   are intentionally deferred until there is a documented, honest policy for them.
 - MCP servers never start, and no model uses tools mid-conversation, until a
@@ -194,7 +210,7 @@ scholarpath --init-config   # write the configuration template, then exit
 scholarpath --config path\to\config.toml
 scholarpath --version
 python -m scholarpath       # equivalent to the console script
-pytest                      # 300 tests, no network required (fake server on loopback)
+pytest                      # 360 tests, no network required (fake server on loopback)
 ```
 
 </details>
@@ -258,6 +274,16 @@ theme = "dark"
 window_width = 1100
 window_height = 720
 
+# What may leave this device. All three are OFF by default.
+[privacy]
+voice_stt = false   # microphone clip -> Google's speech service
+voice_tts = false   # reply text -> Microsoft's speech service
+web_search = false  # search question -> the web-search service
+
+# Domains you trust for scholarship information (matched exactly).
+[search]
+trusted_domains = ["chevening.org"]
+
 log_level = "INFO"
 ```
 
@@ -284,11 +310,17 @@ src/scholarpath/
 ├── profiles.py            strict Profile model, merge_confirmed, completion
 ├── documents.py           PDF text layer (pypdf), plain text, Windows OCR images
 ├── extraction.py          prompt, JSON parsing, verbatim-verification against source
-├── sources.py             guarded http(s) fetch: caps, content-type, sha256, redirects
+├── sources.py             guarded http(s) fetch: SSRF-safe resolution, caps, content-type, sha256, redirects
+├── websearch.py           keyless web search: results, official-domain rule, untrusted-data block
+├── discovery.py           scholarship links published by a page the student trusts
+├── recheck.py             re-fetch a saved page: changed? deadline passed? reachable?
 ├── research.py            official-page pipeline: propose → verbatim verify → draft
 ├── eligibility.py         rule-based checks, honest verdicts, deterministic ranking
 ├── identity.py            provider anonymity: probe interception + reply withholding
 ├── chat_profile.py        chat-stated facts → verbatim-verified profile suggestions
+├── prose.py               model markdown → plain prose for the bubble, the copy button and the voice
+├── tts.py                 spoken replies: neural voice first, offline Windows voice as fallback
+├── voice.py               speech-to-text input: capture, transcription, honest errors
 ├── mcp/
 │   ├── __init__.py        exports
 │   └── client.py          opt-in stdio MCP client: initialize/list/call, read-only guard
@@ -297,19 +329,24 @@ src/scholarpath/
 │   ├── stub.py            offline, deterministic, self-describing
 │   ├── registry.py        model catalogue, deterministic task routing
 │   ├── opencode.py        adapter for the local OpenCode HTTP service
+│   ├── openai_compat.py   adapter for any OpenAI-compatible endpoint
+│   ├── chain.py           provider and model failover chain
+│   ├── failover.py        rate-limit and quota handling
+│   ├── credentials.py     key registration and rotation
 │   └── factory.py         config → provider, explicit selection
 └── ui/
-    ├── chat_controller.py conversation state, busy handling, worker threads
+    ├── chat_controller.py conversation state, busy handling, worker threads, web-search step
     ├── profile_page.py    local-only academic profile form
     ├── documents_page.py  upload → parse → propose → confirm → apply
-    ├── research_page.py   official-page verification: URL → fields → save with provenance
-    ├── eligibility_page.py ranked rule-based eligibility reports with cited evidence
-    ├── saved_page.py       saved list, comparison grid, application checklists
-    ├── settings_page.py    honest status: model, local data, MCP tools
+    ├── research_page.py   official-page verification: URL → fields → save with provenance, plus Find pages
+    ├── eligibility_page.py ranked rule-based eligibility reports with cited evidence    ├── saved_page.py       saved list, comparison grid, application checklists
+    ├── recheck.py         the Re-check worker shared by the eligibility and saved pages
+    ├── settings_page.py    honest status: model, local data, privacy switches, MCP tools
     ├── profile_suggestion.py transcript card confirming chat-stated facts
     ├── confirm_row.py     shared per-value confirm row (tick, edit, marker)
+    ├── mic_button.py      microphone button with the listening ripple
     ├── theme.py           light Reddit-orange palette and widget styles
-    └── main_window.py     stacked pages, sidebar, transcript, status strip
+    └── main_window.py     stacked pages, sidebar, transcript, status strip, voice mode
 ```
 
 **Layering rule:** nothing outside `gateway/` may know which model provider is in
@@ -322,7 +359,7 @@ the same discipline — business logic stays testable without a network or a mod
 
 | Gate | How it is enforced |
 | ---- | ------------------ |
-| Tests | `pytest` — config validation, gateway contract, model routing, adapter round-trips against a fake server, chat turns, failure paths, verbatim extraction checks, SQLite profile/document/scholarship round-trips, fetch guardrails against a fake HTTP server |
+| Tests | `pytest` — config validation, gateway contract, model routing, adapter round-trips against a fake server, chat turns, failure paths, verbatim extraction checks, SQLite profile/document/scholarship round-trips, fetch guardrails (including SSRF blocking) against a fake HTTP server, privacy switches, re-check logic |
 | Honesty | Extraction values must appear verbatim in the source (document or fetched page); unverified proposals are visibly flagged and never auto-applied |
 | Untrusted input | Fetched page content is data only, wrapped in markers with an explicit ignore-instructions instruction |
 | Secrets | Never in source or config templates; config is local + git-ignored |
