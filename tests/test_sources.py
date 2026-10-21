@@ -3,12 +3,21 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
+import socket
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from scholarpath.sources import FetchError, fetch_page
+from scholarpath import sources
+from scholarpath.sources import BlockedRequest, FetchError
+from scholarpath.sources import fetch_page as _fetch_page
+
+
+def fetch_page(url: str, **kwargs) -> object:
+    """The test server is on loopback, which only this flag allows."""
+    return _fetch_page(url, allow_loopback=True, **kwargs)
 
 HTML_OK = b"""<!DOCTYPE html>
 <html><head><title>Chevening-style Test Scholarship</title>
@@ -35,6 +44,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(200, "text/plain; charset=utf-8", PLAIN_OK)
         elif route == "/redirect":
             self._redirect("/ok")
+        elif route == "/redirect-metadata":
+            self._redirect("http://169.254.169.254/latest/meta-data/")
         elif route == "/notfound":
             self._send(404, "text/html", b"<html><body>nope</body></html>")
         elif route == "/binary":
@@ -130,3 +141,96 @@ def test_oversized_page_is_truncated_not_trusted(base_url: str) -> None:
 def test_empty_page_is_refused(base_url: str) -> None:
     with pytest.raises(FetchError):
         fetch_page(f"{base_url}/empty")
+
+
+# -- SSRF hardening -------------------------------------------------------
+
+def test_loopback_is_refused_by_default(base_url: str) -> None:
+    with pytest.raises(BlockedRequest) as excinfo:
+        _fetch_page(f"{base_url}/ok")
+    assert "loopback" in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "127.0.0.1",          # loopback
+        "127.9.9.9",         # loopback range
+        "10.0.0.1",          # private
+        "172.16.5.4",        # private
+        "192.168.1.10",      # private
+        "169.254.1.1",       # link-local
+        "169.254.169.254",   # cloud metadata
+        "169.254.170.2",     # ECS task metadata
+        "100.100.100.200",   # Alibaba metadata
+        "0.0.0.0",           # "this" network
+        "[::1]",             # IPv6 loopback
+        "[fc00::1]",         # IPv6 unique local
+        "[fe80::1]",         # IPv6 link-local
+        "[::ffff:127.0.0.1]",  # IPv4-mapped loopback
+    ],
+)
+def test_private_and_metadata_addresses_are_refused(host: str) -> None:
+    with pytest.raises(BlockedRequest):
+        _fetch_page(f"http://{host}/page")
+
+
+def test_a_host_that_resolves_to_a_private_address_is_refused(monkeypatch) -> None:
+    """A public-looking name that points home is refused."""
+
+    def fake_getaddrinfo(host, port, *args, **kwargs):  # noqa: ANN001
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.1.2.3", 0))]
+
+    monkeypatch.setattr(sources.socket, "getaddrinfo", fake_getaddrinfo)
+    with pytest.raises(BlockedRequest):
+        _fetch_page("https://sneaky.example/page")
+
+
+def test_a_redirect_to_a_blocked_address_is_refused(base_url: str) -> None:
+    """Every hop is checked, not only the first request."""
+    with pytest.raises(BlockedRequest):
+        fetch_page(f"{base_url}/redirect-metadata")
+
+
+def test_the_checked_address_is_the_one_that_is_used(monkeypatch, base_url: str) -> None:
+    """DNS cannot change between the check and the connection (rebinding)."""
+    real_getaddrinfo = socket.getaddrinfo
+    answers: list[str] = []
+
+    def fake_getaddrinfo(host, port, *args, **kwargs):  # noqa: ANN001
+        if host == "localhost":
+            answers.append(host)
+            if len(answers) == 1:
+                return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 0))]
+            # A second, hostile answer for the same name: it must never be used.
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.1.2.3", 0))]
+        return real_getaddrinfo(host, port, *args, **kwargs)
+
+    monkeypatch.setattr(sources.socket, "getaddrinfo", fake_getaddrinfo)
+    port = base_url.rsplit(":", 1)[1]
+    page = _fetch_page(f"http://localhost:{port}/ok", allow_loopback=True)
+    assert "Test Scholarship 2025" in page.text
+    assert answers == ["localhost"], "the name must be resolved exactly once"
+
+
+def test_the_blocked_error_is_a_typed_fetch_error() -> None:
+    assert issubclass(BlockedRequest, FetchError)
+    with pytest.raises(FetchError):
+        _fetch_page("http://10.0.0.1/page")
+
+
+def test_loopback_is_only_allowed_when_asked_for(base_url: str) -> None:
+    """The test escape hatch is narrow: loopback yes, private never."""
+    with pytest.raises(BlockedRequest):
+        _fetch_page("http://10.0.0.1/page", allow_loopback=True)
+    with pytest.raises(BlockedRequest):
+        _fetch_page("http://169.254.169.254/page", allow_loopback=True)
+
+
+def test_address_policy_covers_ipv4_and_ipv6() -> None:
+    assert sources._address_reason(ipaddress.ip_address("10.0.0.1"))
+    assert sources._address_reason(ipaddress.ip_address("::1"))
+    assert sources._address_reason(ipaddress.ip_address("::ffff:10.0.0.1"))
+    assert sources._address_reason(ipaddress.ip_address("169.254.169.254"))
+    assert sources._address_reason(ipaddress.ip_address("8.8.8.8")) is None
+    assert sources._address_reason(ipaddress.ip_address("2606:4700::1111")) is None
