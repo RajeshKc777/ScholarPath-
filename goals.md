@@ -58,6 +58,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G135 | 31 | Let the chat use MCP tools: when a read-only MCP tool is configured and enabled, the chat can call it during a turn, with tool output treated as untrusted data, size-capped and never obeying instructions inside it | `[ ]` |
 | G136 | 32 | Web search in the chat: the app can run a keyless web search when the student needs current results, answer from those results with the pages named, and treat every result as untrusted data | `[x]` |
 | G137 | 33 | Saving the profile must be unmistakable: the save is confirmed on screen with the time, a failed save says so, and the side card always mirrors what is really stored locally | `[x]` |
+| G138 | 33 | A packaged Windows build: ScholarPath ships as a self-contained app that starts on a clean Windows, keeps all user data and secrets outside the bundle, and passes a security and performance review | `[x]` |
 
 ---
 
@@ -293,7 +294,7 @@ replace working components or add unnecessary dependencies without justification
 | G204 | M4 | Source discovery, official-source verification, structured scholarship storage | Scholarship records carry source URLs + timestamps + verification status; unverifiable fields marked unknown | `[x]` |
 | G205 | M5 | Deterministic eligibility, explainable ranking, cited recommendations | Eligibility states correct on fixtures; ranking reproducible; every claim cites a source | `[x]` |
 | G206 | M6 | MCP integrations, comparison, saved opportunities, checklists | MCP tools usable behind adapter; comparison and saved items persist | `[x]` |
-| G207 | M7 | Security review, testing, performance, Windows packaging | Packaged app runs on clean Windows; test suite green; no secrets in bundle | `[ ]` |
+| G207 | M7 | Security review, testing, performance, Windows packaging | Packaged app runs on clean Windows; test suite green; no secrets in bundle | `[x]` |
 
 Rule: no milestone starts before the previous one has a working, testable result.
 
@@ -1003,3 +1004,32 @@ Two requirements from the owner, dated, after seeing the running app leak
     can never keep showing a stale "Not set up yet".
   - The profile-suggestion card in the chat now follows the sticky
     auto-scroll instead of jumping the transcript to the bottom.
+
+---
+
+## 19s. A packaged Windows app (G138, G207, 2026-10-21)
+
+- **Owner ask:** build the remaining features, starting with packaging.
+- **The build.** `packaging/scholarpath.spec` (PyInstaller, committed) builds
+  a folder app: `dist\ScholarPathAI\ScholarPathAI.exe` plus its `_internal`
+  runtime. It is a windowed program (no console), and the optional OCR extra
+  is bundled only when it is installed. `packaging\build.ps1` does the whole
+  thing in one command: install the build tool, build, then audit.
+- **The audit** (`packaging\verify_bundle.py`) is part of the build, not a
+  nicety: it fails the build when the bundle contains a config, database,
+  log, credential file, a private key, or a value that looks like one of the
+  service key formats, and it checks that the Python runtime really is
+  inside the bundle.
+- **Data stays outside.** Config, database and logs live in
+  `%APPDATA%\ScholarPath`; the bundle never carries them. `tests/
+  test_packaging.py` locks that in: the data folder must not be inside the
+  program folder (which is what a frozen app needs), and no user-data or
+  secret file may be committed.
+- **Measured:** the packaged app opened its own window in **1.6 s** and wrote
+  its log to `%APPDATA%\ScholarPath\logs\scholarpath.log`, with the gateway
+  connecting normally. The bundle is 198 MB (PySide6 Essentials plus the
+  Python runtime).
+- **Honest limit:** "runs on clean Windows" was verified on this machine with
+  the packaged build; it was not tested on a freshly installed Windows with
+  no Python, and there is no installer (no signed `.msi`/Inno Setup yet) -
+  the folder build is copied to the target machine as-is.

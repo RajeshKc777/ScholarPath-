@@ -93,6 +93,41 @@ timer stop, review notice shows.
 
 ---
 
+### 2026-10-21 — A25 — A packaged, audited Windows build (G138, G207)
+
+**Satisfies:** G138 (ship as a self-contained app) and G207 (M7: security
+review, testing, performance, Windows packaging).
+
+Built:
+
+| Area | File(s) |
+| ---- | ------- |
+| PyInstaller build definition (windowed app, optional OCR bundled when installed) | `packaging/scholarpath.spec` |
+| One-command build that also audits the result | `packaging/build.ps1` |
+| Bundle security audit (no config/database/logs/keys/secrets, runtime bundled) | `packaging/verify_bundle.py` |
+| Invariants that must hold in the source tree | `tests/test_packaging.py` (4 tests) |
+| `.gitignore` now keeps the spec, still ignores `dist/` and `build/` | `.gitignore` |
+
+Behaviour: `packaging\build.ps1` builds `dist\ScholarPathAI\ScholarPathAI.exe`
+and then audits the bundle, failing the build if a user config, database,
+log, credential file, private key or secret-looking value is inside it. The
+app itself keeps writing config, database and logs to `%APPDATA%\ScholarPath`
+- never into the program folder, which is what a frozen app requires.
+
+**Evidence:** 300 tests passing. The packaged build was launched and showed
+its own window in **1.6 s**, logged to `%APPDATA%\ScholarPath\logs`, and
+connected to the gateway normally. The audit scanned 520 files and reported
+"no user data, no secrets, interpreter bundled (198 MB)".
+
+**Known limits:** verified on this machine, not on a freshly installed
+Windows with no Python present; the build is a folder app, not a signed
+installer (`.msi` / Inno Setup is the next step); the bundle is 198 MB, which
+is mostly PySide6 Essentials; the voice, search and OCR features were not
+exercised through the packaged build yet, only the chat, gateway and window
+start-up.
+
+---
+
 ### 2026-10-21 — A24 — Saving the profile is now unmistakable (G137)
 
 **Satisfies:** G137 (the owner clicked Save profile and "nothing happened").

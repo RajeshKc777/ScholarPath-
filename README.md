@@ -12,7 +12,7 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 ![Status](https://img.shields.io/badge/status-Milestone%204-4f8cff?style=flat-square)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Qt](https://img.shields.io/badge/Qt-6.12-41CD52?style=flat-square&logo=qt&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-296%20passing-2ea043?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-300%20passing-2ea043?style=flat-square)
 ![License](https://img.shields.io/badge/license-view--only%20%C2%B7%20all%20rights%20reserved-b3261e?style=flat-square)
 
 </div>
@@ -61,7 +61,7 @@ built on the opposite rule set.
 | M4 | Source discovery, official-source verification, storage | **Done** |
 | M5 | Deterministic eligibility, explainable ranking | **Done** |
 | M6 | MCP tools behind adapter, comparison, saved opportunities, checklists | **Done** |
-| M7 | Security review, performance, Windows packaging | Planned |
+| M7 | Security review, performance, Windows packaging | In progress - packaged build produced and audited |
 
 Full specification: [`goals.md`](goals.md) · Build log: [`achievements.md`](achievements.md)
 
@@ -194,10 +194,41 @@ scholarpath --init-config   # write the configuration template, then exit
 scholarpath --config path\to\config.toml
 scholarpath --version
 python -m scholarpath       # equivalent to the console script
-pytest                      # 296 tests, no network required (fake server on loopback)
+pytest                      # 300 tests, no network required (fake server on loopback)
 ```
 
 </details>
+
+---
+
+## Build the Windows app
+
+The app also ships as a self-contained Windows build - no Python needed on
+the machine that runs it:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging\build.ps1
+```
+
+That installs PyInstaller, builds `dist\ScholarPathAI\ScholarPathAI.exe`
+(a folder build: the exe plus its `_internal` runtime), and then **audits the
+bundle** - it fails the build if a config, database, log, credential file or
+a secret-looking value ever ends up inside it. The audit can also be run on
+its own:
+
+```powershell
+.\.venv\Scripts\python.exe packaging\verify_bundle.py
+```
+
+Rules the build keeps:
+
+- **No user data in the build.** Config, database and logs live in
+  `%APPDATA%\ScholarPath` and are created on first run, never shipped.
+- **No secrets in the build.** API keys are read from the user's config or
+  the environment at run time.
+- **The Python runtime is bundled**, so the app starts on a clean Windows.
+- Measured startup of the packaged build on this machine: **~1.6 s** to the
+  first window.
 
 ---
 
