@@ -46,6 +46,10 @@ scholarpath = "scholarpath.app:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+# The shipped sources registry must travel with the package (and the build).
+scholarpath = ["data/*.toml"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

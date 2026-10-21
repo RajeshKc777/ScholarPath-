@@ -123,6 +123,25 @@ class _LinkParser(HTMLParser):
             self._text = []
 
 
+class _FeedParser(HTMLParser):
+    """Reads <link rel="alternate" type="application/rss+xml"> declarations."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.feeds: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs) -> None:  # noqa: ANN001 - stdlib API
+        if tag.lower() != "link":
+            return
+        data = {key.lower(): (value or "") for key, value in attrs}
+        rel = data.get("rel", "").lower()
+        media = data.get("type", "").lower()
+        if "alternate" in rel and ("rss" in media or "atom" in media):
+            href = data.get("href", "").strip()
+            if href:
+                self.feeds.append(href)
+
+
 def _site_key(host: str) -> str:
     host = host.lower().rstrip(".")
     return host[4:] if host.startswith("www.") else host
@@ -145,6 +164,64 @@ def _fallback_label(url: str) -> str:
     tail = re.sub(r"\.(html?|php|aspx?)$", "", tail, flags=re.IGNORECASE)
     words = re.sub(r"[-_]+", " ", tail).strip()
     return words.title() if words else "Open page"
+
+
+def page_links(html: str, page_url: str) -> list[tuple[str, str]]:
+    """Every usable link on a page: (absolute URL, link text), in page order.
+
+    Documents, anchors, mail/telephone links and off-site links are dropped.
+    The crawler uses this to follow a site's own navigation; the discovery
+    flow below narrows the same links down to scholarship pages.
+    """
+    parser = _LinkParser()
+    try:
+        parser.feed(html)
+        parser.close()
+    except Exception:  # noqa: BLE001 - broken HTML must not crash discovery
+        pass
+
+    page_host = urlsplit(page_url).netloc
+    seen: set[str] = set()
+    links: list[tuple[str, str]] = []
+    for href, label in parser.links:
+        target = href.strip()
+        if not target or target.startswith("#") or target.startswith(_SKIP_TARGETS):
+            continue
+        absolute = urldefrag(urljoin(page_url, target))[0]
+        parts = urlsplit(absolute)
+        if parts.scheme not in ("http", "https") or not parts.netloc:
+            continue
+        if not _same_site(parts.netloc, page_host):
+            continue
+        if parts.path.casefold().endswith(_SKIP_SUFFIXES):
+            continue
+        key = absolute.casefold().rstrip("/")
+        if key in seen:
+            continue
+        seen.add(key)
+        links.append((absolute, label))
+    return links
+
+
+def alternate_feeds(html: str, page_url: str) -> list[str]:
+    """Feed URLs the page itself advertises (<link rel="alternate">)."""
+    parser = _FeedParser()
+    try:
+        parser.feed(html)
+        parser.close()
+    except Exception:  # noqa: BLE001 - broken HTML must not crash discovery
+        pass
+    feeds: list[str] = []
+    seen: set[str] = set()
+    for href in parser.feeds:
+        absolute = urldefrag(urljoin(page_url, href))[0]
+        if urlsplit(absolute).scheme not in ("http", "https"):
+            continue
+        if absolute in seen:
+            continue
+        seen.add(absolute)
+        feeds.append(absolute)
+    return feeds
 
 
 def candidate_links(

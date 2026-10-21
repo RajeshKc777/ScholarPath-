@@ -1,6 +1,6 @@
 # ScholarPath AI — Goals
 
-Last updated: 2026-10-20
+Last updated: 2026-10-21
 Owner: LOQ
 Status: **scope defined** — specification supplied by the owner on 2026-10-20.
 
@@ -64,6 +64,11 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G141 | 34 | Official pages are recognised by an exact suffix allowlist on the registrable domain (.edu, .ac.xx, .gov, .gov.xx), plus the student's own trusted_domains - never by a substring | `[x]` |
 | G142 | 34 | A Re-check action on saved records: the page is fetched again, the sha256 compared, and changed pages and passed deadlines are flagged on the eligibility and saved pages | `[x]` |
 | G143 | 34 | Page fetching is hardened against SSRF: the host is resolved and checked before connecting, private, loopback, link-local and metadata addresses are refused with a typed error, every redirect hop is checked again, and the checked address is the one that is connected to | `[x]` |
+| G144 | 35 | A sources registry: a shipped default plus an editable copy in `%APPDATA%`, one entry per official portal (name, base_url, country, trust_level, allowed_path_prefixes, crawl_depth, enabled), seeded only with portals that were verified live | `[x]` |
+| G145 | 35 | A crawler: discover pages from sitemap.xml / sitemap index / RSS / Atom and same-site links, obey robots.txt, at most one request per second per host, conditional GET (ETag / If-Modified-Since) with 304 reported as unchanged, a page cap per portal, HTML only, and the same SSRF-guarded fetch the rest of the app uses | `[x]` |
+| G146 | 35 | A background catalog job (thread pool) running crawl → extract → verify → save, with a Catalog page that shows progress, counts errors and can be cancelled | `[x]` |
+| G147 | 35 | Catalog records carry level, countries, fields_of_study, funding_type, amount_text, deadline_text, deadline_date (nullable), language_req, apply_url and canonical_key, and every record keeps a `scholarship_sources` row per page (URL, sha256, retrieved_at, provider, trust level, ETag) | `[x]` |
+| G148 | 35 | Catalog records are de-duplicated by canonical_key (normalised title + provider domain); a second page fills empty fields and adds a source, a differing value is kept and written down as a conflict, and a verified value is never silently overwritten | `[x]` |
 
 ---
 
@@ -1077,3 +1082,42 @@ Six changes, each with its own commit and tests.
    stated deadline has passed. A page that cannot be reached says so.
 6. **README** - the status banner, the "does not do yet" list and the
    architecture tree now match what the app really does.
+
+## 19u. Catalog of official portals — Phase 1 (G144-G148, 2026-10-21)
+
+Owner roadmap, phase 1 of the discovery plan: the app stops waiting for one
+pasted page and walks the official portals itself, storing only what those
+pages state. One phase per session; this entry is phase 1 only.
+
+1. **G144 - sources registry.** `src/scholarpath/data/sources_registry.toml`
+   ships as the default; `load_registry()` prefers the student's editable copy
+   at `%APPDATA%\ScholarPath\sources_registry.toml` and **raises** instead of
+   silently substituting when that copy is broken. Entries are validated
+   (https only, no duplicate URLs, allowed paths start with `/`). Eight
+   portals were verified live on 2026-10-21 and shipped; **CSC**
+   (`csc.edu.cn`, HTTP 412) and **Australia Awards**
+   (`australiaawards.gov.au`, connection reset / timeout) were dropped rather
+   than shipped as a promise the app cannot keep.
+2. **G145 - crawler.** `crawler.py` reads `robots.txt` (longest match wins,
+   `Allow` wins a tie, wildcards, `Crawl-delay` can only slow a host down),
+   collects seeds from sitemap.xml, a sitemap index, RSS/Atom feeds and the
+   start page's own same-site links, keeps every *page* inside
+   `allowed_path_prefixes` (index files may sit outside), reads HTML only,
+   paces one request per second per host, sends `If-None-Match` /
+   `If-Modified-Since` and reports `304` as unchanged, caps pages per portal,
+   and refuses to connect to a private address.
+3. **G146 - the run.** `catalog.py` (no Qt, so it is testable headless) does
+   crawl → extract → verify → save, counts created / updated / merged / errors
+   and stops between pages when asked. `ui/catalog_page.py` wraps it in a
+   `QThreadPool` job with a progress bar, a per-portal list with switches, a
+   pages-per-portal limit, an error box and a Cancel button.
+4. **G147 - the record.** The `scholarship` table gained the catalog columns
+   (old databases are migrated in place) and `scholarship_sources` keeps every
+   page behind a record with its sha256, retrieval time, provider, trust level
+   and ETag. `deadline_date` is parsed only from unambiguous page wording and
+   stays `NULL` otherwise.
+5. **G148 - one record, many pages.** `canonical_key` = provider domain +
+   normalised title words; the same page twice adds no second source; an empty
+   field is filled by a later page; a differing verified value is **kept** and
+   the difference is stored under `data["conflicts"]` with the page that said
+   it.

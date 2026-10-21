@@ -23,6 +23,8 @@ data/
 *.sqlite3
 .env
 .env.*
+# ...but the shipped sources registry is part of the app
+!src/scholarpath/data/
 
 # OS / editor
 .DS_Store

@@ -1,0 +1,102 @@
+# ScholarPath AI - official scholarship portals (Phase 1 catalog).
+#
+# Every entry below was checked on 2026-10-21 with the app's own guarded
+# fetch (https only, HTML only, address checked before connecting). A portal
+# that could not be read was left out rather than shipped as a promise the
+# app cannot keep - the two that were dropped are recorded in
+# achievements.md, with the reason.
+#
+# This file is the shipped default. The editable copy lives next to the app's
+# config: %APPDATA%\ScholarPath\sources_registry.toml
+#
+# Fields per source:
+#   name                   - the portal as it is known
+#   base_url               - the page the crawl starts from
+#   country                - the country the scholarship is for
+#   trust_level            - "official" (the awarding body's own portal) or
+#                            "government" (a ministry / government department)
+#   allowed_path_prefixes  - the URL paths the crawler may read on that site;
+#                            nothing outside them is ever fetched
+#   crawl_depth            - how many link levels below the start page to read
+#   enabled                - set to false to keep an entry without crawling it
+
+version = 1
+
+[[source]]
+name = "Chevening Scholarships"
+base_url = "https://www.chevening.org/scholarships/"
+country = "United Kingdom"
+trust_level = "official"
+allowed_path_prefixes = ["/scholarships/", "/fellowships/"]
+crawl_depth = 1
+enabled = true
+
+[[source]]
+name = "DAAD Scholarships (Germany)"
+base_url = "https://www.daad.de/en/studying-in-germany/scholarships/"
+country = "Germany"
+trust_level = "official"
+allowed_path_prefixes = ["/en/studying-in-germany/scholarships/"]
+crawl_depth = 1
+enabled = true
+
+[[source]]
+name = "Fulbright Program (U.S. Department of State)"
+base_url = "https://fulbrightprogram.org/"
+country = "United States"
+trust_level = "government"
+allowed_path_prefixes = ["/apply", "/fellowships", "/programmes", "/about/faq-contact/"]
+crawl_depth = 1
+enabled = true
+
+[[source]]
+name = "Erasmus+ (European Commission)"
+base_url = "https://erasmus-plus.ec.europa.eu/opportunities"
+country = "European Union"
+trust_level = "government"
+allowed_path_prefixes = ["/opportunities"]
+crawl_depth = 1
+enabled = true
+
+[[source]]
+name = "MEXT - Study in Japan (Ministry of Education)"
+base_url = "https://www.studyinjapan.go.jp/en/planning/scholarships/"
+country = "Japan"
+trust_level = "government"
+allowed_path_prefixes = ["/en/planning/scholarships/"]
+crawl_depth = 1
+enabled = true
+
+[[source]]
+name = "Commonwealth Scholarships in the UK (FCDO)"
+base_url = "https://cscuk.fcdo.gov.uk/scholarships-filter-search/"
+country = "United Kingdom"
+trust_level = "government"
+allowed_path_prefixes = ["/scholarships-filter-search/", "/current-scholars/", "/scholarships/"]
+crawl_depth = 1
+enabled = true
+
+[[source]]
+name = "Korea GKS - Study in Korea"
+base_url = "https://www.studyinkorea.go.kr/ko/plan/scholarship.do"
+country = "South Korea"
+trust_level = "government"
+allowed_path_prefixes = ["/ko/plan/scholarship.do", "/ko/notice/scholarshipsList.do"]
+crawl_depth = 1
+enabled = true
+
+[[source]]
+name = "Turkiye Scholarships (Turkiye Burslari)"
+base_url = "https://turkiyeburslari.gov.tr/"
+country = "Turkiye"
+trust_level = "government"
+allowed_path_prefixes = [
+    "/scholarshipsprograms",
+    "/scholarshipsprocess",
+    "/fulltimeprograms",
+    "/calendar",
+    "/applysteps",
+    "/whyturkiyescholarships",
+]
+crawl_depth = 1
+enabled = true

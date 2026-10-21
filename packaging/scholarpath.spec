@@ -57,6 +57,8 @@ hiddenimports = [
 ]
 
 datas = collect_data_files("speech_recognition")
+# The shipped sources registry is package data: the packaged app needs it too.
+datas += collect_data_files("scholarpath", includes=["data/*.toml"])
 binaries = collect_dynamic_libs("pyaudio")
 
 # TLS roots for the live connections (search + speech services).

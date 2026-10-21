@@ -62,3 +62,15 @@ def test_the_build_definition_is_part_of_the_project() -> None:
     assert spec.exists(), "the PyInstaller spec must be committed"
     audit = REPO / "packaging" / "verify_bundle.py"
     assert audit.exists(), "the bundle security audit must be committed"
+
+
+def test_the_shipped_sources_registry_is_package_data() -> None:
+    """The registry must travel with the app, and the build must include it."""
+    from scholarpath.registry import default_registry_path
+
+    assert default_registry_path().exists(), "the shipped registry is missing"
+    spec = (REPO / "packaging" / "scholarpath.spec").read_text(encoding="utf-8")
+    assert 'collect_data_files("scholarpath"' in spec, (
+        "the packaged app would have no sources registry"
+    )
+

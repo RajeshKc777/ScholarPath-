@@ -9,10 +9,10 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 
 <br>
 
-![Status](https://img.shields.io/badge/status-Milestone%204-4f8cff?style=flat-square)
+![Status](https://img.shields.io/badge/status-catalog%20phase%201-4f8cff?style=flat-square)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Qt](https://img.shields.io/badge/Qt-6.12-41CD52?style=flat-square&logo=qt&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-360%20passing-2ea043?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-445%20passing-2ea043?style=flat-square)
 ![License](https://img.shields.io/badge/license-view--only%20%C2%B7%20all%20rights%20reserved-b3261e?style=flat-square)
 
 </div>
@@ -45,16 +45,21 @@ built on the opposite rule set.
 
 ## Status
 
-> **All seven milestones are complete.** Chat runs **live through the local
-> OpenCode service**, profiles/documents work locally, and you can **verify a
-> scholarship page**: paste the official URL, and only values that literally
-> appear in the page text are offered - every saved record carries its source
-> URL, retrieval time and page hash. The chat can also **search the web** for
-> you (off by default), point it at a site's scholarships page to list that
-> page's own links, and **re-check** saved records to see whether a page
-> changed or a deadline has passed. Voice input and a spoken reply are
-> available too — both **off by default**, because they send data to a
-> third party. There is a packaged Windows build (`packaging\build.ps1`).
+> **All seven milestones are complete**, and **phase 1 of the discovery
+> roadmap** is in: the app now walks **official scholarship portals** itself.
+> Chat runs **live through the local OpenCode service**, profiles/documents work
+> locally, and you can **verify a scholarship page**: paste the official URL,
+> and only values that literally appear in the page text are offered - every
+> saved record carries its source URL, retrieval time and page hash. The
+> **Catalog** page reads a registry of official portals (sitemaps, feeds,
+> same-site links, robots.txt, one request per second per host) and stores what
+> those pages state, merged into one record per scholarship. The chat can also
+> **search the web** for you (off by default), point it at a site's
+> scholarships page to list that page's own links, and **re-check** saved
+> records to see whether a page changed or a deadline has passed. Voice input
+> and a spoken reply are available too — both **off by default**, because they
+> send data to a third party. There is a packaged Windows build
+> (`packaging\build.ps1`).
 
 | # | Milestone | Status |
 | - | --------- | :----: |
@@ -65,6 +70,7 @@ built on the opposite rule set.
 | M5 | Deterministic eligibility, explainable ranking | **Done** |
 | M6 | MCP tools behind adapter, comparison, saved opportunities, checklists | **Done** |
 | M7 | Security review, performance, Windows packaging | **Done** - packaged build produced and audited |
+| P1 | Catalog: sources registry, crawler, background run, dedup + sources | **Done** - 8 official portals shipped |
 
 Full specification: [`goals.md`](goals.md) · Build log: [`achievements.md`](achievements.md)
 
@@ -91,6 +97,18 @@ Full specification: [`goals.md`](goals.md) · Build log: [`achievements.md`](ach
   skipped, capped and de-duplicated. Click one and it goes straight through
   the same read-and-verify flow. Nothing is guessed - every link is read from
   the page, and the chat's own web search is a separate, opt-in feature.
+- **Catalog page** - a registry of **official portals** (8 shipped: Chevening,
+  DAAD, Fulbright, Erasmus+, MEXT, Commonwealth, Korea GKS, Turkiye Burslari;
+  your editable copy lives at `%APPDATA%\ScholarPath\sources_registry.toml`).
+  Switch portals on, set how many pages each may contribute, and press
+  **Start catalog run**: the app discovers scholarship pages from each portal's
+  sitemap, feed and same-site links, obeys its `robots.txt`, reads **at most one
+  page a second per host**, and only inside the paths the registry allows.
+  Every value is still verified **word-for-word** against the page; a record is
+  recognised by its title plus the portal's domain, so a second page **fills
+  empty fields and adds a source** instead of duplicating the record, and a
+  differing value is **kept** with the disagreement written down. The run shows
+  progress, counts errors and can be cancelled between pages.
 - **Re-check saved records** — press **Re-check pages** on the Eligibility or
   Saved page: every record's page is fetched again, the sha256 is compared
   with the copy that was saved, and the card is flagged when the page
@@ -178,6 +196,12 @@ Full specification: [`goals.md`](goals.md) · Build log: [`achievements.md`](ach
   you can add the domains you trust yourself.
 - GPA scale conversion, funding-type ranking, and deadline-reminder features
   are intentionally deferred until there is a documented, honest policy for them.
+- The catalog is a **starting set of eight official portals**, not a complete
+  index: it finds pages through sitemaps, feeds and same-site links (no search
+  engine, no JavaScript menus), reads HTML only (PDF prospectuses are skipped),
+  and never goes faster than one request per second per host. Two portals were
+  checked and left out because they could not be read: CSC (`csc.edu.cn`, HTTP
+  412) and Australia Awards (`australiaawards.gov.au`, connection reset).
 - MCP servers never start, and no model uses tools mid-conversation, until a
   concrete student-facing use and a documented injection policy exist.
 - Extraction is a proposal engine, not an authority: a value the source does not
@@ -210,7 +234,7 @@ scholarpath --init-config   # write the configuration template, then exit
 scholarpath --config path\to\config.toml
 scholarpath --version
 python -m scholarpath       # equivalent to the console script
-pytest                      # 360 tests, no network required (fake server on loopback)
+pytest                      # 445 tests, no network required (fake server on loopback)
 ```
 
 </details>
@@ -297,6 +321,22 @@ log_level = "INFO"
   `OPENCODE_SERVICE_PASSWORD` environment variable when `base_url` is set.
 - Template: [`config.example.toml`](config.example.toml) — contains no credentials.
 
+### Sources registry (catalog)
+
+The portals the **Catalog** page reads live in a separate file, so they can be
+edited without touching config:
+
+```
+%APPDATA%\ScholarPath\sources_registry.toml   # your editable copy (created on first use)
+src\scholarpath\data\sources_registry.toml    # the shipped default
+```
+
+Each `[[source]]` entry has `name`, `base_url`, `country`, `trust_level`
+(`official` / `government`), `allowed_path_prefixes` (nothing outside them is
+ever fetched), `crawl_depth` and `enabled`. Your copy wins; if it is broken the
+Catalog page says so and refuses to run rather than silently falling back to the
+shipped list.
+
 ---
 
 ## Architecture
@@ -306,13 +346,16 @@ src/scholarpath/
 ├── app.py                 entry point, startup checks, exit codes
 ├── config.py              TOML + pydantic models, strict validation
 ├── logging_setup.py       rotating logs, no payloads
-├── storage.py             SQLite: profiles, documents, scholarships, saved list, checklists
+├── storage.py             SQLite: profiles, documents, scholarships (+ catalog columns), sources, saved list, checklists
 ├── profiles.py            strict Profile model, merge_confirmed, completion
 ├── documents.py           PDF text layer (pypdf), plain text, Windows OCR images
 ├── extraction.py          prompt, JSON parsing, verbatim-verification against source
-├── sources.py             guarded http(s) fetch: SSRF-safe resolution, caps, content-type, sha256, redirects
+├── sources.py             guarded http(s) fetch: SSRF-safe resolution, caps, content-type, conditional GET, sha256, redirects
 ├── websearch.py           keyless web search: results, official-domain rule, untrusted-data block
-├── discovery.py           scholarship links published by a page the student trusts
+├── discovery.py           scholarship links published by a page the student trusts, plus RSS/Atom helpers
+├── registry.py            sources registry: shipped default, editable user copy, strict validation
+├── crawler.py             robots.txt, sitemaps, feeds, same-site links, per-host pacing, page cap, 304s
+├── catalog.py             the run: crawl → extract → verify → dedup/merge → save, honest stats, cancel
 ├── recheck.py             re-fetch a saved page: changed? deadline passed? reachable?
 ├── research.py            official-page pipeline: propose → verbatim verify → draft
 ├── eligibility.py         rule-based checks, honest verdicts, deterministic ranking
@@ -340,6 +383,7 @@ src/scholarpath/
     ├── documents_page.py  upload → parse → propose → confirm → apply
     ├── research_page.py   official-page verification: URL → fields → save with provenance, plus Find pages
     ├── eligibility_page.py ranked rule-based eligibility reports with cited evidence    ├── saved_page.py       saved list, comparison grid, application checklists
+    ├── catalog_page.py    official portals, background catalog run, progress, errors, stored records
     ├── recheck.py         the Re-check worker shared by the eligibility and saved pages
     ├── settings_page.py    honest status: model, local data, privacy switches, MCP tools
     ├── profile_suggestion.py transcript card confirming chat-stated facts
@@ -359,7 +403,7 @@ the same discipline — business logic stays testable without a network or a mod
 
 | Gate | How it is enforced |
 | ---- | ------------------ |
-| Tests | `pytest` — config validation, gateway contract, model routing, adapter round-trips against a fake server, chat turns, failure paths, verbatim extraction checks, SQLite profile/document/scholarship round-trips, fetch guardrails (including SSRF blocking) against a fake HTTP server, privacy switches, re-check logic |
+| Tests | `pytest` — config validation, gateway contract, model routing, adapter round-trips against a fake server, chat turns, failure paths, verbatim extraction checks, SQLite profile/document/scholarship round-trips, fetch guardrails (including SSRF blocking) against a fake HTTP server, privacy switches, re-check logic, sources registry validation, crawler (robots, sitemaps, feeds, redirects, 304, pacing, page cap) and the catalog run (dedup, merge, conflicts, invented values, cancel, old-database migration) |
 | Honesty | Extraction values must appear verbatim in the source (document or fetched page); unverified proposals are visibly flagged and never auto-applied |
 | Untrusted input | Fetched page content is data only, wrapped in markers with an explicit ignore-instructions instruction |
 | Secrets | Never in source or config templates; config is local + git-ignored |

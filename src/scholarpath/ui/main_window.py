@@ -559,6 +559,15 @@ class MainWindow(QMainWindow):
         column.addWidget(research_item)
         self._nav_buttons["research"] = research_item
 
+        catalog_item = NavButton(GLYPH_GLOBE, "Catalog", parent=side)
+        catalog_item.setToolTip(
+            "Read the official portals one by one and store what their pages "
+            "state. Every value is verified word-for-word against the page."
+        )
+        catalog_item.clicked.connect(lambda: self.select_page("catalog"))
+        column.addWidget(catalog_item)
+        self._nav_buttons["catalog"] = catalog_item
+
         eligibility_item = NavButton(GLYPH_CHECK, "Eligibility", parent=side)
         eligibility_item.setToolTip(
             "Rule-based checks of your saved records against your profile - "
@@ -718,6 +727,16 @@ class MainWindow(QMainWindow):
             parent=self,
         )
         self._pages.addWidget(self._eligibility_page)
+
+        from scholarpath.ui.catalog_page import CatalogPage
+
+        self._catalog_page = CatalogPage(
+            self._database,
+            self._controller.gateway,
+            self._config.gateway.model or None,
+            parent=self,
+        )
+        self._pages.addWidget(self._catalog_page)
 
         from scholarpath.ui.saved_page import SavedPage
 
@@ -1167,8 +1186,9 @@ class MainWindow(QMainWindow):
             "documents": 2,
             "research": 3,
             "eligibility": 4,
-            "saved": 5,
-            "settings": 6,
+            "catalog": 5,
+            "saved": 6,
+            "settings": 7,
         }.get(name, 0)
         self._pages.setCurrentIndex(index)
         self._page_name = name
@@ -1183,6 +1203,7 @@ class MainWindow(QMainWindow):
             "documents": "Documents",
             "research": "Scholarship Pages",
             "eligibility": "Eligibility",
+            "catalog": "Catalog",
             "saved": "Saved Opportunities",
             "settings": "Settings",
         }
@@ -1278,6 +1299,8 @@ class MainWindow(QMainWindow):
             self._documents_page.cancel_worker()
         if self._research_page is not None:
             self._research_page.cancel_worker()
+        if getattr(self, "_catalog_page", None) is not None:
+            self._catalog_page.shutdown()
         if getattr(self, "_settings_page", None) is not None:
             self._settings_page.shutdown()
         if getattr(self, "_profile_scan_worker", None) is not None:

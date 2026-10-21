@@ -12,6 +12,7 @@ import json
 import re
 import unicodedata
 from dataclasses import dataclass, field
+from datetime import date
 
 from scholarpath.gateway.base import (
     ChatRequest,
@@ -225,6 +226,27 @@ def _same_date(
     return True
 
 
+def single_date(text: str) -> date | None:
+    """The one date a phrase states - or None when it is not unambiguous.
+
+    A phrase with two dates in it ("opens 1 August and closes 15 January")
+    is left without a date: guessing which one is the deadline would not be
+    honest, so the record keeps the page's own wording and the date stays
+    empty.
+    """
+    complete = [
+        parts for parts in _dates_in(text) if all(part is not None for part in parts)
+    ]
+    if len(complete) != 1:
+        return None
+    year, month, day = complete[0]
+    assert year is not None and month is not None and day is not None
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
+
+
 def verbatim_in_source(value: str, source_text: str) -> bool:
     """Is this value really on the page, as a reader would see it?
 
@@ -285,12 +307,17 @@ def _digits_match(value: str, source_lower: str) -> bool:
 
 
 def parse_model_json(
-    raw: str, allowed: frozenset[str] | tuple[str, ...] | None = None
+    raw: str,
+    allowed: frozenset[str] | tuple[str, ...] | None = None,
+    *,
+    keep_unknown: bool = False,
 ) -> dict[str, str | None]:
     """Parse the model's JSON reply; raise on any unusable shape.
 
     `allowed` restricts accepted field names (defaults to profile fields);
-    the scholarship pipeline passes its own set.
+    the scholarship pipeline passes its own set. `keep_unknown` keeps fields
+    the build does not know, so the verifier can write down that the model
+    proposed them - they are still never stored as values.
     """
     accepted = allowed if allowed is not None else EXTRACTABLE_FIELDS
     match = _JSON_BLOCK.search(raw)
@@ -309,7 +336,7 @@ def parse_model_json(
         )
     parsed: dict[str, str | None] = {}
     for name, value in fields.items():
-        if name not in accepted:
+        if name not in accepted and not keep_unknown:
             continue
         if value is None:
             parsed[name] = None

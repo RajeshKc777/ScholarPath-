@@ -36,6 +36,16 @@ MAX_BYTES = 2_000_000
 DEFAULT_TIMEOUT = 15.0
 _ALLOWED_SCHEMES = ("http", "https")
 _ALLOWED_TYPES = ("text/html", "application/xhtml+xml", "text/plain")
+# XML types the crawler needs (sitemaps and feeds). They are never turned into
+# page text - only the URLs inside them are read.
+XML_TYPES = (
+    "application/xml",
+    "text/xml",
+    "application/rss+xml",
+    "application/atom+xml",
+    "application/rdf+xml",
+    "text/rss+xml",
+)
 _USER_AGENT = "ScholarPath-AI/0.1 (verification fetch; local-first)"
 _HTML_TAGS_TO_SKIP = {"script", "style", "noscript", "template"}
 
@@ -105,6 +115,34 @@ class Page:
     @property
     def empty(self) -> bool:
         return not self.text.strip()
+
+
+@dataclass
+class Resource:
+    """A retrieved file (page, sitemap, feed) before it is interpreted.
+
+    `status` is 200 for a fresh body and 304 when the server confirmed that the
+    cached copy (ETag / Last-Modified) is still current - in that case the body
+    is empty and `not_modified` is true.
+    """
+
+    requested_url: str
+    final_url: str
+    status: int
+    content_type: str
+    charset: str | None
+    body: bytes
+    etag: str = ""
+    last_modified: str = ""
+    headers: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def not_modified(self) -> bool:
+        return self.status == 304
+
+    def text(self) -> str:
+        """The body decoded with the charset the server announced."""
+        return _decode(self.body, self.charset)
 
 
 class _TextExtractor(HTMLParser):
@@ -351,21 +389,32 @@ def _decode(body: bytes, charset: str | None) -> str:
 
 
 def _download(
-    url: str, timeout: float, max_bytes: int, allow_loopback: bool = False
-) -> tuple[bytes, str, str | None]:
+    url: str,
+    timeout: float,
+    max_bytes: int,
+    allow_loopback: bool = False,
+    allowed_types: tuple[str, ...] = _ALLOWED_TYPES,
+    etag: str | None = None,
+    last_modified: str | None = None,
+) -> Resource:
     """Fetch one URL under the app's strict rules.
 
-    Returns (body, final_url, charset). The body may be one byte longer than
-    `max_bytes` so the caller can detect truncation.
+    The body may be one byte longer than `max_bytes` so the caller can detect
+    truncation. When `etag` / `last_modified` are given the request is
+    conditional and the server may answer 304 (nothing changed) - that is
+    reported as a `Resource` with `status == 304` and no body.
     """
     pins: dict[str, str] = {}
     pinned = _assert_public_html_url(url, allow_loopback=allow_loopback)
     if pinned:
         pins[(urlsplit(url).hostname or "").lower()] = pinned
 
-    request = urlrequest.Request(
-        url, headers={"User-Agent": _USER_AGENT, "Accept-Encoding": "identity"}
-    )
+    headers = {"User-Agent": _USER_AGENT, "Accept-Encoding": "identity"}
+    if etag:
+        headers["If-None-Match"] = etag
+    if last_modified:
+        headers["If-Modified-Since"] = last_modified
+    request = urlrequest.Request(url, headers=headers)
     opener = _build_opener(pins, allow_loopback)
     try:
         with opener.open(request, timeout=timeout) as response:
@@ -375,7 +424,23 @@ def _download(
             ].strip().lower()
             charset = response.headers.get_content_charset()
             body = response.read(max_bytes + 1)
+            status = response.status
+            response_headers = {key.lower(): value for key, value in response.headers.items()}
     except HTTPError as exc:
+        if exc.code == 304:
+            # The server confirms the cached copy is still current.
+            cached_headers = {key.lower(): value for key, value in exc.headers.items()}
+            return Resource(
+                requested_url=url,
+                final_url=url,
+                status=304,
+                content_type="",
+                charset=None,
+                body=b"",
+                etag=cached_headers.get("etag") or etag or "",
+                last_modified=cached_headers.get("last-modified") or last_modified or "",
+                headers=cached_headers,
+            )
         raise FetchError(f"The server returned HTTP {exc.code} for that page.") from exc
     except URLError as exc:
         raise FetchError(f"Could not reach that page: {exc.reason}") from exc
@@ -383,12 +448,47 @@ def _download(
         raise FetchError("The page took too long to respond.") from exc
 
     if not content_type or not any(
-        content_type.startswith(allowed) for allowed in _ALLOWED_TYPES
+        content_type.startswith(allowed) for allowed in allowed_types
     ):
         raise FetchError(
             f"That link is not a web page (server said '{content_type or 'unknown type'}')."
         )
-    return body, final_url, charset
+    return Resource(
+        requested_url=url,
+        final_url=final_url,
+        status=status,
+        content_type=content_type,
+        charset=charset,
+        body=body,
+        etag=response_headers.get("etag", ""),
+        last_modified=response_headers.get("last-modified", ""),
+        headers=response_headers,
+    )
+
+
+def fetch_resource(
+    url: str,
+    timeout: float = DEFAULT_TIMEOUT,
+    max_bytes: int = MAX_BYTES,
+    allow_loopback: bool = False,
+    allowed_types: tuple[str, ...] = _ALLOWED_TYPES,
+    etag: str | None = None,
+    last_modified: str | None = None,
+) -> Resource:
+    """Download one file under the same guards as `fetch_page`.
+
+    Used by the crawler for sitemaps and feeds, and for conditional requests
+    that must not re-read a page that has not changed.
+    """
+    return _download(
+        url,
+        timeout,
+        max_bytes,
+        allow_loopback=allow_loopback,
+        allowed_types=allowed_types,
+        etag=etag,
+        last_modified=last_modified,
+    )
 
 
 def fetch_html(
@@ -401,28 +501,24 @@ def fetch_html(
 
     The HTML is untrusted web content: callers must treat it as data only.
     """
-    body, final_url, charset = _download(url, timeout, max_bytes, allow_loopback)
-    if len(body) > max_bytes:
-        body = body[:max_bytes]
-    return _decode(body, charset), final_url
+    resource = _download(url, timeout, max_bytes, allow_loopback=allow_loopback)
+    body = resource.body[:max_bytes]
+    return _decode(body, resource.charset), resource.final_url
 
 
-def fetch_page(
-    url: str,
-    timeout: float = DEFAULT_TIMEOUT,
-    max_bytes: int = MAX_BYTES,
-    allow_loopback: bool = False,
-) -> Page:
-    """Download one page and reduce it to verified-provenance text."""
-    body, final_url, charset = _download(url, timeout, max_bytes, allow_loopback)
+def page_from_resource(resource: Resource, max_bytes: int = MAX_BYTES) -> Page:
+    """Turn a fetched HTML resource into a page with provenance.
 
+    Used by the crawler, which fetches conditionally (ETag / If-Modified-Since)
+    and therefore already holds the resource.
+    """
     warnings: list[str] = []
-    truncated = len(body) > max_bytes
+    truncated = len(resource.body) > max_bytes
+    body = resource.body[:max_bytes]
     if truncated:
-        body = body[:max_bytes]
         warnings.append(f"page larger than {max_bytes:,} bytes - text truncated")
 
-    decoded = _decode(body, charset)
+    decoded = _decode(body, resource.charset)
     extractor = _TextExtractor()
     try:
         extractor.feed(decoded)
@@ -431,8 +527,8 @@ def fetch_page(
         warnings.append(f"page structure could not be fully parsed ({exc.__class__.__name__})")
 
     page = Page(
-        requested_url=url,
-        final_url=final_url,
+        requested_url=resource.requested_url,
+        final_url=resource.final_url,
         title=extractor.title,
         text=extractor.text(),
         fetched_at=datetime.now().isoformat(timespec="seconds"),
@@ -443,3 +539,14 @@ def fetch_page(
     if page.empty:
         raise FetchError("No readable text was found on that page.")
     return page
+
+
+def fetch_page(
+    url: str,
+    timeout: float = DEFAULT_TIMEOUT,
+    max_bytes: int = MAX_BYTES,
+    allow_loopback: bool = False,
+) -> Page:
+    """Download one page and reduce it to verified-provenance text."""
+    resource = _download(url, timeout, max_bytes, allow_loopback=allow_loopback)
+    return page_from_resource(resource, max_bytes=max_bytes)

@@ -1,6 +1,6 @@
 # ScholarPath AI — Achievements
 
-Last updated: 2026-10-20
+Last updated: 2026-10-21
 
 What has actually been **built and verified**. A feature appears here only when it
 is finished, not when it is started. Each entry names the goal it satisfies
@@ -25,14 +25,80 @@ is finished, not when it is started. Each entry names the goal it satisfies
   the model/provider can never be disclosed in chat (probes answered
   deterministically, leaky replies withheld), and profile facts stated in chat
   are proposed for saving through an explicit, verbatim-verified confirmation
-  card.
+  card. **Phase 1 of the discovery roadmap** adds the sources registry, the
+  crawler and the background catalog run (A26).
 - Licence: proprietary, source-available, view-only (`LICENSE`).
-- Tests: **197 passing** (`pytest`, ~12 s).
-- Next milestone: **M7** (G207) — security review, performance, Windows packaging.
+- Tests: **445 passing** (`pytest`, ~38 s).
+- Next: **Phase 2** of the owner roadmap (catalog search, filters and the
+  eligibility hand-off built on the catalog records); M7 hardening remains done
+  for packaging, with the security review carried by A25/G143.
 
 ---
 
 ## Log (newest first)
+
+### 2026-10-21 — A26 — Phase 1: catalog + crawler (G144-G148)
+
+**Satisfies:** G144 (sources registry), G145 (crawler), G146 (background run +
+Catalog page), G147 (catalog record + `scholarship_sources`), G148 (dedup by
+`canonical_key`, never overwrite a verified value). Reuses G139's tolerant
+verbatim check and G143's SSRF-guarded fetch.
+
+| Area | File(s) |
+| ---- | ------- |
+| Registry parsing/validation, shipped + user copy, defaults | `src/scholarpath/registry.py`, `src/scholarpath/data/sources_registry.toml` |
+| Crawler: robots, sitemaps, feeds, same-site links, throttle, conditional GET, page cap | `src/scholarpath/crawler.py` |
+| Conditional fetch (`fetch_resource`, 304, `Resource`) | `src/scholarpath/sources.py` |
+| Feed/link helpers reused by the crawler | `src/scholarpath/discovery.py` |
+| Headless run: crawl → extract → verify → save, stats, cancel | `src/scholarpath/catalog.py` |
+| Catalog columns, `scholarship_sources`, migration, dedup/merge/conflicts | `src/scholarpath/storage.py` |
+| Catalog page: portal list + switches, progress, error box, cancel, stored records | `src/scholarpath/ui/catalog_page.py` |
+| Sidebar page at index 5, titles/index map, cancel on close | `src/scholarpath/ui/main_window.py` |
+| Tests | `tests/test_sources_registry.py` (20), `tests/test_crawler.py` (31), `tests/test_catalog.py` (26), `tests/test_catalog_page.py` (9) |
+
+Behaviour: **Catalog** in the sidebar lists the portals from the registry with a
+switch each and a pages-per-portal limit. A run crawls in the background, shows
+what it is reading, counts the errors, and can be cancelled between pages. Every
+value is verified word-for-word against the page before it is stored; a record
+is recognised by its normalised title plus the portal's domain, so a second page
+fills empty fields and adds a source instead of creating a duplicate, and a
+differing value is kept with the disagreement written down under
+`data["conflicts"]`. The page shows the conflicts, the number of pages behind a
+record, and a button that opens each page.
+
+**Evidence:** the suite is **445 passing** in ~38 s (`pytest`), including
+the crawler against a loopback server (sitemap index, RSS, robots allow/disallow,
+wildcards, `Crawl-delay`, redirect final URL, 304/`If-None-Match`, private-address
+refusal, HTML-only, page cap) and the run against a fake crawler + fake gateway
+(created / updated / merged, conflict kept, invented values dropped, cancel,
+gateway and crawl errors counted, old-database migration). Live crawl of the real
+portals (no model, 2 pages each): DAAD returned its scholarships index and
+overview page, Chevening returned `/scholarships/` (7 043 chars) and
+`/fellowships/` with ETag and Last-Modified recorded, zero errors, and the page
+cap was reported honestly.
+
+**Live URL check (2026-10-21):** 10 portals checked with the app's own guarded
+fetch; **8 shipped** — Chevening, DAAD, Fulbright, Erasmus+, MEXT (Study in
+Japan), Commonwealth (CSC UK), Korea GKS (Study in Korea), Turkiye Burslari.
+**2 dropped, with reason:** **CSC** (`csc.edu.cn`) answers HTTP 412 to a plain
+guarded request, and **Australia Awards** (`australiaawards.gov.au`) reset the
+connection / timed out. Neither is shipped pretending to work. Three entries use a
+substituted start URL because the obvious one 404s: Erasmus+
+`/opportunities`, MEXT `studyinjapan.go.jp/en/planning/scholarships/`,
+Commonwealth `cscuk.fcdo.gov.uk/scholarships-filter-search/`; Study in Korea
+serves `/en/` pages by redirecting to `/ko/`, so the registry points at `/ko/`.
+
+**Known limits:** the shipped registry is a starting set of eight portals, not a
+complete one; discovery is limited to sitemaps, feeds and same-site links (no
+search engine, no JavaScript menus); only HTML is read, so PDF-only prospectuses
+are skipped; `Crawl-delay` can slow a host beyond one request per second but the
+app never goes faster; the end-to-end verify-and-save path was exercised with a
+fake gateway only — a live run against a real model was not performed (no
+provider is configured to be spent on a 50-page crawl), so the first real run is
+still to be watched; `deadline_date` stays empty for ambiguous wording, which is
+deliberate.
+
+---
 
 ### 2026-10-20 — A14 — Provider anonymity (G121) + chat→profile capture (G122)
 
