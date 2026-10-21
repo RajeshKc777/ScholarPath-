@@ -93,6 +93,45 @@ timer stop, review notice shows.
 
 ---
 
+### 2026-10-21 — A23 — Web search in the chat (G136)
+
+**Satisfies:** G136 (the student asked for "search scholarship in uk" and the
+app said it could not search the web).
+
+Built:
+
+| Area | File(s) |
+| ---- | ------- |
+| Keyless search client, result parsing, untrusted-data block | `src/scholarpath/websearch.py` (new) |
+| Search step inside a turn (model asks -> search -> answer) | `src/scholarpath/ui/chat_controller.py` |
+| Search rule in the prompts (both the app prompt and the live gateway) | `src/scholarpath/identity.py`, `src/scholarpath/gateway/opencode.py` |
+| "Searching the web for …" status + honest status line | `src/scholarpath/ui/main_window.py` |
+| Tests | `tests/test_websearch.py` (12 tests) |
+
+Behaviour: when a question needs live results the model replies with
+`{"search": "..."}`; the app runs one keyless search (DuckDuckGo's light
+HTML endpoint - no key, no account, no SDK), then asks the model again with
+the results and answers from them, naming the pages it used. Results are
+untrusted third-party content, capped at 6, de-duplicated, with tracking
+redirects unwrapped; university, government and registered-body domains are
+listed first and every result is labelled as official-looking or not. If the
+search cannot run, the student gets a plain error turn instead of an answer
+from memory.
+
+**Evidence:** 290 tests passing. Live: a real search for "chevening
+scholarship 2027 deadline" returned 5 results in 1.2 s, led by
+chevening.org pages, and the turn flow fed them to the model as an
+untrusted-data block with the URLs and the official/not-official labels.
+
+**Known limits:** one search per turn and no follow-up searches; results are
+snippets, so the model may miss detail that only the page itself carries -
+the student is told to confirm on the official page, and the Scholarships page
+can now read and verify that page; the provider is a single keyless endpoint
+and can rate-limit or change its markup; ranking is a domain-suffix
+heuristic, not proof of officialness.
+
+---
+
 ### 2026-10-21 — A22 — Find scholarship pages on a trusted site (G134)
 
 **Satisfies:** G134 (the Scholarships page only read URLs the student pasted).

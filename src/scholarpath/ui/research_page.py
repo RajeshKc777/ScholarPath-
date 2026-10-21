@@ -361,8 +361,8 @@ class ResearchPage(QWidget):
             "Paste an official scholarship page and the app reads it, or paste "
             "a site's scholarships/funding page and use Find pages to list the "
             "scholarship links that page itself publishes. Only text that "
-            "literally appears on a page can be kept. There is still no open "
-            "web search.",
+            "literally appears on a page can be kept. (The chat can also "
+            "search the web for you.)",
             self,
         )
         lead.setObjectName("PageLead")

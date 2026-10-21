@@ -54,7 +54,14 @@ SYSTEM_PROMPT = (
     "adding anything else. Never use markdown formatting: no asterisks or "
     "bold, no dash bullets, no headings, no tables, no emoji. If several "
     "things need saying, write them as short sentences instead of a list. "
-    "Never open with filler such as 'Certainly' or 'As an AI'."
+    "Never open with filler such as 'Certainly' or 'As an AI'. "
+    "Search rule: when the student asks for current opportunities, deadlines, "
+    "or anything that needs live web results, do not answer from memory and "
+    "do not guess. Reply with exactly {\"search\": \"<short query>\"} and "
+    "nothing else; the app runs the search and sends you the results. Then "
+    "answer from those results, name the pages you used with their URLs, and "
+    "say plainly when the results do not answer the question. Never claim to "
+    "have searched when you did not."
 )
 
 # Curated vendor/product words that must not appear in a student-facing reply.

@@ -12,7 +12,7 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 ![Status](https://img.shields.io/badge/status-Milestone%204-4f8cff?style=flat-square)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Qt](https://img.shields.io/badge/Qt-6.12-41CD52?style=flat-square&logo=qt&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-278%20passing-2ea043?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-290%20passing-2ea043?style=flat-square)
 ![License](https://img.shields.io/badge/license-view--only%20%C2%B7%20all%20rights%20reserved-b3261e?style=flat-square)
 
 </div>
@@ -49,9 +49,9 @@ built on the opposite rule set.
 > service**, profiles/documents work locally, and you can **verify a scholarship
 > page**: paste the official URL, and only values that literally appear in the
 > page text are offered - every saved record carries its source URL, retrieval
-> time and page hash. You can also point it at a site's scholarships page and
-> let it list that page's own scholarship links. There is **no open web search
-> yet**: you choose the sites. Eligibility checks are next.
+> time and page hash. The chat can also search the web for you, and you can
+> point it at a site's scholarships page and let it list that page's own
+> scholarship links. Eligibility checks are next.
 
 | # | Milestone | Status |
 | - | --------- | :----: |
@@ -123,6 +123,15 @@ Full specification: [`goals.md`](goals.md) · Build log: [`achievements.md`](ach
   Spoken text is markdown-free; the full reply stays in the chat, and the
   transcript follows the conversation as it grows. If a reply cannot be
   fetched, the app says so out loud and keeps listening instead of stopping.
+- **Web search in the chat** — ask for current scholarships ("scholarships in
+  the UK for a master's in engineering") and the app **searches the web** and
+  answers from what it found, naming the pages it used. The search is
+  keyless (no account, no API key). Results are treated as untrusted
+  third-party data, official-looking domains (universities, governments,
+  scholarship bodies) are listed first, and every result is marked as
+  official-looking or not — so you always know which page to trust and
+  confirm on. If the search cannot run, the app says so instead of answering
+  from memory.
 - **Replies read like a person wrote them** — the model is asked for plain,
   warm sentences with no formatting, and anything that still arrives as
   markdown is cleaned before you see it: no `**bold**`, no `--`, no headings,
@@ -185,7 +194,7 @@ scholarpath --init-config   # write the configuration template, then exit
 scholarpath --config path\to\config.toml
 scholarpath --version
 python -m scholarpath       # equivalent to the console script
-pytest                      # 278 tests, no network required (fake server on loopback)
+pytest                      # 290 tests, no network required (fake server on loopback)
 ```
 
 </details>

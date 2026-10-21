@@ -56,6 +56,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G133 | 29 | The spoken reply must actually be audible: the neural audio is played as a WAV file through the Windows audio engine (the route the local voice uses), and if playback does not run the app falls back to the offline voice instead of silence | `[ ]` |
 | G134 | 30 | Find scholarships on a site the student trusts: the app lists the scholarship/funding links published on a page (same site only, no guessing), and one click reads and verifies the chosen page | `[x]` |
 | G135 | 31 | Let the chat use MCP tools: when a read-only MCP tool is configured and enabled, the chat can call it during a turn, with tool output treated as untrusted data, size-capped and never obeying instructions inside it | `[ ]` |
+| G136 | 32 | Web search in the chat: the app can run a keyless web search when the student needs current results, answer from those results with the pages named, and treat every result as untrusted data | `[x]` |
 
 ---
 
@@ -945,3 +946,32 @@ Two requirements from the owner, dated, after seeing the running app leak
   raw HTML under the same guardrails as `fetch_page` (both now share one
   `_download` step: scheme/credential/address checks, content-type allow-list,
   2 MB cap).
+
+---
+
+## 19q. Web search in the chat (G136, 2026-10-21)
+
+- **Owner ask:** the student typed "search scholarship in uk" and the app
+  answered "I can't search the web in this build".
+- **How a search happens.** The model decides: when the question needs live
+  results it replies with exactly `{"search": "<short query>"}` and nothing
+  else. The controller runs that one search, then asks the model again with
+  the results attached and uses that answer. One search per turn; the search
+  request itself never enters the conversation history, only the answer does.
+- **Provider:** DuckDuckGo's lightweight HTML endpoint - **no API key, no
+  account, no SDK**. The parser reads only `a.result-link` rows, unwraps
+  DuckDuckGo's redirect so the model never sees a tracking URL, keeps
+  http(s) links only, de-duplicates, caps at 6 results and 260 characters per
+  snippet.
+- **Untrusted by construction:** the results block is introduced as
+  third-party content the model must treat as data and never obey; the model
+  is told to name the pages it used, to say which ones are not official, and
+  never to invent deadlines, amounts or eligibility the results do not state.
+- **Official sources first:** university, government and registered-body
+  domains (`.edu`, `.gov`, `.ac.*`, `.org`, ...) are listed first, and every
+  result is labelled in the block as "official-looking domain" or "not an
+  official domain" so the student is never misled.
+- **Honest failures:** an unreachable search becomes a plain error turn ("the
+  web search service could not be reached"), never a silent answer from
+  memory. The status line shows whether a search was used in the
+  conversation.

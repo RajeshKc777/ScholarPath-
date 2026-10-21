@@ -819,9 +819,9 @@ class MainWindow(QMainWindow):
         title.setObjectName("HeroTitle")
         sub = QLabel(
             "I can chat with you, build your academic profile from documents, "
-            "verify scholarship pages you paste here, run rule-based "
-            "eligibility checks, and keep your saved opportunities and "
-            "checklists. Automatic search arrives later.",
+            "search the web for current scholarships, verify the official "
+            "pages, run rule-based eligibility checks, and keep your saved "
+            "opportunities and checklists.",
             hero,
         )
         sub.setObjectName("HeroSub")
@@ -851,7 +851,8 @@ class MainWindow(QMainWindow):
                 tile.clicked.connect(lambda _checked=False: self.select_page("documents"))
             elif title_text == "Find Scholarships":
                 tile.setToolTip(
-                    "Paste an official scholarship page URL. No automatic search yet."
+                    "Search the web in the chat, or paste an official scholarship "
+                    "page and verify it here."
                 )
                 tile.clicked.connect(lambda _checked=False: self.select_page("research"))
             elif title_text == "Check Eligibility":
@@ -1234,6 +1235,7 @@ class MainWindow(QMainWindow):
         self._controller.turn_added.connect(self._on_turn_added)
         self._controller.busy_changed.connect(self._on_busy_changed)
         self._controller.failed.connect(self._on_failed)
+        self._controller.search_started.connect(self._on_search_started)
         self._speaker = Speaker(self)
         self._speaker.finished.connect(self._on_speech_finished)
         self._speaker.failed.connect(self._on_speech_failed)
@@ -1272,6 +1274,11 @@ class MainWindow(QMainWindow):
             f"Milestone {number}."
         )
         self._refresh_status()
+
+    def _on_search_started(self, query: str) -> None:
+        """Tell the student the app is searching the web right now (G136)."""
+        logger.info("web search started for a %d-character query", len(query))
+        self.subtitle.setText(f"Searching the web for \u201c{query}\u201d\u2026")
 
     def _on_turn_added(self, turn: Turn) -> None:
         if self._turns == 0:
@@ -1597,7 +1604,7 @@ class MainWindow(QMainWindow):
             elif self._page_name == "documents":
                 text = f"{state}  \u00b7  documents  \u00b7  parsed locally, confirmed by you"
             elif self._page_name == "research":
-                text = f"{state}  \u00b7  research  \u00b7  official pages only  \u00b7  no automatic search"
+                text = f"{state}  \u00b7  research  \u00b7  official pages only  \u00b7  search in the chat"
             elif self._page_name == "eligibility":
                 text = (
                     f"{state}  \u00b7  eligibility  \u00b7  rule-based  \u00b7  no probabilities"
@@ -1609,7 +1616,12 @@ class MainWindow(QMainWindow):
             else:
                 text = (
                     f"{state}  \u00b7  chat: {self._controller.chat_mode}  \u00b7  "
-                    f"{count} {noun}  \u00b7  no research performed"
+                    f"{count} {noun}  \u00b7  "
+                + (
+                    "web search used"
+                    if self._controller.last_search
+                    else "no web search yet"
+                )
                 )
 
         if self.status.objectName() != name:
@@ -1664,8 +1676,8 @@ class MainWindow(QMainWindow):
             )
         elif live:
             self.subtitle.setText(
-                "Model replies are live. Scholarship pages can be verified; "
-                "automatic search is still to come."
+                "Model replies are live. Ask for current scholarships and the "
+                "app searches the web; official pages can be verified here."
             )
         else:
             self.subtitle.setText(
@@ -1674,8 +1686,8 @@ class MainWindow(QMainWindow):
 
         if live:
             self.hint.setText(
-                "Model replies, page verification, eligibility checks and saved "
-                "lists are live; automatic search is still to come."
+                "Model replies, web search, page verification, eligibility "
+                "checks and saved lists are live."
             )
         else:
             self.hint.setText(
