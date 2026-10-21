@@ -12,7 +12,7 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 ![Status](https://img.shields.io/badge/status-catalog%20phase%201-4f8cff?style=flat-square)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Qt](https://img.shields.io/badge/Qt-6.12-41CD52?style=flat-square&logo=qt&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-445%20passing-2ea043?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-488%20passing-2ea043?style=flat-square)
 ![License](https://img.shields.io/badge/license-view--only%20%C2%B7%20all%20rights%20reserved-b3261e?style=flat-square)
 
 </div>
@@ -45,16 +45,18 @@ built on the opposite rule set.
 
 ## Status
 
-> **All seven milestones are complete**, and **phase 1 of the discovery
-> roadmap** is in: the app now walks **official scholarship portals** itself.
-> Chat runs **live through the local OpenCode service**, profiles/documents work
-> locally, and you can **verify a scholarship page**: paste the official URL,
-> and only values that literally appear in the page text are offered - every
-> saved record carries its source URL, retrieval time and page hash. The
-> **Catalog** page reads a registry of official portals (sitemaps, feeds,
-> same-site links, robots.txt, one request per second per host) and stores what
-> those pages state, merged into one record per scholarship. The chat can also
-> **search the web** for you (off by default), point it at a site's
+> **All seven milestones are complete**, and **phases 1 and 2 of the discovery
+> roadmap** are in: the app now walks **official scholarship portals** itself
+> and lets you **search what they stated**. Chat runs **live through the local
+> OpenCode service**, profiles/documents work locally, and you can **verify a
+> scholarship page**: paste the official URL, and only values that literally
+> appear in the page text are offered - every saved record carries its source
+> URL, retrieval time and page hash. The **Catalog** page reads a registry of
+> official portals (sitemaps, feeds, same-site links, robots.txt, one request
+> per second per host) and stores what those pages state, merged into one
+> record per scholarship; the new **Discover** page searches and filters those
+> records and hands one to the same deterministic eligibility checks. The chat
+> can also **search the web** for you (off by default), point it at a site's
 > scholarships page to list that page's own links, and **re-check** saved
 > records to see whether a page changed or a deadline has passed. Voice input
 > and a spoken reply are available too — both **off by default**, because they
@@ -71,6 +73,7 @@ built on the opposite rule set.
 | M6 | MCP tools behind adapter, comparison, saved opportunities, checklists | **Done** |
 | M7 | Security review, performance, Windows packaging | **Done** - packaged build produced and audited |
 | P1 | Catalog: sources registry, crawler, background run, dedup + sources | **Done** - 8 official portals shipped |
+| P2 | Discover: search + filters over the catalog, eligibility hand-off | **Done** |
 
 Full specification: [`goals.md`](goals.md) · Build log: [`achievements.md`](achievements.md)
 
@@ -109,6 +112,15 @@ Full specification: [`goals.md`](goals.md) · Build log: [`achievements.md`](ach
   empty fields and adds a source** instead of duplicating the record, and a
   differing value is **kept** with the disagreement written down. The run shows
   progress, counts errors and can be cancelled between pages.
+- **Discover page** - search the catalog by what the pages state. One search
+  box (title, country, field, funder, amount, deadline wording) plus filters
+  for level, country, field of study, portal and deadline state ("still open",
+  "closing within 90 days", "already closed", "no readable date"). Results are
+  ordered honestly (open deadlines first by date, then records with no readable
+  date, then closed ones), and every card shows the page's own deadline
+  sentence beside the parsed state. **Check against my profile** runs the same
+  rule-based checks as the Eligibility page, and **Save** adds the record to
+  Saved Opportunities. A match is a reading aid, never a verdict.
 - **Re-check saved records** — press **Re-check pages** on the Eligibility or
   Saved page: every record's page is fetched again, the sha256 is compared
   with the copy that was saved, and the card is flagged when the page
@@ -202,6 +214,11 @@ Full specification: [`goals.md`](goals.md) · Build log: [`achievements.md`](ach
   and never goes faster than one request per second per host. Two portals were
   checked and left out because they could not be read: CSC (`csc.edu.cn`, HTTP
   412) and Australia Awards (`australiaawards.gov.au`, connection reset).
+- Discover searches the **stored text**, so it is a reading aid, not a
+  linguistic search: a word can match inside another word, level filters only
+  match the page's own wording, "closing soon" is a fixed 90-day window, and
+  there are no saved searches or deadline reminders. A page that changed since
+  the last catalog run is caught by **Re-check**, not by searching again.
 - MCP servers never start, and no model uses tools mid-conversation, until a
   concrete student-facing use and a documented injection policy exist.
 - Extraction is a proposal engine, not an authority: a value the source does not
@@ -234,7 +251,7 @@ scholarpath --init-config   # write the configuration template, then exit
 scholarpath --config path\to\config.toml
 scholarpath --version
 python -m scholarpath       # equivalent to the console script
-pytest                      # 445 tests, no network required (fake server on loopback)
+pytest                      # 488 tests, no network required (fake server on loopback)
 ```
 
 </details>
@@ -356,6 +373,7 @@ src/scholarpath/
 ├── registry.py            sources registry: shipped default, editable user copy, strict validation
 ├── crawler.py             robots.txt, sitemaps, feeds, same-site links, per-host pacing, page cap, 304s
 ├── catalog.py             the run: crawl → extract → verify → dedup/merge → save, honest stats, cancel
+├── search.py              search + filters over the catalog: folded text, whole-word levels, deadline states
 ├── recheck.py             re-fetch a saved page: changed? deadline passed? reachable?
 ├── research.py            official-page pipeline: propose → verbatim verify → draft
 ├── eligibility.py         rule-based checks, honest verdicts, deterministic ranking
@@ -384,6 +402,8 @@ src/scholarpath/
     ├── research_page.py   official-page verification: URL → fields → save with provenance, plus Find pages
     ├── eligibility_page.py ranked rule-based eligibility reports with cited evidence    ├── saved_page.py       saved list, comparison grid, application checklists
     ├── catalog_page.py    official portals, background catalog run, progress, errors, stored records
+    ├── discover_page.py   search + filters over the catalog, cards, save, profile hand-off
+    ├── eligibility_dialog.py one record's rule-based checks, reusing the Eligibility card
     ├── recheck.py         the Re-check worker shared by the eligibility and saved pages
     ├── settings_page.py    honest status: model, local data, privacy switches, MCP tools
     ├── profile_suggestion.py transcript card confirming chat-stated facts
@@ -403,7 +423,7 @@ the same discipline — business logic stays testable without a network or a mod
 
 | Gate | How it is enforced |
 | ---- | ------------------ |
-| Tests | `pytest` — config validation, gateway contract, model routing, adapter round-trips against a fake server, chat turns, failure paths, verbatim extraction checks, SQLite profile/document/scholarship round-trips, fetch guardrails (including SSRF blocking) against a fake HTTP server, privacy switches, re-check logic, sources registry validation, crawler (robots, sitemaps, feeds, redirects, 304, pacing, page cap) and the catalog run (dedup, merge, conflicts, invented values, cancel, old-database migration) |
+| Tests | `pytest` — config validation, gateway contract, model routing, adapter round-trips against a fake server, chat turns, failure paths, verbatim extraction checks, SQLite profile/document/scholarship round-trips, fetch guardrails (including SSRF blocking) against a fake HTTP server, privacy switches, re-check logic, sources registry validation, crawler (robots, sitemaps, feeds, redirects, 304, pacing, page cap), the catalog run (dedup, merge, conflicts, invented values, cancel, old-database migration) and Discover (text folding, whole-word levels, five deadline states, filter isolation, ordering, empty states, the hand-off, navigation) |
 | Honesty | Extraction values must appear verbatim in the source (document or fetched page); unverified proposals are visibly flagged and never auto-applied |
 | Untrusted input | Fetched page content is data only, wrapped in markers with an explicit ignore-instructions instruction |
 | Secrets | Never in source or config templates; config is local + git-ignored |

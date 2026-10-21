@@ -30,7 +30,7 @@ from scholarpath.eligibility import (
     UNKNOWN,
     evaluate_all,
 )
-from scholarpath.profiles import Profile
+from scholarpath.profiles import stored_profile_payload
 from scholarpath.recheck import RecheckStore
 from scholarpath.storage import Database
 from scholarpath.ui.recheck import RecheckWorker
@@ -211,11 +211,7 @@ class EligibilityPage(QWidget):
         self.reload()
 
     def _profile_payload(self) -> dict:
-        record = self._database.load_profile()
-        if not record:
-            return {}
-        profile, _dropped = Profile.from_payload(record.get("data", {}))
-        return profile.model_dump()
+        return stored_profile_payload(self._database.load_profile())
 
     def reload(self) -> None:
         while self._list.count() > 1:  # keep trailing stretch

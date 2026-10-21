@@ -63,6 +63,7 @@ GLYPH_SEND = "\uE724"
 GLYPH_ATTACH = "\uE723"
 GLYPH_MIC = "\uE720"
 GLYPH_GLOBE = "\uE774"
+GLYPH_SEARCH = "\uE721"
 
 # How close to the bottom still counts as "following the conversation".
 SCROLL_STICK_THRESHOLD = 12
@@ -553,7 +554,8 @@ class MainWindow(QMainWindow):
         research_item = NavButton(GLYPH_EDUCATION, "Scholarships", parent=side)
         research_item.setToolTip(
             "Paste an official scholarship page URL; values are verified against "
-            "the page text before anything is saved. Search comes later."
+            "the page text before anything is saved. Discover searches what is "
+            "already stored."
         )
         research_item.clicked.connect(lambda: self.select_page("research"))
         column.addWidget(research_item)
@@ -567,6 +569,15 @@ class MainWindow(QMainWindow):
         catalog_item.clicked.connect(lambda: self.select_page("catalog"))
         column.addWidget(catalog_item)
         self._nav_buttons["catalog"] = catalog_item
+
+        discover_item = NavButton(GLYPH_SEARCH, "Discover", parent=side)
+        discover_item.setToolTip(
+            "Search and filter the catalog records by what the pages state, "
+            "then check one against your profile. Nothing leaves this device."
+        )
+        discover_item.clicked.connect(lambda: self.select_page("discover"))
+        column.addWidget(discover_item)
+        self._nav_buttons["discover"] = discover_item
 
         eligibility_item = NavButton(GLYPH_CHECK, "Eligibility", parent=side)
         eligibility_item.setToolTip(
@@ -737,6 +748,11 @@ class MainWindow(QMainWindow):
             parent=self,
         )
         self._pages.addWidget(self._catalog_page)
+
+        from scholarpath.ui.discover_page import DiscoverPage
+
+        self._discover_page = DiscoverPage(self._database, parent=self)
+        self._pages.addWidget(self._discover_page)
 
         from scholarpath.ui.saved_page import SavedPage
 
@@ -1187,8 +1203,9 @@ class MainWindow(QMainWindow):
             "research": 3,
             "eligibility": 4,
             "catalog": 5,
-            "saved": 6,
-            "settings": 7,
+            "discover": 6,
+            "saved": 7,
+            "settings": 8,
         }.get(name, 0)
         self._pages.setCurrentIndex(index)
         self._page_name = name
@@ -1204,11 +1221,14 @@ class MainWindow(QMainWindow):
             "research": "Scholarship Pages",
             "eligibility": "Eligibility",
             "catalog": "Catalog",
+            "discover": "Discover",
             "saved": "Saved Opportunities",
             "settings": "Settings",
         }
         if name == "saved" and self._saved_page is not None:
             self._saved_page.reload()  # data may have changed since last visit
+        if name == "discover" and self._discover_page is not None:
+            self._discover_page.reload()  # a catalog run may have added records
         self._page_title.setText(titles.get(name, titles["chat"]))
         if getattr(self, "voice_mode_button", None) is not None:
             self.voice_mode_button.setVisible(name == "chat")

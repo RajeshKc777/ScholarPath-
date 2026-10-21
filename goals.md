@@ -69,6 +69,9 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G146 | 35 | A background catalog job (thread pool) running crawl → extract → verify → save, with a Catalog page that shows progress, counts errors and can be cancelled | `[x]` |
 | G147 | 35 | Catalog records carry level, countries, fields_of_study, funding_type, amount_text, deadline_text, deadline_date (nullable), language_req, apply_url and canonical_key, and every record keeps a `scholarship_sources` row per page (URL, sha256, retrieved_at, provider, trust level, ETag) | `[x]` |
 | G148 | 35 | Catalog records are de-duplicated by canonical_key (normalised title + provider domain); a second page fills empty fields and adds a source, a differing value is kept and written down as a conflict, and a verified value is never silently overwritten | `[x]` |
+| G149 | 36 | A Discover page over the stored catalog: free-text search plus level, country, field, provider and deadline filters, deterministic ordering (open first, then undated, then closed), each result showing the page's own deadline wording beside the parsed state, and honest empty states - browsing changes nothing | `[x]` |
+| G150 | 36 | Eligibility hand-off: from a search result, the deterministic engine runs on that record's verified values against the local profile and shows the same report card as the Eligibility page, and the record can be saved to Saved Opportunities; nothing is ever called eligible | `[x]` |
+| G151 | 36 | Search and filters are local-only: no query leaves the device, no record is modified by browsing, and a match is labelled a reading aid rather than a verdict | `[x]` |
 
 ---
 
@@ -1121,3 +1124,32 @@ pages state. One phase per session; this entry is phase 1 only.
    field is filled by a later page; a differing verified value is **kept** and
    the difference is stored under `data["conflicts"]` with the page that said
    it.
+
+## 19v. Discover: search, filters and the profile hand-off — Phase 2 (G149-G151, 2026-10-21)
+
+Phase 2 of the discovery roadmap. The catalog from phase 1 fills the database;
+this phase is how a student actually finds something in it, without the app
+ever pretending to judge them.
+
+1. **G149 - Discover page.** Search covers the words a page actually states
+   (title, provider, country, level, fields of study, funding, amount, deadline
+   wording, language requirement), folded for case, accents, quote and dash
+   style. Filters: level (bachelor / master / PhD, matched from the page's own
+   wording as whole words), country, field of study, provider (only portals that
+   actually have records) and deadline state (still open / closing within 90
+   days / already closed / no readable date). Ordering is fixed and explainable:
+   open deadlines first (closest first), then records without a readable date,
+   then closed ones. Each card shows the page's own deadline sentence next to
+   the parsed state, so a mis-parse is visible rather than hidden.
+2. **G150 - the hand-off.** "Check against my profile" runs
+   `eligibility.evaluate` on the record's stored, verbatim-verified values and
+   shows the same `ReportCard` the Eligibility page uses, inside a dialog. The
+   save toggle writes to Saved Opportunities; the dialog says so when the
+   profile is empty (every requirement would read unknown).
+3. **G151 - local only.** The search is a loop over rows already in SQLite. No
+   query, filter or result leaves the machine, and browsing never writes to a
+   record - asserted by a test that compares the stored row before and after a
+   search and a reload.
+4. **Wording.** The page lead says "a match is not a verdict", the result count
+   says "N of M record(s) match", and the dialog repeats that nothing is a
+   probability and every requirement must be confirmed on the official page.

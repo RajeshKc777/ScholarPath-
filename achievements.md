@@ -26,16 +26,63 @@ is finished, not when it is started. Each entry names the goal it satisfies
   deterministically, leaky replies withheld), and profile facts stated in chat
   are proposed for saving through an explicit, verbatim-verified confirmation
   card. **Phase 1 of the discovery roadmap** adds the sources registry, the
-  crawler and the background catalog run (A26).
+  crawler and the background catalog run (A26); **phase 2** adds the Discover
+  page - search and filters over the stored records with an eligibility
+  hand-off (A27).
 - Licence: proprietary, source-available, view-only (`LICENSE`).
-- Tests: **445 passing** (`pytest`, ~38 s).
-- Next: **Phase 2** of the owner roadmap (catalog search, filters and the
-  eligibility hand-off built on the catalog records); M7 hardening remains done
-  for packaging, with the security review carried by A25/G143.
+- Tests: **488 passing** (`pytest`, ~42 s).
+- Next: **Phase 3** of the owner roadmap (to be scoped with the owner before
+  any code); M7 packaging and the security review remain in place.
 
 ---
 
 ## Log (newest first)
+
+### 2026-10-21 — A27 — Phase 2: Discover search, filters and the profile hand-off (G149-G151)
+
+**Satisfies:** G149 (search + filters), G150 (eligibility hand-off + save),
+G151 (local-only, browsing writes nothing). Builds on A26's catalog records.
+
+| Area | File(s) |
+| ---- | ------- |
+| Matching: accent/case/quote/dash folding, whole-word levels, deadline states | `src/scholarpath/search.py` |
+| One profile-payload reader for both pages | `src/scholarpath/profiles.py` (`stored_profile_payload`) |
+| Discover page: search box, five filters, counts, cards, empty states | `src/scholarpath/ui/discover_page.py` |
+| The record's checks in a dialog, reusing the Eligibility page's card | `src/scholarpath/ui/eligibility_dialog.py` |
+| Sidebar entry, page at index 6, reload on open, index map | `src/scholarpath/ui/main_window.py` |
+| Tests | `tests/test_search.py` (26), `tests/test_discover_page.py` (14), `tests/test_navigation.py` (2) |
+
+Behaviour: **Discover** searches the records the catalog already holds. Text
+search folds accents ("turkiye" finds "Türkiye") and every word must appear;
+level is read from the page's own wording as whole words ("doctoral" matches
+PhD, "BSc and MA" matches both, "Bacheloropolis" matches neither); the deadline
+filter uses the stored, parsed date only, so an ambiguous "05/11/2026" stays
+"no readable date" instead of being guessed; other filters read only their own
+field (a record titled "Netherlands Grant" with country Germany is not a
+country match). Results are ordered open-first by date, then undated, then
+closed. Each card shows the page's sentence ("The page says: ...") beside the
+parsed state. **Check against my profile** opens the deterministic checks on
+that record's verified values; **Save** adds it to Saved Opportunities.
+
+**Evidence:** **488 passing** in ~42 s. New tests cover the folding and
+whole-word rules, the five deadline states and their phrases, field-isolation
+of every filter, deterministic ordering, honest empty states, saving from a
+card, a record not changing while browsing, the hand-off running the same
+engine as the Eligibility page (identical states), an empty profile flagged in
+the dialog, and every sidebar name landing on its own page. Rendered the real
+page off-screen at 1120 px with three seeded records: 3 cards, "3 of 3
+record(s) match - 2 with an open deadline", CLOSING SOON / OPEN / NO DATE
+chips, and searching "germany" narrowed it to 1 of 3.
+
+**Known limits:** matching is a substring search over stored text (honest as a
+reading aid, not a linguistic search - "bachelor" finds "Bacheloropolis");
+level matching depends on how the page words it, so an unusual phrase falls
+through to "any level" rather than being guessed; "closing soon" is a fixed
+90-day window; the eligibility hand-off reuses the record's stored values as of
+the last catalog run - a page that changed since then is caught by **Re-check**,
+not by Discover; saving is per record, not per search.
+
+---
 
 ### 2026-10-21 — A26 — Phase 1: catalog + crawler (G144-G148)
 

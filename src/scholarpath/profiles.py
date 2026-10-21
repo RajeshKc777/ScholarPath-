@@ -93,6 +93,21 @@ class Profile(BaseModel):
         return cls(**accepted), dropped
 
 
+def stored_profile_payload(record: dict[str, Any] | None) -> dict[str, Any]:
+    """The stored profile as plain field values (empty when none is saved).
+
+    One place for "profile row -> values the eligibility engine reads", so the
+    Eligibility page and the Discover hand-off can never disagree.
+    """
+    if not record:
+        return {}
+    payload = record.get("data", {})
+    if not isinstance(payload, dict):
+        return {}
+    profile, _dropped = Profile.from_payload(payload)
+    return profile.model_dump()
+
+
 def merge_confirmed(profile: Profile, confirmed: dict[str, str | None]) -> Profile:
     """Apply user-confirmed extraction fields onto the profile.
 
