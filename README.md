@@ -15,7 +15,7 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?style=flat-square&logo=windows&logoColor=white)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Qt](https://img.shields.io/badge/Qt-6.12-41CD52?style=flat-square&logo=qt&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-562%20passing-2ea043?style=flat-square&logo=pytest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-573%20passing-2ea043?style=flat-square&logo=pytest&logoColor=white)
 ![Local first](https://img.shields.io/badge/local--first-no%20cloud%20account-8B5CF6?style=flat-square)
 ![License](https://img.shields.io/badge/license-view--only%20%C2%B7%20all%20rights%20reserved-b3261e?style=flat-square)
 
@@ -85,7 +85,7 @@ Click any image to open it full size.
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/screens/settings.png" alt="Settings page: privacy switches, local data counts and MCP status" width="420">
+      <img src="docs/screens/settings.png" alt="Settings page: privacy disclosures, local data counts and MCP status" width="420">
       <br>
       <sub><b>Settings</b> — what runs, what stays local, and exactly which third party receives each opt-in feature.</sub>
     </td>
@@ -315,7 +315,9 @@ flowchart LR
 - **Privacy switches** — voice input, the spoken reply and web search are all
   **off by default** (`[privacy]` in config.toml). The Settings page states
   exactly what each one sends and to whom; nothing leaves the device until
-  you switch one on.
+  you switch one on. While a switch is off, the mic and Live voice controls
+  are disabled and greyed out; clicking one opens Settings at the privacy
+  section, which names the exact config key.
 
 ### ⚙️ Under the hood
 
@@ -394,7 +396,7 @@ scholarpath --init-config   # write the configuration template, then exit
 scholarpath --config path\to\config.toml
 scholarpath --version
 python -m scholarpath       # equivalent to the console script
-pytest                      # 562 tests, no network required (fake server on loopback)
+pytest                      # 573 tests, no network required (fake server on loopback)
 ```
 
 </details>
@@ -675,7 +677,7 @@ src/scholarpath/
     ├── freshness.py       the background re-check worker (no UI code in the runner)
     ├── reminders.py       the Windows notification for a due deadline (local only)
     ├── recheck.py         the Re-check worker shared by the eligibility and saved pages
-    ├── settings_page.py    honest status: model, local data, privacy switches, MCP tools
+    ├── settings_page.py    honest status: model, local data, privacy disclosures, MCP tools
     ├── profile_suggestion.py transcript card confirming chat-stated facts
     ├── confirm_row.py     shared per-value confirm row (tick, edit, marker)
     ├── mic_button.py      microphone button with the listening ripple
@@ -695,7 +697,7 @@ the same discipline — business logic stays testable without a network or a mod
 
 | Gate | How it is enforced |
 | ---- | ------------------ |
-| Tests | `pytest` — config validation, gateway contract, model routing, adapter round-trips against a fake server, chat turns, failure paths, verbatim extraction checks, SQLite profile/document/scholarship round-trips, fetch guardrails (including SSRF blocking) against a fake HTTP server, privacy switches, re-check logic, sources registry validation, crawler (robots, sitemaps, feeds, redirects, 304, pacing, page cap), the catalog run (dedup, merge, conflicts, invented values, cancel, old-database migration), Discover (text folding, whole-word levels, five deadline states, filter isolation, ordering, empty states, the hand-off, navigation) and Phase 3 (unchanged / changed / failed re-check, version history, expiry only from a stored date, the stored difference, reminder schedule and no repeats, CSV + ICS content, every warning sign and lookalike domain, the never-a-verdict wording check) |
+| Tests | `pytest` — config validation, gateway contract, model routing, adapter round-trips against a fake server, chat turns, failure paths, verbatim extraction checks, SQLite profile/document/scholarship round-trips, fetch guardrails (including SSRF blocking) against a fake HTTP server, privacy switches, UI privacy gates and status elision, re-check logic, sources registry validation, crawler (robots, sitemaps, feeds, redirects, 304, pacing, page cap), the catalog run (dedup, merge, conflicts, invented values, cancel, old-database migration), Discover (text folding, whole-word levels, five deadline states, filter isolation, ordering, empty states, the hand-off, navigation) and Phase 3 (unchanged / changed / failed re-check, version history, expiry only from a stored date, the stored difference, reminder schedule and no repeats, CSV + ICS content, every warning sign and lookalike domain, the never-a-verdict wording check) |
 | Honesty | Extraction values must appear verbatim in the source (document or fetched page); unverified proposals are visibly flagged and never auto-applied |
 | Untrusted input | Fetched page content is data only, wrapped in markers with an explicit ignore-instructions instruction |
 | Secrets | Never in source or config templates; config is local + git-ignored |

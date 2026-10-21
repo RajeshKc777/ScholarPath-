@@ -106,6 +106,7 @@ class MicButton(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
         palette = theme.PALETTE
+        enabled = self.isEnabled()
         outer = min(self.width(), self.height()) / 2.0 - 1.0
         center = QPointF(self.width() / 2.0, self.height() / 2.0)
 
@@ -124,13 +125,15 @@ class MicButton(QWidget):
             painter.drawEllipse(center, outer * 0.62, outer * 0.62)
             glyph_color = QColor("#FFFFFF")
         else:
-            if self._hover:
+            if self._hover and enabled:
                 painter.setPen(Qt.NoPen)
                 fill = QColor(palette["border"])
                 fill.setAlphaF(0.55 if not self._pressed else 0.9)
                 painter.setBrush(fill)
                 painter.drawEllipse(center, outer * 0.62, outer * 0.62)
-            glyph_color = QColor(palette["text_secondary"])
+            glyph_color = QColor(
+                palette["text_secondary"] if enabled else palette["text_muted"]
+            )
 
         font = QFont("Segoe MDL2 Assets")
         font.setPixelSize(16)

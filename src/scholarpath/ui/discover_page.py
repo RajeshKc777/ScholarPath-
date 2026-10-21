@@ -344,6 +344,11 @@ class DiscoverPage(QWidget):
         self._provider.blockSignals(False)
 
     # -- results -----------------------------------------------------------
+    def focus_search(self) -> None:
+        """Put the cursor in the search box (used by the quick action)."""
+        self._search.setFocus()
+        self._search.selectAll()
+
     def reload(self) -> None:
         """Re-read the catalog (a run or a save may have changed it)."""
         records = list(self._database.catalog_records())

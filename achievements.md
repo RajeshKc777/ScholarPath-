@@ -35,18 +35,44 @@ is finished, not when it is started. Each entry names the goal it satisfies
   trust boundary (A29). The README now also carries a banner, seven
   badges and eight real screenshots of the shipped pages (A30).
 - Licence: proprietary, source-available, view-only (`LICENSE`).
-- Tests: **562 passing** (`pytest`, ~43 s).
+- Tests: **573 passing** (`pytest`, ~57 s).
 - M7: packaged and bundle-audited (`dist\ScholarPathAI`,
   `packaging\build.ps1`), but **not clean-Windows verified**; there is no
   installer and no separate security/performance review. G138, G207 and G113
   are `[~]` (A31).
 - Next: **G165** (database encryption), **G166** (OCR/TTS interfaces) and
-  **G167** (GitHub Actions CI), then the UI polish and live checks (G168-G170).
-  G164 (the truthful README) is done in A31.
+  **G167** (GitHub Actions CI), then the live checks (G169-G170). G164 (the
+  truthful README) and G168 (UI privacy/status) are done in A31 and A32.
 
 ---
 
 ## Log (newest first)
+
+### 2026-10-21 - A32 - Privacy gates, word-aware status, and panels that fit (G168)
+
+**Satisfies:** G168.
+
+| Area | What changed |
+| ---- | ------------ |
+| Privacy gates | `PrivacyGate` wraps the mic and Live voice controls. The real control is disabled while its switch is off; the tooltip is exactly "Off. Turn on in Settings > Privacy"; a click, Enter or Space opens Settings and scrolls the privacy card into view. The mic paints muted when disabled and Live voice has a `:disabled` style. |
+| Status strip | `ElidedStatusLabel` elides only between words and keeps the full sentence in the tooltip. The config path is a short "Config" label with the full path in its tooltip, so the message has the room. |
+| Copy | The chat subtitle, hint, status line and the "What works today" tags follow `[privacy]`: web search and voice read "Off (enable in Settings)" until on, and Conversation reads "Offline" with the stub. |
+| Navigation | "Find Scholarships" opens Discover and focuses its search; the stale "search is not built yet" tooltip and the dead `_not_available` path are gone. |
+| Avatar | The top-right avatar is the profile's first letter, or a person glyph when no name is stored. |
+| Layout | The right panel no longer needs the 23 px scroll at 1120x720; My Profile sits inside a `QScrollArea`, so the Save row never clips at higher scaling. |
+
+**Evidence:** **573 tests pass** (562 before plus 11 in
+`tests/test_ui_privacy_status.py`), exit 0. An offscreen probe at 1120x720
+measured the right viewport and holder both at 584 px with no vertical
+scrollbar; the profile Save row is visible; a 180 px status elides to
+`Live voice is off. Turn it on in Settings …` with the full sentence in the
+tooltip; a gated mic click lands on Settings with the privacy card in view.
+
+**Known limits:** Settings is still read-only - the switch itself is
+`[privacy]` in config.toml, so the tooltip's "Turn on in Settings" opens the
+explanation, not an editor. At Windows scaling above 100% the right panel and
+My Profile scroll instead of clipping, by design. The right-panel fit is tuned
+for 1120x720; a wider font may scroll.
 
 ### 2026-10-21 - A31 - Truth pass: M7 is not done, Phase 4 is tracked, and the docs say what the code does (G164)
 
@@ -1211,5 +1237,5 @@ pydantic 2.14.1, pytest 9.1.1 — all import-tested.
 - G138, G207 and M7 (G113) - packaged folder build produced and bundle-audited;
   clean-Windows install, installer and a separate security/performance review
   are still missing.
-- G165, G166, G167, G168, G169, G170 - Phase 4 and the next steps; G164 is done
-  in A31.
+- G165, G166, G167, G169, G170 - Phase 4 and the next steps; G164 is done in
+  A31 and G168 in A32.

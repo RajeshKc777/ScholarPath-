@@ -185,6 +185,7 @@ class SettingsPage(QWidget):
 
         scroll = QScrollArea(self)
         scroll.setObjectName("DocScroll")
+        self._scroll = scroll
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         holder = QWidget()
@@ -289,6 +290,7 @@ class SettingsPage(QWidget):
 
         # -- privacy: what may leave this device ------------------------------
         privacy_layout = card("Privacy: what may leave this device")
+        self._privacy_card = privacy_layout.parentWidget()
         switches = self._config.privacy
         intro = QLabel(
             "All three are OFF by default. Nothing you type, say or search "
@@ -400,6 +402,15 @@ class SettingsPage(QWidget):
         reminder_key.setObjectName("DocMeta")
         reminder_key.setWordWrap(True)
         fresh_layout.addWidget(reminder_key)
+
+    def focus_privacy(self) -> None:
+        """Scroll the privacy card into view (a gated voice control sends us here)."""
+        card = getattr(self, "_privacy_card", None)
+        if card is None:
+            return
+        self._scroll.ensureWidgetVisible(card)
+        card.setFocusPolicy(Qt.StrongFocus)
+        card.setFocus()
 
     def _open_folder(self) -> None:
         folder = config_path().parent

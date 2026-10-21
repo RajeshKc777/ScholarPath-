@@ -3,7 +3,8 @@
 Layout follows the user-supplied dashboard reference: navy sidebar, top bar,
 gradient welcome card, quick-action tiles, conversation column, academic
 profile panel. Every value shown is real application state - the profile and
-feature tiles are explicitly marked as not built yet.
+catalog values come from the local database, and the capability rows follow
+the config.
 """
 
 from __future__ import annotations
@@ -84,7 +85,7 @@ def should_stick_to_bottom(
 GLYPH_CHECK = "\uE73E"
 
 ACTION_TILES = (
-    ("Find Scholarships", "Official pages you paste", "M4", GLYPH_STAR, "#FFF1E8", "#FF4500"),
+    ("Find Scholarships", "Search the verified catalog", "M4", GLYPH_STAR, "#FFF1E8", "#FF4500"),
     ("Check Eligibility", "Rule-based, no gaps", "M5", GLYPH_CHECK, "#EAF9F0", "#10B981"),
     ("Explore Countries", "Search the catalog", "M6", GLYPH_GLOBE, "#EAF2FF", "#3B82F6"),
     ("Upload Documents", "Marksheets, IDs", "M3", GLYPH_DOCUMENT, "#F3EEFF", "#8B5CF6"),
@@ -455,6 +456,158 @@ class TurnWidget(QWidget):
         super().leaveEvent(event)
 
 
+class PrivacyGate(QWidget):
+    """Wraps a control that privacy keeps off.
+
+    The inner control is genuinely disabled (so it cannot act), but a disabled
+    child does not take mouse events, so the wrapper receives the click and
+    opens the place that explains the switch. While privacy is on the wrapper
+    is transparent and the real control behaves normally.
+    """
+
+    clicked = Signal()
+
+    def __init__(self, button: QWidget, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._button = button
+        self._button_tip = button.toolTip()
+        self._gated = False
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        button.setParent(self)
+        layout.addWidget(button)
+        self.setFocusPolicy(Qt.NoFocus)
+        # A transparent shield sits over the disabled control. Qt skips
+        # disabled children when hit-testing; the shield makes the click
+        # target explicit instead of relying on event propagation.
+        self._shield = QWidget(self)
+        self._shield.setAttribute(Qt.WA_NoSystemBackground, True)
+        self._shield.setStyleSheet("background: transparent;")
+        self._shield.installEventFilter(self)
+        self._shield.hide()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt API
+        self._shield.setGeometry(self.rect())
+        super().resizeEvent(event)
+
+    def eventFilter(self, watched, event) -> bool:  # noqa: N802 - Qt API
+        if watched is self._shield and self._gated:
+            if event.type() == QEvent.Type.MouseButtonPress:
+                if event.button() == Qt.LeftButton:
+                    self.setFocus(Qt.MouseFocusReason)
+                    return True
+            elif event.type() == QEvent.Type.MouseButtonRelease:
+                if (
+                    event.button() == Qt.LeftButton
+                    and self._shield.rect().contains(event.position().toPoint())
+                ):
+                    self.clicked.emit()
+                    return True
+            elif event.type() == QEvent.Type.KeyPress and event.key() in (
+                Qt.Key_Return,
+                Qt.Key_Enter,
+                Qt.Key_Space,
+            ):
+                self.clicked.emit()
+                return True
+        return super().eventFilter(watched, event)
+
+    def set_gated(self, gated: bool, reason: str = "Off. Turn on in Settings > Privacy") -> None:
+        self._gated = gated
+        self._button.setEnabled(not gated)
+        self._button.setToolTip(reason if gated else self._button_tip)
+        self.setToolTip(reason if gated else "")
+        self.setCursor(Qt.PointingHandCursor if gated else Qt.ArrowCursor)
+        self.setFocusPolicy(Qt.StrongFocus if gated else Qt.NoFocus)
+        self._shield.setToolTip(reason if gated else "")
+        self._shield.setCursor(Qt.PointingHandCursor if gated else Qt.ArrowCursor)
+        self._shield.setFocusPolicy(Qt.NoFocus)
+        if gated:
+            self._shield.setGeometry(self.rect())
+            self._shield.show()
+            self._shield.raise_()
+            self.setAccessibleName(self._button.accessibleName() or "Unavailable")
+            self.setAccessibleDescription(reason)
+        else:
+            self._shield.hide()
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt API
+        if self._gated and event.button() == Qt.LeftButton:
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802 - Qt API
+        if (
+            self._gated
+            and event.button() == Qt.LeftButton
+            and self.rect().contains(event.position().toPoint())
+        ):
+            self.clicked.emit()
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 - Qt API
+        if self._gated and event.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
+            self.clicked.emit()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+
+class ElidedStatusLabel(QLabel):
+    """A one-line status that elides only between words.
+
+    ``text()`` is what is painted (possibly with an ellipsis); ``full_text()``
+    and the tooltip always keep the complete sentence.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._full_text = ""
+        self.setMinimumWidth(0)
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+
+    def full_text(self) -> str:
+        return self._full_text
+
+    def set_full_text(self, text: str) -> None:
+        self._full_text = text
+        self.setToolTip(text)
+        self._apply_elision()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt API
+        super().resizeEvent(event)
+        self._apply_elision()
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 - Qt API
+        hint = super().minimumSizeHint()
+        return QSize(0, hint.height())
+
+    def _apply_elision(self) -> None:
+        text = self._full_text
+        width = self.width() - 2
+        if not text or width <= 0:
+            super().setText(text)
+            return
+        metrics = self.fontMetrics()
+        if metrics.horizontalAdvance(text) <= width:
+            super().setText(text)
+            return
+        words = text.split()
+        while words:
+            candidate = " ".join(words) + " \u2026"
+            if metrics.horizontalAdvance(candidate) <= width:
+                super().setText(candidate)
+                return
+            words.pop()
+        # One unbroken word wider than the strip: character elision is the
+        # only remaining option and still beats drawing over the next widget.
+        super().setText(metrics.elidedText(text, Qt.ElideRight, width))
+
+
 class MainWindow(QMainWindow):
     def __init__(
         self,
@@ -661,6 +814,7 @@ class MainWindow(QMainWindow):
         self._page_title = title
         self.subtitle = QLabel("Starting\u2026", bar)
         self.subtitle.setObjectName("PageSub")
+        self.subtitle.setWordWrap(True)
         titles.addWidget(title)
         titles.addWidget(self.subtitle)
         row.addLayout(titles)
@@ -685,13 +839,16 @@ class MainWindow(QMainWindow):
             "unavailable the offline Windows voice is used. Click again to end."
         )
         self.voice_mode_button.clicked.connect(self._toggle_voice_mode)
-        row.addWidget(self.voice_mode_button, 0, Qt.AlignVCenter)
+        self._voice_gate = PrivacyGate(self.voice_mode_button, bar)
+        self._voice_gate.clicked.connect(self._open_privacy_settings)
+        row.addWidget(self._voice_gate, 0, Qt.AlignVCenter)
 
-        avatar = QLabel("S", bar)
-        avatar.setObjectName("Avatar")
-        avatar.setFixedSize(34, 34)
-        avatar.setAlignment(Qt.AlignCenter)
-        row.addWidget(avatar)
+        self._avatar = QLabel(GLYPH_PERSON, bar)
+        self._avatar.setObjectName("Avatar")
+        self._avatar.setFixedSize(34, 34)
+        self._avatar.setAlignment(Qt.AlignCenter)
+        self._avatar.setToolTip("No profile saved yet. Open My Profile.")
+        row.addWidget(self._avatar)
         return bar
 
     # -- body -------------------------------------------------------------
@@ -717,7 +874,13 @@ class MainWindow(QMainWindow):
         self._profile_page = ProfilePage(
             self._database, on_saved=self._on_profile_saved, parent=self
         )
-        self._pages.addWidget(self._profile_page)
+        self._profile_scroll = QScrollArea(self)
+        self._profile_scroll.setObjectName("ProfileScroll")
+        self._profile_scroll.setWidgetResizable(True)
+        self._profile_scroll.setFrameShape(QFrame.NoFrame)
+        self._profile_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._profile_scroll.setWidget(self._profile_page)
+        self._pages.addWidget(self._profile_scroll)
 
         self._documents_page = DocumentsPage(
             self._database,
@@ -903,20 +1066,16 @@ class MainWindow(QMainWindow):
         for index, (
             title_text,
             subtitle,
-            milestone,
+            _milestone,
             glyph,
             tint,
             accent,
         ) in enumerate(ACTION_TILES):
-            working = title_text in (
-                "Upload Documents", "Find Scholarships", "Check Eligibility",
-                "Explore Countries",
-            )
             tile = ActionTile(
                 glyph,
                 title_text,
                 subtitle,
-                None if working else "Soon",
+                None,
                 tint,
                 accent,
                 tiles,
@@ -926,10 +1085,9 @@ class MainWindow(QMainWindow):
                 tile.clicked.connect(lambda _checked=False: self.select_page("documents"))
             elif title_text == "Find Scholarships":
                 tile.setToolTip(
-                    "Search the web in the chat, or paste an official scholarship "
-                    "page and verify it here."
+                    "Open Discover to search the verified scholarship catalog."
                 )
-                tile.clicked.connect(lambda _checked=False: self.select_page("research"))
+                tile.clicked.connect(lambda _checked=False: self._find_scholarships())
             elif title_text == "Check Eligibility":
                 tile.setToolTip(
                     "Deterministic checks of your saved records against your profile."
@@ -937,22 +1095,12 @@ class MainWindow(QMainWindow):
                 tile.clicked.connect(
                     lambda _checked=False: self.select_page("eligibility")
                 )
-            elif title_text == "Explore Countries":
+            else:  # Explore Countries
                 tile.setToolTip(
                     "Browse the stored catalog by country, level and deadline."
                 )
                 tile.clicked.connect(
                     lambda _checked=False: self.select_page("discover")
-                )
-            else:
-                tile.setToolTip(
-                    f"{title_text} arrives in Milestone {milestone[1:]}. "
-                    "Not available in this build."
-                )
-                tile.clicked.connect(
-                    lambda _checked=False, name=title_text, m=milestone: self._not_available(
-                        name, m
-                    )
                 )
             grid.addWidget(tile, index // 2, index % 2)
         column.addWidget(tiles)
@@ -1000,6 +1148,8 @@ class MainWindow(QMainWindow):
                 "Settings to let a short microphone clip reach Google's speech "
                 "service for transcription."
             )
+        self._mic_gate = PrivacyGate(self.mic_button, self.composer)
+        self._mic_gate.clicked.connect(self._open_privacy_settings)
 
         self.input = ChatInput(self.composer)
         self.input.setObjectName("Input")
@@ -1016,7 +1166,7 @@ class MainWindow(QMainWindow):
         )
 
         row.addWidget(self.attach, 0, Qt.AlignVCenter)
-        row.addWidget(self.mic_button, 0, Qt.AlignVCenter)
+        row.addWidget(self._mic_gate, 0, Qt.AlignVCenter)
         row.addWidget(self.input, 1)
         row.addWidget(self.send_button, 0, Qt.AlignVCenter)
         column.addWidget(self.composer)
@@ -1047,6 +1197,7 @@ class MainWindow(QMainWindow):
 
         self.hint = QLabel(panel)
         self.hint.setObjectName("Hint")
+        self.hint.setWordWrap(True)
         column.addWidget(self.hint)
         return panel
 
@@ -1054,6 +1205,7 @@ class MainWindow(QMainWindow):
     def _build_right_panel(self) -> QWidget:
         scroll = QScrollArea(self)
         scroll.setObjectName("RightScroll")
+        self._right_scroll = scroll
         scroll.setFixedWidth(322)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
@@ -1063,7 +1215,7 @@ class MainWindow(QMainWindow):
         holder.setObjectName("RightBody")
         column = QVBoxLayout(holder)
         column.setContentsMargins(0, 0, 4, 8)
-        column.setSpacing(12)
+        column.setSpacing(8)
 
         column.addWidget(self._build_profile_card(holder))
         column.addWidget(self._build_info_card(holder))
@@ -1077,8 +1229,8 @@ class MainWindow(QMainWindow):
         card = QFrame(parent)
         card.setObjectName("PanelCard")
         column = QVBoxLayout(card)
-        column.setContentsMargins(16, 14, 16, 16)
-        column.setSpacing(10)
+        column.setContentsMargins(16, 12, 16, 14)
+        column.setSpacing(9)
 
         header = QHBoxLayout()
         title = QLabel("Your Academic Profile", card)
@@ -1156,7 +1308,7 @@ class MainWindow(QMainWindow):
         card = QFrame(parent)
         card.setObjectName("InfoCard")
         row = QHBoxLayout(card)
-        row.setContentsMargins(12, 10, 12, 10)
+        row.setContentsMargins(12, 9, 12, 9)
         row.setSpacing(9)
 
         mark = QLabel("i", card)
@@ -1182,35 +1334,132 @@ class MainWindow(QMainWindow):
         card = QFrame(parent)
         card.setObjectName("PanelCard")
         column = QVBoxLayout(card)
-        column.setContentsMargins(16, 14, 16, 14)
-        column.setSpacing(8)
+        column.setContentsMargins(16, 9, 16, 9)
+        column.setSpacing(4)
 
         title = QLabel("What works today", card)
         title.setObjectName("CardTitle")
         column.addWidget(title)
 
         rows = (
-            ("Conversation", "LIVE", True, "Chat replies run through the model gateway."),
-            ("Profile", "LIVE", True, "Local form + confirmed document values."),
-            ("Documents", "LIVE", True, "Upload, read locally, confirm every value."),
-            ("Research", "LIVE", True, "Official pages you paste; search is not built yet."),
-            ("Eligibility", "LIVE", True, "Rule-based checks of records vs your profile."),
-            ("Saved list", "LIVE", True, "You save; comparison and checklists included."),
-            ("Tools (MCP)", "Optional", False, "Off by default; configured in config.toml."),
+            ("conversation", "Conversation"),
+            ("profile", "Profile + documents"),
+            ("research", "Research"),
+            ("eligibility", "Eligibility"),
+            ("saved", "Saved list"),
+            ("web", "Web search"),
+            ("voice", "Voice"),
+            ("mcp", "Tools (MCP)"),
         )
-        for name, tag_text, live, tip in rows:
+        self._capability_tags: dict[str, QLabel] = {}
+        for key, name in rows:
             row = QHBoxLayout()
             row.setSpacing(8)
             label = QLabel(name, card)
             label.setObjectName("CapName")
             row.addWidget(label)
             row.addStretch(1)
-            tag = QLabel(tag_text, card)
-            tag.setObjectName("CapLive" if live else "CapSoon")
-            tag.setToolTip(tip)
+            tag = QLabel("", card)
+            tag.setObjectName("CapSoon")
+            self._capability_tags[key] = tag
             row.addWidget(tag)
             column.addLayout(row)
+        self._refresh_capabilities()
         return card
+
+    def _refresh_capabilities(self) -> None:
+        """Keep the right-panel rows in step with the config."""
+        tags = getattr(self, "_capability_tags", None)
+        if not tags:
+            return
+        live = self._controller.gateway_name != "stub"
+        web = self._privacy_flag("web_search")
+        stt = self._privacy_flag("voice_stt")
+        tts = self._privacy_flag("voice_tts")
+
+        def set_tag(key: str, text: str, good: bool, tip: str) -> None:
+            tag = tags.get(key)
+            if tag is None:
+                return
+            if tag.text() != text:
+                tag.setText(text)
+            name = "CapLive" if good else "CapSoon"
+            if tag.objectName() != name:
+                tag.setObjectName(name)
+                tag.style().unpolish(tag)
+                tag.style().polish(tag)
+            tag.setToolTip(tip)
+
+        set_tag(
+            "conversation",
+            "LIVE" if live else "Offline",
+            live,
+            "Chat replies run through the local model service."
+            if live
+            else "Offline preview - placeholder replies with no model behind them.",
+        )
+        set_tag(
+            "profile",
+            "LIVE",
+            True,
+            "Local form + documents read on this device; every value is confirmed.",
+        )
+        set_tag(
+            "research",
+            "LIVE",
+            True,
+            "Official pages you paste; every value is verified."
+            + (
+                " Web search is on for current ones."
+                if web
+                else " Web search is off (enable in Settings > Privacy)."
+            ),
+        )
+        set_tag(
+            "eligibility",
+            "LIVE",
+            True,
+            "Rule-based checks of records against your profile; no probabilities.",
+        )
+        set_tag(
+            "saved",
+            "LIVE",
+            True,
+            "You save; side-by-side comparison and checklists are included.",
+        )
+        set_tag(
+            "web",
+            "On" if web else "Off",
+            web,
+            "On. A search question and the pages it returns go to DuckDuckGo."
+            if web
+            else "Off (enable in Settings > Privacy).",
+        )
+        if stt and tts:
+            voice_text, voice_good = "On", True
+            voice_tip = (
+                "On. A microphone clip goes to Google's speech service and the "
+                "reply text to Microsoft's."
+            )
+        elif stt or tts:
+            voice_text, voice_good = "Partly", False
+            voice_tip = (
+                f"Voice input is {'on' if stt else 'off (enable in Settings > Privacy)'}. "
+                f"Spoken replies are {'on' if tts else 'off (enable in Settings > Privacy)'}."
+            )
+        else:
+            voice_text, voice_good = "Off", False
+            voice_tip = (
+                "Voice input is off (enable in Settings > Privacy). Spoken "
+                "replies are off (enable in Settings > Privacy)."
+            )
+        set_tag("voice", voice_text, voice_good, voice_tip)
+        set_tag(
+            "mcp",
+            "Optional",
+            False,
+            "Off by default; configured in config.toml.",
+        )
 
     # -- status strip -----------------------------------------------------
     def _build_status_strip(self) -> QWidget:
@@ -1221,16 +1470,17 @@ class MainWindow(QMainWindow):
         row.setContentsMargins(24, 0, 24, 0)
         row.setSpacing(8)
 
-        self.status = QLabel(strip)
+        self.status = ElidedStatusLabel(strip)
         self.status.setObjectName("Status")
-        row.addWidget(self.status)
-        row.addStretch(1)
+        row.addWidget(self.status, 1)
 
         path = config_path()
-        path_label = QLabel(self._elided_path(str(path)), strip)
-        path_label.setObjectName("StatusPath")
-        path_label.setToolTip(str(path))
-        row.addWidget(path_label)
+        # The path is too long to compete with the message; the tooltip keeps
+        # it available without truncating either one (G168).
+        self._config_path_label = QLabel("Config", strip)
+        self._config_path_label.setObjectName("StatusPath")
+        self._config_path_label.setToolTip(f"Config file: {path}")
+        row.addWidget(self._config_path_label, 0)
         return strip
 
     # -- page selection -------------------------------------------------------
@@ -1271,8 +1521,8 @@ class MainWindow(QMainWindow):
         if name == "discover" and self._discover_page is not None:
             self._discover_page.reload()  # a catalog run may have added records
         self._page_title.setText(titles.get(name, titles["chat"]))
-        if getattr(self, "voice_mode_button", None) is not None:
-            self.voice_mode_button.setVisible(name == "chat")
+        if getattr(self, "_voice_gate", None) is not None:
+            self._voice_gate.setVisible(name == "chat")
         self._notice = None  # a switch clears stale "not available" notices
         for key, button in self._nav_buttons.items():
             button.set_active(key == name)
@@ -1305,6 +1555,7 @@ class MainWindow(QMainWindow):
         profile, _dropped = Profile.from_payload(record["data"] if record else {})
 
         self._profile_name.setText(profile.student_name or "Not set up yet")
+        self._refresh_avatar(profile.student_name)
         self._profile_detail.setText(
             "Local profile \u00b7 stored in this app's data folder"
         )
@@ -1339,6 +1590,31 @@ class MainWindow(QMainWindow):
         }
         for key, label in self._profile_values.items():
             label.setText(values.get(key, "\u2014"))
+
+    def _refresh_avatar(self, name: str) -> None:
+        """The top-right avatar: the profile's first letter, or a person icon."""
+        avatar = getattr(self, "_avatar", None)
+        if avatar is None:
+            return
+        stripped = (name or "").strip()
+        letter = ""
+        if stripped:
+            first = stripped[0]
+            letter = first.upper() if first.isalpha() else ""
+            if not letter:
+                letter = next((ch.upper() for ch in stripped if ch.isalpha()), "")
+        if letter:
+            avatar.setText(letter)
+            avatar.setStyleSheet("")
+            avatar.setToolTip(f"Your profile: {stripped}")
+            avatar.setAccessibleName("Profile avatar")
+        else:
+            avatar.setText(GLYPH_PERSON)
+            avatar.setStyleSheet(
+                "font-family: 'Segoe MDL2 Assets'; font-size: 17px;"
+            )
+            avatar.setToolTip("No profile saved yet. Open My Profile.")
+            avatar.setAccessibleName("No profile saved")
 
     # -- wiring -----------------------------------------------------------
     def _connect(self) -> None:
@@ -1451,13 +1727,24 @@ class MainWindow(QMainWindow):
         if self._controller.send(text):
             self.input.clear()
 
-    def _not_available(self, feature: str, milestone: str) -> None:
-        number = milestone.lstrip("M")
-        self._notice = (
-            f"Not available in this build \u2014 {feature} arrives in "
-            f"Milestone {number}."
-        )
-        self._refresh_status()
+    def _find_scholarships(self) -> None:
+        """The quick action opens Discover and puts the cursor in its search."""
+        self.select_page("discover")
+        try:
+            self._discover_page.focus_search()
+        except Exception:  # noqa: BLE001 - focus is a nicety, not navigation
+            logger.exception("the Discover search box could not be focused")
+
+    def _open_privacy_settings(self) -> None:
+        """A gated voice control sends the student to the privacy explanation."""
+        self.select_page("settings")
+        page = getattr(self, "_settings_page", None)
+        if page is None:
+            return
+        try:
+            page.focus_privacy()
+        except Exception:  # noqa: BLE001 - the page still opened
+            logger.exception("the privacy section could not be focused")
 
     def _on_search_started(self, query: str) -> None:
         """Tell the student the app is searching the web right now (G136)."""
@@ -1538,6 +1825,26 @@ class MainWindow(QMainWindow):
     def _voice_tts_allowed(self) -> bool:
         privacy = self._privacy()
         return bool(getattr(privacy, "voice_tts", False))
+
+    def _privacy_flag(self, name: str) -> bool:
+        return bool(getattr(self._privacy(), name, False))
+
+    def _apply_privacy_gates(self) -> None:
+        """Grey out what privacy keeps off, and keep it clickable to Settings."""
+        stt = self._voice_stt_allowed()
+        tts = self._voice_tts_allowed()
+        mic_gate = getattr(self, "_mic_gate", None)
+        if mic_gate is not None:
+            mic_gate.set_gated(not stt)
+        voice_gate = getattr(self, "_voice_gate", None)
+        if voice_gate is not None:
+            voice_gate.set_gated(not (stt and tts))
+            if not (stt and tts):
+                self.voice_mode_button.setChecked(False)
+        if self._voice_mode_active() and not (stt and tts):
+            self._end_voice_mode(
+                "Live voice is off. Turn it on in Settings > Privacy."
+            )
 
     def _toggle_voice(self) -> None:
         worker = getattr(self, "_voice_worker", None)
@@ -1767,7 +2074,7 @@ class MainWindow(QMainWindow):
         self.voice_bar.hide()
         self._scroll_transcript_to_bottom()  # the bar changed the viewport
         self.voice_mode_button.setChecked(False)
-        self.mic_button.setEnabled(True)
+        self._apply_privacy_gates()
         if notice:
             self._notice = notice
             self._refresh_status()
@@ -1827,7 +2134,7 @@ class MainWindow(QMainWindow):
             elif self._page_name == "documents":
                 text = f"{state}  \u00b7  documents  \u00b7  parsed locally, confirmed by you"
             elif self._page_name == "research":
-                text = f"{state}  \u00b7  research  \u00b7  official pages only  \u00b7  search in the chat"
+                text = f"{state}  \u00b7  research  \u00b7  official pages only  \u00b7  verified values"
             elif self._page_name == "eligibility":
                 text = (
                     f"{state}  \u00b7  eligibility  \u00b7  rule-based  \u00b7  no probabilities"
@@ -1837,21 +2144,25 @@ class MainWindow(QMainWindow):
             elif self._page_name == "settings":
                 text = f"{state}  \u00b7  settings  \u00b7  status only  \u00b7  config stays in config.toml"
             else:
+                if not self._privacy_flag("web_search"):
+                    search_state = "web search off (enable in Settings)"
+                elif self._controller.last_search:
+                    search_state = "web search used"
+                else:
+                    search_state = "no web search yet"
                 text = (
                     f"{state}  \u00b7  chat: {self._controller.chat_mode}  \u00b7  "
-                    f"{count} {noun}  \u00b7  "
-                + (
-                    "web search used"
-                    if self._controller.last_search
-                    else "no web search yet"
-                )
+                    f"{count} {noun}  \u00b7  {search_state}"
                 )
 
         if self.status.objectName() != name:
             self.status.setObjectName(name)
-        self.status.setText(text)
+        self.status.set_full_text(text)
         self.status.style().unpolish(self.status)
         self.status.style().polish(self.status)
+
+        self._apply_privacy_gates()
+        self._refresh_capabilities()
 
         live = self._controller.gateway_name != "stub"
         # Provider names stay in the logs - students only see "live" or "offline".
@@ -1898,29 +2209,29 @@ class MainWindow(QMainWindow):
                 "stays local."
             )
         elif live:
-            self.subtitle.setText(
-                "Model replies are live. Ask for current scholarships and the "
-                "app searches the web; official pages can be verified here."
-            )
+            web = "on" if self._privacy_flag("web_search") else "off (enable in Settings)"
+            self.subtitle.setText(f"Model replies are live \u00b7 web search {web}.")
         else:
             self.subtitle.setText(
                 "Offline preview \u2014 replies are placeholder text, no model behind them."
             )
 
         if live:
-            self.hint.setText(
-                "Model replies, web search, page verification, eligibility "
-                "checks and saved lists are live."
-            )
+            self.hint.setText(self._chat_hint())
         else:
             self.hint.setText(
                 "Offline preview \u2014 replies are placeholder text with no model behind them."
             )
 
-    @staticmethod
-    def _elided_path(text: str) -> str:
-        metrics = QFontMetrics(QFont("Consolas", 9))
-        return metrics.elidedText(text, Qt.ElideMiddle, 340)
+    def _chat_hint(self) -> str:
+        """One honest line about the optional features, from the config."""
+        web = "on" if self._privacy_flag("web_search") else "off (enable in Settings)"
+        stt = "on" if self._privacy_flag("voice_stt") else "off (enable in Settings)"
+        tts = "on" if self._privacy_flag("voice_tts") else "off (enable in Settings)"
+        return (
+            f"Web search {web}  \u00b7  voice input {stt}  \u00b7  spoken replies {tts}  "
+            "\u00b7  page verification, eligibility checks and saved lists are live."
+        )
 
 
 class _VoiceWorker(QThread):

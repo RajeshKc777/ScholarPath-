@@ -28,7 +28,7 @@ def window(tmp_path, monkeypatch):
 def test_every_named_page_opens_the_page_it_names(window: MainWindow) -> None:
     expected = {
         "chat": window._pages.widget(0),
-        "profile": window._profile_page,
+        "profile": window._profile_scroll,
         "documents": window._documents_page,
         "research": window._research_page,
         "eligibility": window._eligibility_page,

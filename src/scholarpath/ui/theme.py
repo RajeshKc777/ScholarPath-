@@ -143,6 +143,11 @@ QToolButton#VoiceModeButton:checked {{
     background: {p['tint_orange']};
     border-color: {p['border_orange']};
 }}
+QToolButton#VoiceModeButton:disabled {{
+    color: #A5AEBC;
+    background: #F5F6F8;
+    border-color: #E5E7EB;
+}}
 QLabel#StatusLive {{
     color: #15803D;
     background: transparent;
@@ -250,7 +255,8 @@ QToolButton#Copy:hover {{ color: {p['orange_deep']}; background: {p['tint_orange
 
 /* ---------------- right panel ---------------- */
 QScrollArea#RightScroll, QWidget#RightBody,
-QScrollArea#DocScroll, QWidget#DocBody {{
+QScrollArea#DocScroll, QWidget#DocBody,
+QScrollArea#ProfileScroll {{
     background: {p['page']};
     border: none;
 }}

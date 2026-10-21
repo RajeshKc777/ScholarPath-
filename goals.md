@@ -88,7 +88,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G165 | 40 | Local database encryption at rest (DPAPI or SQLCipher), with a migration for existing databases and an honest note on what the key protects and what it does not | `[ ]` |
 | G166 | 40 | OCR and TTS/STT sit behind small Protocol interfaces (like `gateway/`), with the Windows implementation as the default and a fake for tests; no behaviour change | `[ ]` |
 | G167 | 41 | GitHub Actions CI on `windows-latest`: Python 3.11, install `.[dev]`, run pytest and the bundle checks that need no build, and show a README status badge | `[ ]` |
-| G168 | 42 | UI privacy and status correctness: voice buttons disabled (and linked to Settings) when their switch is off, status text never cut mid-word, copy follows config, accurate tooltips, profile initial, and no clipped panels | `[ ]` |
+| G168 | 42 | UI privacy and status correctness: voice buttons disabled (and linked to Settings) when their switch is off, status text never cut mid-word, copy follows config, accurate tooltips, profile initial, and no clipped panels | `[x]` |
 | G169 | 43 | Live catalog run with the real model on 3 portals, at most 8 pages each, with a per-field verbatim audit; every bug found is fixed with a fake-server/fake-gateway regression test | `[ ]` |
 | G170 | 44 | A live-proofs checklist in `docs/live_checks.md` for forced-429 failover, neural-voice audibility and clean-Windows packaging; the goals stay open until the owner runs it and reports back | `[ ]` |
 
@@ -1403,6 +1403,19 @@ badge to the README. The suite must never depend on a live provider.
   when no name).
 - The right profile panel's 23 px clip is fixed; My Profile is wrapped in a
   scroll area so the Save row never clips at any Windows scaling.
+
+**Where it stands (2026-10-21).** Built in A32. `PrivacyGate` disables the
+real mic and Live voice controls while the switch is off (the mic paints muted,
+Live voice has a `:disabled` style), keeps the exact tooltip, and sends a click
+or Enter/Space to Settings with the privacy card scrolled into view. The status
+strip uses word-aware elision with the full sentence in its tooltip; the config
+path is a short "Config" label whose tooltip holds the path. The chat subtitle,
+hint, status line and the "What works today" tags read the `[privacy]` values,
+so web search and voice say "Off (enable in Settings)" until turned on.
+"Find Scholarships" opens Discover and focuses its search, the old
+`_not_available` path is gone, and the avatar is the profile's first letter
+(person glyph when empty). At 1120x720 the right panel needs no scrollbar; My
+Profile is a `QScrollArea`. 573 tests pass, including 11 new UI tests.
 
 ## 43. Live catalog verification (G169)
 
