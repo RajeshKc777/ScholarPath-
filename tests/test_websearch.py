@@ -168,7 +168,8 @@ def test_a_failed_search_becomes_an_honest_error_turn() -> None:
 
 
 def test_search_can_be_switched_off() -> None:
-    gateway = FakeGateway(['{"search": "grant"}', "never used"])
+    """With the switch off no search runs, and the model is told why."""
+    gateway = FakeGateway(['{"search": "grant"}', "I could not check live pages."])
     calls: list[str] = []
     controller = ChatController(
         gateway,
@@ -178,5 +179,7 @@ def test_search_can_be_switched_off() -> None:
         search_enabled=False,
     )
     controller.send("find a grant")
-    assert calls == []
-    assert len(gateway.requests) == 1
+    assert calls == [], "no search may run while the switch is off"
+    assert len(gateway.requests) == 2, "the model is asked again without results"
+    assert "switched off" in gateway.requests[1].messages[-1].content.casefold()
+    assert controller.history[-1].error is False

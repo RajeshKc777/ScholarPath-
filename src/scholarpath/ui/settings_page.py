@@ -287,6 +287,72 @@ class SettingsPage(QWidget):
         for server in mcp.servers:
             tools_layout.addWidget(ServerRow(server, mcp.read_only, holder))
 
+        # -- privacy: what may leave this device ------------------------------
+        privacy_layout = card("Privacy: what may leave this device")
+        switches = self._config.privacy
+        intro = QLabel(
+            "All three are OFF by default. Nothing you type, say or search "
+            "leaves this device until you turn one on in config.toml "
+            "([privacy]). Here is exactly what each one sends, and to whom.",
+            self,
+        )
+        intro.setObjectName("StateWhy")
+        intro.setWordWrap(True)
+        privacy_layout.addWidget(intro)
+
+        disclosures = (
+            (
+                "voice_stt",
+                switches.voice_stt,
+                "Voice input (speech to text)",
+                "Google's speech service",
+                "a short microphone clip of your voice, which is transcribed "
+                "into text",
+            ),
+            (
+                "voice_tts",
+                switches.voice_tts,
+                "Spoken replies (text to speech)",
+                "Microsoft's speech service",
+                "the text of the reply, which is turned into audio and played "
+                "on this device",
+            ),
+            (
+                "web_search",
+                switches.web_search,
+                "Web search in the chat",
+                "the web-search service (DuckDuckGo)",
+                "the search question, and the pages it returns, which are "
+                "fetched and shown to the model",
+            ),
+        )
+        for name, enabled, feature, party, data in disclosures:
+            state = "ON" if enabled else "off"
+            line = QLabel(
+                f"{feature} — {state}. When on, {data} goes to {party}.",
+                self,
+            )
+            line.setObjectName("StateWhat" if not enabled else "CardTitle")
+            line.setWordWrap(True)
+            privacy_layout.addWidget(line)
+            key = QLabel(f"switch: privacy.{name} in config.toml", self)
+            key.setObjectName("DocMeta")
+            key.setWordWrap(True)
+            privacy_layout.addWidget(key)
+
+        always = QLabel(
+            "Always local, never sent anywhere: your profile, your documents, "
+            "the chat history, the saved opportunities and the logs.",
+            self,
+        )
+        always.setObjectName("StateWhat")
+        always.setWordWrap(True)
+        privacy_layout.addWidget(always)
+        open_config = QPushButton("Open config file", self)
+        open_config.setObjectName("GhostButton")
+        open_config.clicked.connect(self._open_config)
+        privacy_layout.addWidget(open_config)
+
     def _open_folder(self) -> None:
         folder = config_path().parent
         try:
@@ -294,6 +360,21 @@ class SettingsPage(QWidget):
         except OSError:
             return
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
+
+    def _open_config(self) -> None:
+        """Open the config file itself (or its folder when it does not exist)."""
+        target = config_path()
+        try:
+            if not target.exists():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(
+                    "[privacy]\nvoice_stt = false\nvoice_tts = false\n"
+                    "web_search = false\n",
+                    encoding="utf-8",
+                )
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(target)))
+        except OSError:
+            self._open_folder()
 
     def shutdown(self) -> None:
         """Stop any running tool probes at window close."""

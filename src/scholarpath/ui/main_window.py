@@ -912,6 +912,12 @@ class MainWindow(QMainWindow):
             "this notice; typing still works."
         )
         self.mic_button.clicked.connect(self._toggle_voice)
+        if not self._voice_stt_allowed():
+            self.mic_button.setToolTip(
+                "Voice input is off in this build. Turn on privacy.voice_stt in "
+                "Settings to let a short microphone clip reach Google's speech "
+                "service for transcription."
+            )
 
         self.input = ChatInput(self.composer)
         self.input.setObjectName("Input")
@@ -1361,6 +1367,18 @@ class MainWindow(QMainWindow):
         self._refresh_status()
 
     # -- voice input (G123, G124, G125) ---------------------------------------
+    def _privacy(self) -> object:
+        """The privacy switches (voice_stt, voice_tts, web_search)."""
+        return getattr(getattr(self, "_config", None), "privacy", None)
+
+    def _voice_stt_allowed(self) -> bool:
+        privacy = self._privacy()
+        return bool(getattr(privacy, "voice_stt", False))
+
+    def _voice_tts_allowed(self) -> bool:
+        privacy = self._privacy()
+        return bool(getattr(privacy, "voice_tts", False))
+
     def _toggle_voice(self) -> None:
         worker = getattr(self, "_voice_worker", None)
         if worker is not None and worker.isRunning():
@@ -1368,6 +1386,15 @@ class MainWindow(QMainWindow):
             self._notice = "Stopping the microphone\u2026"
             self._refresh_status()
             cancel_active()  # second click stops the running capture
+            return
+        if not self._voice_stt_allowed():
+            self.mic_button.set_listening(False)
+            self._notice = (
+                "Voice input is off. Turning it on (privacy.voice_stt in "
+                "Settings) sends a short microphone clip to Google's speech "
+                "service to turn it into text."
+            )
+            self._refresh_status()
             return
         usable, reason = availability()
         if not usable:
@@ -1432,6 +1459,21 @@ class MainWindow(QMainWindow):
         if not usable:
             self.voice_mode_button.setChecked(False)
             self._notice = reason
+            self._refresh_status()
+            return
+        missing = []
+        if not self._voice_stt_allowed():
+            missing.append("voice_stt")
+        if not self._voice_tts_allowed():
+            missing.append("voice_tts")
+        if missing:
+            self.voice_mode_button.setChecked(False)
+            self._notice = (
+                "Live voice is off. It needs "
+                + " and ".join(f"privacy.{name}" for name in missing)
+                + " turned on in Settings: the microphone clip goes to Google's "
+                "speech service and the reply text to Microsoft's."
+            )
             self._refresh_status()
             return
         speakable, speak_reason = Speaker.available()
@@ -1525,6 +1567,8 @@ class MainWindow(QMainWindow):
         self._end_voice_mode(message)
 
     def _speak_reply(self, turn: Turn) -> None:
+        if not self._voice_tts_allowed():
+            return  # speaking is switched off: the reply stays in the chat
         speech, truncated = to_speech(turn.text)
         logger.info(
             "voice mode: speaking reply (%d characters, truncated=%s)",
@@ -1539,6 +1583,8 @@ class MainWindow(QMainWindow):
 
     def _speak_notice(self, text: str) -> None:
         """Say something short (a failure note) and keep the loop alive."""
+        if not self._voice_tts_allowed():
+            return
         logger.info("voice mode: speaking a notice (%d characters)", len(text))
         self._set_voice_state("Speaking\u2026", "Click End to stop.")
         self._speaker.say(text)

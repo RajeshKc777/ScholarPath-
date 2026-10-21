@@ -75,6 +75,18 @@ theme = "dark"          # dark | light | system
 window_width = 1100
 window_height = 720
 
+# --- Privacy: what may leave this device -------------------------------------
+# Everything here is OFF by default. Turn a switch on only if you are happy
+# for that data to reach the third party named below. The Settings page shows
+# the same information inside the app.
+[privacy]
+# Microphone audio -> Google's speech service (the clip is transcribed to text).
+voice_stt = false
+# Reply text -> Microsoft's speech service (the text is turned into audio).
+voice_tts = false
+# Search question -> the web-search service (and the pages it returns).
+web_search = false
+
 # --- Tools (MCP, optional) -----------------------------------------------------
 # MCP is opt-in and read-only by default. No server starts unless mcp.enabled
 # is true AND that server has enabled = true. With read_only = true, only

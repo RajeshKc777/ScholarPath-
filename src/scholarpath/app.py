@@ -81,7 +81,11 @@ def main(argv: list[str] | None = None) -> int:
         QMessageBox.critical(None, "ScholarPath AI - gateway not available", exc.message)
         return 3
 
-    controller = ChatController(gateway, model=config.gateway.model or None)
+    controller = ChatController(
+        gateway,
+        model=config.gateway.model or None,
+        search_enabled=config.privacy.web_search,
+    )
     window = MainWindow(controller, config)
     window.show()
     return app.exec()

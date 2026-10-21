@@ -43,6 +43,18 @@ Searcher = Callable[[str], list[SearchResult]]
 
 _JSON_BLOCK_RE = re.compile(r"\{.*\}", re.DOTALL)
 
+SEARCH_OFF_NOTE = (
+    "Web search is switched off in this build, so you cannot look anything up. "
+    "Answer from what you know, and say plainly that you could not check live "
+    "pages or current deadlines. Never claim to have searched."
+)
+SEARCH_OFF_ANSWER = (
+    "Web search is switched off in this build, so the pages for "
+    '"search" could not be fetched. Answer the student from what you know, '
+    "state clearly that you could not check live pages or current deadlines, "
+    "and never claim to have searched. Plain prose, no markdown."
+)
+
 
 def parse_search_request(text: str) -> str | None:
     """The query in a model reply of the form {"search": "..."} (else None)."""
@@ -194,6 +206,11 @@ class ChatController(QObject):
         request = ChatRequest(
             messages=[
                 Message(role="system", content=SYSTEM_PROMPT),
+                *(
+                    [Message(role="system", content=SEARCH_OFF_NOTE)]
+                    if not self._search_enabled
+                    else []
+                ),
                 *[
                     Message(role=turn.role, content=turn.text)  # type: ignore[arg-type]
                     for turn in self._history
@@ -203,10 +220,14 @@ class ChatController(QObject):
             model=self._model,
         )
         response = self._complete(request)
-        if response is not None and self._search_enabled:
+        if response is not None:
             query = parse_search_request(response.text)
-            if query:
+            if query and self._search_enabled:
                 response = self._search_and_answer(request, query)
+            elif query:
+                # The student has not allowed web search: the model must say
+                # so rather than pretend it looked (privacy.web_search).
+                response = self._answer_without_search(request, query)
         if response is not None:
             providers = getattr(self._gateway, "provider_names", (self._gateway.name,))
             tokens = forbidden_tokens(*providers, self._model or "")
@@ -236,6 +257,20 @@ class ChatController(QObject):
             self._append(Turn(role="assistant", text=message, error=True))
             self.failed.emit(message)
             return None
+
+    def _answer_without_search(
+        self, request: ChatRequest, query: str
+    ) -> ChatResponse | None:
+        """Search is switched off: the model is told, and answers honestly."""
+        logger.info("web search was requested but is switched off")
+        follow_up = ChatRequest(
+            messages=[
+                *request.messages,
+                Message(role="user", content=SEARCH_OFF_ANSWER),
+            ],
+            model=self._model,
+        )
+        return self._complete(follow_up)
 
     def _search_and_answer(
         self, request: ChatRequest, query: str

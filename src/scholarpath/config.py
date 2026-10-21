@@ -114,12 +114,36 @@ class McpConfig(BaseModel):
         return value
 
 
+class PrivacyConfig(BaseModel):
+    """What may leave this device. Everything is off until the student says so.
+
+    Each switch is about one third party and one kind of data:
+
+    - ``voice_stt``: the microphone clip is sent to Google's speech service to
+      be turned into text.
+    - ``voice_tts``: the reply text is sent to Microsoft's speech service to
+      be turned into audio.
+    - ``web_search``: the search question is sent to the web-search service,
+      and the pages it returns are fetched.
+
+    All three default to off. The Settings page states exactly what each one
+    sends and to whom.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    voice_stt: bool = False
+    voice_tts: bool = False
+    web_search: bool = False
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
     mcp: McpConfig = Field(default_factory=McpConfig)
+    privacy: PrivacyConfig = Field(default_factory=PrivacyConfig)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
 
