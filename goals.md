@@ -51,6 +51,8 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G128 | 27 | OpenAI-compatible gateway provider: the chat can be served directly by any OpenAI-compatible endpoint (e.g. a local router that serves DeepSeek), with its own key and model chain | `[ ]` |
 | G129 | 28 | Key rotation inside the app: console keys are registered with the model service and rotated between accounts when a model quota is exhausted | `[ ]` |
 | G130 | 29 | Spoken replies use a natural neural voice (free Edge neural TTS, no API key) with the offline Windows voice as automatic fallback; the transcript auto-scrolls as the conversation grows | `[x]` |
+| G131 | 29 | Replies read like a person wrote them: no markdown symbols (bold asterisks, `--`, headings, tables) in the chat bubble or the voice, and the model is asked to answer in plain, warm, conversational prose | `[x]` |
+| G132 | 29 | Live voice mode survives a failed reply: the app says what happened out loud and keeps listening, and stopping a capture really releases the microphone | `[x]` |
 
 ---
 
@@ -848,3 +850,40 @@ Two requirements from the owner, dated, after seeing the running app leak
 - **Honest cost:** the neural voice sends the reply text to Microsoft's speech
   service (no key, no account). The offline fallback keeps the app usable
   without a network.
+
+---
+
+## 19n. Human-sounding replies + voice that survives failures (G131, G132, 2026-10-21)
+
+- **Owner ask:** the `**` and `--` in the replies made the conversation look
+  machine-written, and after the voice change the model stopped speaking in
+  live conversation.
+- **Plain prose (G131):** two layers.
+  - *Ask*: the app-level system prompt and the live gateway prompt now
+    require plain sentences with contractions, short paragraphs, and no
+    markdown at all - no asterisks, no dash bullets, no headings, no tables,
+    no emoji, no filler openings.
+  - *Clean up*: `prose.humanize_reply` (new module) turns whatever still
+    arrives into plain text for the bubble and the copy button: bold and
+    italic markers removed, `--` becomes a real dash, headings and
+    horizontal rules dropped, dash bullets become dots, tables become plain
+    lines, links keep their label and URL. `prose.speech_text` is the spoken
+    variant (one flowing line, links spoken as words, bare URLs as "link in
+    the chat"). The model still receives the raw text, so its own context is
+    unchanged.
+  - The live gateway prompt now keeps the app rules (identity, privacy) in
+    the instruction block instead of labelling them as an "Assistant" line.
+- **Voice that keeps going (G132):** the app log showed two real problems -
+  a failed model reply (quota) and `voice cancel failed: 'Microphone' object
+  has no attribute 'stop'`.
+  - A failed reply no longer ends voice mode. The app says "Sorry, I couldn't
+    get an answer just then. Please ask me again." out loud and keeps
+    listening.
+  - `cancel_active` now stops the capture the way `speech_recognition` allows
+    - by stopping the PyAudio stream - so the microphone is really released
+    when a capture is cancelled.
+  - The voice loop logs what it does (listening, characters heard, reply
+    failed, engine used, speech finished) so a silent voice can be diagnosed
+    from the log file instead of guessed at.
+  - Voice worker threads are held until they really end, so Qt never destroys
+    a running thread.

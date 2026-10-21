@@ -8,6 +8,8 @@ feature tiles are explicitly marked as not built yet.
 
 from __future__ import annotations
 
+import logging
+
 from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import (
     QColor,
@@ -38,6 +40,7 @@ from PySide6.QtWidgets import (
 from scholarpath.chat_profile import merge_selected
 from scholarpath.config import AppConfig, config_path
 from scholarpath.profiles import Profile
+from scholarpath.prose import humanize_reply
 from scholarpath.storage import Database, database_path
 from scholarpath.ui import theme
 from scholarpath.ui.chat_controller import ChatController, Turn
@@ -46,6 +49,8 @@ from scholarpath.ui.profile_page import DEGREE_LABELS
 from scholarpath.ui.profile_suggestion import ProfileSuggestionCard, _ProfileScanWorker
 from scholarpath.tts import Speaker, engine_label, to_speech
 from scholarpath.voice import availability, cancel_active, listen_once
+
+logger = logging.getLogger("scholarpath.ui")
 
 GLYPH_EDUCATION = "\uE7BE"
 GLYPH_CHAT = "\uE8BD"
@@ -412,7 +417,9 @@ class TurnWidget(QWidget):
             block.setObjectName("AsstBubble")
             inner = QVBoxLayout(block)
             inner.setContentsMargins(14, 10, 14, 11)
-            body = QLabel(self._turn.text, block)
+            # The bubble reads like a person wrote it: markdown symbols never
+            # reach the student (G131).
+            body = QLabel(humanize_reply(self._turn.text), block)
             body.setObjectName("AsstBody")
             body.setWordWrap(True)
             body.setTextInteractionFlags(Qt.TextSelectableByMouse)
@@ -422,7 +429,7 @@ class TurnWidget(QWidget):
         column.addStretch(1)
 
     def _copy_text(self) -> None:
-        QApplication.clipboard().setText(self._turn.text)
+        QApplication.clipboard().setText(humanize_reply(self._turn.text))
         if self._copy is not None:
             self._copy.setText("Copied")
             self._copy.setStyleSheet(f"color: {theme.PALETTE['mint']};")
@@ -458,6 +465,9 @@ class MainWindow(QMainWindow):
         self._scroll_timer = QTimer(self)  # deferred auto-scroll (G130)
         self._scroll_timer.setSingleShot(True)
         self._scroll_timer.timeout.connect(self._apply_scroll_to_bottom)
+        self._voice_mode = False
+        self._voice_misses = 0
+        self._voice_workers: set[QThread] = set()  # held until each thread ends
 
         self.setWindowTitle("ScholarPath AI")
         self.resize(config.ui.window_width, config.ui.window_height)
@@ -1279,7 +1289,12 @@ class MainWindow(QMainWindow):
             if self._voice_mode_active():
                 self._speak_reply(turn)
         elif turn.role == "assistant" and turn.error and self._voice_mode_active():
-            self._end_voice_mode("The reply failed \u2014 voice mode stopped.")
+            # A failed reply must not end the conversation. Say what happened
+            # and keep listening; the student can simply ask again (G132).
+            logger.info("voice mode: reply failed; speaking a notice and listening again")
+            self._speak_notice(
+                "Sorry, I couldn't get an answer just then. Please ask me again."
+            )
         self._refresh_status()
 
     # -- chat → profile capture (G117) ---------------------------------------
@@ -1416,8 +1431,13 @@ class MainWindow(QMainWindow):
     def _voice_mode_listen(self) -> None:
         if not self._voice_mode_active():
             return
+        logger.info("voice mode: listening")
         worker = _VoiceWorker()
         self._voice_worker = worker
+        # Hold a reference until the thread really ends, so Qt never destroys
+        # a QThread that is still running.
+        self._voice_workers.add(worker)
+        worker.finished.connect(lambda w=worker: self._voice_workers.discard(w))
         worker.heard.connect(self._on_voice_mode_heard)
         worker.failed.connect(self._on_voice_mode_failed)
         worker.start()
@@ -1425,6 +1445,7 @@ class MainWindow(QMainWindow):
     def _on_voice_mode_heard(self, text: str) -> None:
         if not self._voice_mode_active():
             return
+        logger.info("voice mode: heard %d characters", len(text.strip()))
         if not text.strip():
             self._on_voice_mode_miss()
             return
@@ -1451,6 +1472,7 @@ class MainWindow(QMainWindow):
     def _on_voice_mode_failed(self, message: str) -> None:
         if not self._voice_mode_active():
             return
+        logger.info("voice mode: capture failed: %s", message)
         if "Nothing was heard" in message:
             self._on_voice_mode_miss()
         else:
@@ -1470,22 +1492,36 @@ class MainWindow(QMainWindow):
 
     def _on_speech_finished(self) -> None:
         if self._voice_mode_active():
+            logger.info("voice mode: speech finished; listening again")
             self._set_voice_state("Listening \u2014 speak now", "Click End to stop.")
             self._voice_mode_listen()
 
     def _on_speech_failed(self, message: str) -> None:
+        logger.info("voice mode: speech failed: %s", message)
         self._end_voice_mode(message)
 
     def _speak_reply(self, turn: Turn) -> None:
         speech, truncated = to_speech(turn.text)
+        logger.info(
+            "voice mode: speaking reply (%d characters, truncated=%s)",
+            len(speech),
+            truncated,
+        )
         detail = "Click End to stop."
         if truncated:
             detail = "Full reply is in the chat. Click End to stop."
         self._set_voice_state("Speaking\u2026", detail)
         self._speaker.say(speech)
 
+    def _speak_notice(self, text: str) -> None:
+        """Say something short (a failure note) and keep the loop alive."""
+        logger.info("voice mode: speaking a notice (%d characters)", len(text))
+        self._set_voice_state("Speaking\u2026", "Click End to stop.")
+        self._speaker.say(text)
+
     def _on_voice_engine(self, engine: str) -> None:
         """Name the voice that is really speaking (G130)."""
+        logger.info("voice mode: speaking with the %s engine", engine)
         if not self._voice_mode_active():
             return
         self.voice_detail.setText(

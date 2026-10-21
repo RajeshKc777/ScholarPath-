@@ -90,16 +90,35 @@ def _unregister_active(source: object) -> None:
             _active_sources.remove(source)
 
 
+def _stop_source(source: object) -> None:
+    """End a capture in progress.
+
+    `speech_recognition.Microphone` has no `stop()`; the only way to break
+    `Recognizer.listen()` is to stop its PyAudio stream, which makes the
+    blocking read return. Sources that do expose `stop()` still work.
+    """
+    stream = getattr(source, "stream", None)
+    if stream is not None:
+        try:
+            stream.stop_stream()
+            return
+        except Exception as exc:  # noqa: BLE001 - fall through to stop()
+            logger.info("voice cancel (stream) failed: %s", exc)
+    stop = getattr(source, "stop", None)
+    if callable(stop):
+        try:
+            stop()
+        except Exception as exc:  # noqa: BLE001 - the listen timeout still holds
+            logger.info("voice cancel failed: %s", exc)
+
+
 def cancel_active() -> None:
     """Stop a running capture (called from the UI thread)."""
     _cancel_event.set()
     with _active_lock:
         sources = list(_active_sources)
     for source in sources:
-        try:
-            source.stop()  # type: ignore[attr-defined]
-        except Exception as exc:  # noqa: BLE001 - the listen timeout still holds
-            logger.info("voice cancel failed: %s", exc)
+        _stop_source(source)
 
 
 def _record_and_transcribe(max_seconds: float) -> str:

@@ -1,12 +1,14 @@
-"""Spoken replies for live voice mode (G126).
+"""Spoken replies for live voice mode (G126, G130).
 
-- The engine is Windows SAPI through `pyttsx3`: fully offline, no API key,
-  no cloud service, no audio ever leaves the device. Replies already passed
-  the provider-scrub guard in the chat controller; this module only turns the
-  shown text into sound.
-- `clean_speech` strips markdown so the voice reads sentences, not symbols
-  (asterisks, backticks, headings, bullets, link syntax). Bare URLs become
-  "link in the chat" instead of being read aloud.
+- Two engines, best first: the free Edge neural voice (`edge-tts`, no API
+  key, needs the internet), then the local Windows SAPI voice through
+  `pyttsx3` as an automatic offline fallback. The app never goes mute, and
+  `engine_changed` says which engine actually spoke.
+- Replies already passed the provider-scrub guard in the chat controller;
+  this module only turns the shown text into sound.
+- `clean_speech` uses `prose.speech_text`, so the voice reads sentences, not
+  symbols (asterisks, dashes, backticks, headings, bullets, link syntax).
+  Bare URLs become "link in the chat" instead of being read aloud.
 - `to_speech` additionally truncates long replies at a sentence boundary so a
   spoken answer stays speakable; the full text stays visible in the chat.
 """
@@ -14,12 +16,13 @@
 from __future__ import annotations
 
 import logging
-import re
 import threading
 from pathlib import Path
 from typing import Callable
 
 from PySide6.QtCore import QObject, Signal
+
+from scholarpath.prose import speech_text
 
 logger = logging.getLogger("scholarpath.tts")
 
@@ -38,28 +41,9 @@ ENGINE_LABELS = {
     ENGINE_OFFLINE: "offline Windows voice",
 }
 
-_URL_RE = re.compile(r"https?://\S+")
-_MD_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]*\)")
-_MD_EMPH_RE = re.compile(r"\*\*?([^*]+)\*\*?|__([^_]+)__")
-_CODE_RE = re.compile(r"`([^`]*)`")
-_HEADING_RE = re.compile(r"^#{1,6}\s*", re.MULTILINE)
-_BULLET_RE = re.compile(r"^\s*[-*]\s+", re.MULTILINE)
-
-
 def clean_speech(text: str) -> str:
     """Markdown-free, URL-light version of a chat reply, fit for a voice."""
-    spoken = _MD_LINK_RE.sub(r"\1", text)
-    spoken = _URL_RE.sub("link in the chat", spoken)
-    spoken = _CODE_RE.sub(r"\1", spoken)
-
-    def _emphasis(match: re.Match[str]) -> str:
-        return match.group(1) or match.group(2) or ""
-
-    spoken = _MD_EMPH_RE.sub(_emphasis, spoken)
-    spoken = _HEADING_RE.sub("", spoken)
-    spoken = _BULLET_RE.sub("", spoken)
-    spoken = re.sub(r"\s+", " ", spoken)
-    return spoken.strip()
+    return speech_text(text)
 
 
 def to_speech(text: str, limit: int = DEFAULT_SPEECH_LIMIT) -> tuple[str, bool]:

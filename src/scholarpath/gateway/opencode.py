@@ -69,7 +69,11 @@ SYSTEM_PROMPT = (
     "- If you do not know or cannot verify something, say so plainly.\n"
     "- This build has no web search and no document access yet. Do not claim to have\n"
     "  researched anything or to have checked official sources.\n"
-    "- Keep answers short and useful. Ask for missing facts instead of guessing."
+    "- Keep answers short and useful. Ask for missing facts instead of guessing.\n"
+    "- Write like a person talking to a student, not like a document: plain sentences,\n"
+    "  contractions, short paragraphs. No markdown at all - no asterisks, no bold,\n"
+    "  no dash bullets, no headings, no tables, no emoji. If several things need\n"
+    "  saying, use short sentences instead of a list. No filler openings."
 )
 
 
@@ -451,11 +455,18 @@ class OpenCodeGateway:
     # -- request composition ----------------------------------------------
     @staticmethod
     def _compose_prompt(request: ChatRequest) -> str:
-        lines = [SYSTEM_PROMPT, "", "Conversation:"]
+        instructions = [SYSTEM_PROMPT]
+        conversation: list[str] = []
         for message in request.messages:
+            if message.role == "system":
+                # App rules (identity, privacy) belong in the instruction
+                # block, never as an "Assistant" line.
+                if message.content.strip():
+                    instructions.append(message.content.strip())
+                continue
             role = "User" if message.role == "user" else "Assistant"
-            lines.append(f"{role}: {message.content.strip()}")
-        lines.append("Assistant:")
+            conversation.append(f"{role}: {message.content.strip()}")
+        lines = ["\n".join(instructions), "", "Conversation:", *conversation, "Assistant:"]
         return "\n".join(lines)
 
     def _resolve_model(self, request: ChatRequest) -> ModelRef:

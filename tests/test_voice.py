@@ -109,6 +109,44 @@ def test_cancel_active_marks_the_capture_and_stops_sources() -> None:
         voice._cancel_event.clear()
 
 
+def test_cancel_active_stops_the_microphone_stream() -> None:
+    """`Microphone` has no stop(); the capture ends by stopping its stream."""
+
+    class Stream:
+        def __init__(self) -> None:
+            self.stopped = False
+
+        def stop_stream(self) -> None:
+            self.stopped = True
+
+    class Microphone:
+        def __init__(self) -> None:
+            self.stream = Stream()
+
+    source = Microphone()
+    voice._register_active(source)
+    try:
+        voice.cancel_active()
+        assert source.stream.stopped
+    finally:
+        voice._unregister_active(source)
+        voice._cancel_event.clear()
+
+
+def test_cancel_active_survives_a_source_that_cannot_stop() -> None:
+    class Stubborn:
+        stream = None
+
+    source = Stubborn()
+    voice._register_active(source)
+    try:
+        voice.cancel_active()  # must never raise
+        assert voice._cancel_event.is_set()
+    finally:
+        voice._unregister_active(source)
+        voice._cancel_event.clear()
+
+
 def test_messages_are_student_facing() -> None:
     for message in (NOTHING_HEARD, NO_MICROPHONE, SERVICE_UNREACHABLE, LIBRARY_MISSING):
         assert message and "Error" not in message and "0x" not in message

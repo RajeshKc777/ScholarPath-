@@ -93,6 +93,44 @@ timer stop, review notice shows.
 
 ---
 
+### 2026-10-21 — A20 — Human-sounding replies + voice that survives failures (G131, G132)
+
+**Satisfies:** G131 (the `**` and `--` made the conversation look machine-made)
+and G132 (the model stopped speaking in live conversation after the voice
+change).
+
+Built:
+
+| Area | File(s) |
+| ---- | ------- |
+| Plain-prose cleanup for the bubble, the copy button and the voice | `src/scholarpath/prose.py` (new) |
+| Tone rules: plain sentences, contractions, no markdown | `src/scholarpath/identity.py`, `src/scholarpath/gateway/opencode.py` |
+| App rules kept in the instruction block of the live prompt | `src/scholarpath/gateway/opencode.py` |
+| Voice survives a failed reply, loop logging, worker lifetime | `src/scholarpath/ui/main_window.py` |
+| Microphone really released on cancel | `src/scholarpath/voice.py` |
+| Tests | `tests/test_prose.py` (10 tests), `tests/test_voice.py` (+2 tests) |
+
+Behaviour: the model is asked to answer like a knowledgeable friend - plain
+sentences, contractions, no markdown - and anything that still arrives as
+markdown is cleaned before the student sees it (bold asterisks gone, `--` a
+real dash, headings and rules dropped, dash bullets as dots, tables as plain
+lines, links keeping their label and URL). The voice reads the same clean
+text. When a model reply fails, voice mode says so out loud and keeps
+listening instead of stopping, and cancelling a capture now really releases
+the microphone.
+
+**Evidence:** 261 tests passing. Live check: a markdown-heavy reply came out
+of the bubble as plain prose (no `**`, `--`, `##` or table rules), and a
+forced model failure produced the spoken apology with voice mode still on and
+the state back at "Listening - speak now".
+
+**Known limits:** a reply that is one long table or a long list still reads
+as a list in the bubble (the wording changes, the structure stays); the tone
+rules shape the model but cannot guarantee every reply is warm; the
+"speaking apology" voice is the same engine as the replies.
+
+---
+
 ### 2026-10-21 — A19 — Natural voice + sticky transcript auto-scroll (G130)
 
 **Satisfies:** G130 (owner ask: the voice sounded robotic; the conversation

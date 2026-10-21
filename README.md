@@ -12,7 +12,7 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 ![Status](https://img.shields.io/badge/status-Milestone%204-4f8cff?style=flat-square)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Qt](https://img.shields.io/badge/Qt-6.12-41CD52?style=flat-square&logo=qt&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-249%20passing-2ea043?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-261%20passing-2ea043?style=flat-square)
 ![License](https://img.shields.io/badge/license-view--only%20%C2%B7%20all%20rights%20reserved-b3261e?style=flat-square)
 
 </div>
@@ -113,7 +113,13 @@ Full specification: [`goals.md`](goals.md) · Build log: [`achievements.md`](ach
   listens again. A voice bar always shows the real state (Listening /
   Thinking / Speaking) and names the voice in use, with an End button.
   Spoken text is markdown-free; the full reply stays in the chat, and the
-  transcript follows the conversation as it grows.
+  transcript follows the conversation as it grows. If a reply cannot be
+  fetched, the app says so out loud and keeps listening instead of stopping.
+- **Replies read like a person wrote them** — the model is asked for plain,
+  warm sentences with no formatting, and anything that still arrives as
+  markdown is cleaned before you see it: no `**bold**`, no `--`, no headings,
+  no table bars, no dash bullets. The chat bubble, the copy button and the
+  spoken reply all get the same clean text.
 - **The model behind it stays anonymous** — identity questions ("which model
   are you?") are answered deterministically without the model seeing them, a
   provider-neutral system prompt forbids disclosure, and any reply that names
@@ -171,7 +177,7 @@ scholarpath --init-config   # write the configuration template, then exit
 scholarpath --config path\to\config.toml
 scholarpath --version
 python -m scholarpath       # equivalent to the console script
-pytest                      # 249 tests, no network required (fake server on loopback)
+pytest                      # 261 tests, no network required (fake server on loopback)
 ```
 
 </details>
