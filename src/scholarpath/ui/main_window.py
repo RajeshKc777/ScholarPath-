@@ -8,7 +8,7 @@ feature tiles are explicitly marked as not built yet.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QThread, QUrl, Signal
+from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import (
     QColor,
     QDesktopServices,
@@ -44,6 +44,7 @@ from scholarpath.ui.chat_controller import ChatController, Turn
 from scholarpath.ui.mic_button import MicButton
 from scholarpath.ui.profile_page import DEGREE_LABELS
 from scholarpath.ui.profile_suggestion import ProfileSuggestionCard, _ProfileScanWorker
+from scholarpath.tts import Speaker, to_speech
 from scholarpath.voice import availability, cancel_active, listen_once
 
 GLYPH_EDUCATION = "\uE7BE"
@@ -613,6 +614,19 @@ class MainWindow(QMainWindow):
         # not fill the 76px top bar.
         row.addWidget(pill, 0, Qt.AlignVCenter)
 
+        self.voice_mode_button = QToolButton(bar)
+        self.voice_mode_button.setObjectName("VoiceModeButton")
+        self.voice_mode_button.setText(" Live voice")
+        self.voice_mode_button.setCheckable(True)
+        self.voice_mode_button.setCursor(Qt.PointingHandCursor)
+        self.voice_mode_button.setToolTip(
+            "Live voice mode - talk hands-free: the app listens, sends your "
+            "words to the model, and speaks the reply aloud (Windows speech, "
+            "offline). Click again to end."
+        )
+        self.voice_mode_button.clicked.connect(self._toggle_voice_mode)
+        row.addWidget(self.voice_mode_button, 0, Qt.AlignVCenter)
+
         avatar = QLabel("S", bar)
         avatar.setObjectName("Avatar")
         avatar.setFixedSize(34, 34)
@@ -857,6 +871,30 @@ class MainWindow(QMainWindow):
         row.addWidget(self.send_button, 0, Qt.AlignVCenter)
         column.addWidget(self.composer)
 
+        self.voice_bar = QFrame(panel)
+        self.voice_bar.setObjectName("VoiceBar")
+        bar_row = QHBoxLayout(self.voice_bar)
+        bar_row.setContentsMargins(14, 10, 10, 10)
+        bar_row.setSpacing(10)
+        state_column = QVBoxLayout()
+        state_column.setContentsMargins(0, 0, 0, 0)
+        state_column.setSpacing(1)
+        self.voice_state = QLabel("Listening \u2014 speak now", self.voice_bar)
+        self.voice_state.setObjectName("VoiceState")
+        state_column.addWidget(self.voice_state)
+        self.voice_detail = QLabel("Your words become text; the reply is spoken aloud.", self.voice_bar)
+        self.voice_detail.setObjectName("VoiceDetail")
+        state_column.addWidget(self.voice_detail)
+        bar_row.addLayout(state_column, 1)
+        self.voice_end = QToolButton(self.voice_bar)
+        self.voice_end.setObjectName("VoiceEnd")
+        self.voice_end.setText("End")
+        self.voice_end.setCursor(Qt.PointingHandCursor)
+        self.voice_end.clicked.connect(lambda: self._end_voice_mode("Voice mode off."))
+        bar_row.addWidget(self.voice_end, 0, Qt.AlignVCenter)
+        self.voice_bar.hide()
+        column.addWidget(self.voice_bar)
+
         self.hint = QLabel(panel)
         self.hint.setObjectName("Hint")
         column.addWidget(self.hint)
@@ -1071,6 +1109,8 @@ class MainWindow(QMainWindow):
         if name == "saved" and self._saved_page is not None:
             self._saved_page.reload()  # data may have changed since last visit
         self._page_title.setText(titles.get(name, titles["chat"]))
+        if getattr(self, "voice_mode_button", None) is not None:
+            self.voice_mode_button.setVisible(name == "chat")
         self._notice = None  # a switch clears stale "not available" notices
         for key, button in self._nav_buttons.items():
             button.set_active(key == name)
@@ -1133,6 +1173,9 @@ class MainWindow(QMainWindow):
         self._controller.turn_added.connect(self._on_turn_added)
         self._controller.busy_changed.connect(self._on_busy_changed)
         self._controller.failed.connect(self._on_failed)
+        self._speaker = Speaker(self)
+        self._speaker.finished.connect(self._on_speech_finished)
+        self._speaker.failed.connect(self._on_speech_failed)
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt API
         """Flush and release the local database; stop ingest threads."""
@@ -1148,6 +1191,9 @@ class MainWindow(QMainWindow):
             if self._voice_worker.isRunning():  # a mic capture cannot outlive the window
                 cancel_active()
                 self._voice_worker.wait(5000)
+        if getattr(self, "_speaker", None) is not None:
+            self._speaker.stop()
+            self._speaker.wait(5)
         self._database.close()
         super().closeEvent(event)
     def _submit(self) -> None:
@@ -1179,6 +1225,10 @@ class MainWindow(QMainWindow):
         )
         if turn.role == "assistant" and not turn.error:
             self._maybe_scan_profile()
+            if self._voice_mode_active():
+                self._speak_reply(turn)
+        elif turn.role == "assistant" and turn.error and self._voice_mode_active():
+            self._end_voice_mode("The reply failed \u2014 voice mode stopped.")
         self._refresh_status()
 
     # -- chat → profile capture (G117) ---------------------------------------
@@ -1271,6 +1321,129 @@ class MainWindow(QMainWindow):
         # Informational, not an app error: the message says what to do next.
         self._notice = message
         self._refresh_status()
+
+    # -- live voice mode (G126) ------------------------------------------------
+    def _voice_mode_active(self) -> bool:
+        return bool(getattr(self, "_voice_mode", False))
+
+    def _toggle_voice_mode(self) -> None:
+        if self._voice_mode_active():
+            self._end_voice_mode("Voice mode off.")
+            return
+        if self._controller.chat_mode != "live":
+            self.voice_mode_button.setChecked(False)
+            self._notice = (
+                "Voice mode needs the live model connection. Open Settings "
+                "to connect, then try again."
+            )
+            self._refresh_status()
+            return
+        usable, reason = availability()
+        if not usable:
+            self.voice_mode_button.setChecked(False)
+            self._notice = reason
+            self._refresh_status()
+            return
+        speakable, speak_reason = Speaker.available()
+        if not speakable:
+            self.voice_mode_button.setChecked(False)
+            self._notice = speak_reason
+            self._refresh_status()
+            return
+        self._voice_mode = True
+        self._voice_misses = 0
+        self.mic_button.setEnabled(False)  # the voice bar owns the mic now
+        self.voice_bar.show()
+        self._set_voice_state("Listening \u2014 speak now", "Click End to stop.")
+        self._voice_mode_listen()
+
+    def _set_voice_state(self, state: str, detail: str) -> None:
+        self.voice_state.setText(state)
+        self.voice_detail.setText(detail)
+
+    def _voice_mode_listen(self) -> None:
+        if not self._voice_mode_active():
+            return
+        worker = _VoiceWorker()
+        self._voice_worker = worker
+        worker.heard.connect(self._on_voice_mode_heard)
+        worker.failed.connect(self._on_voice_mode_failed)
+        worker.start()
+
+    def _on_voice_mode_heard(self, text: str) -> None:
+        if not self._voice_mode_active():
+            return
+        if not text.strip():
+            self._on_voice_mode_miss()
+            return
+        self._voice_misses = 0
+        sent = self._controller.send(text)
+        if sent:
+            self._set_voice_state("Thinking\u2026", "The model is replying; it will be spoken.")
+        else:
+            # The model was still replying - drop this utterance and keep the loop.
+            self._set_voice_state("One moment\u2026", "Waiting for the current reply; message skipped.")
+            self._retry_listen_when_free()
+
+    def _retry_listen_when_free(self) -> None:
+        def retry() -> None:
+            if not self._voice_mode_active():
+                return
+            if self._controller.busy:
+                QTimer.singleShot(500, retry)
+            else:
+                self._voice_mode_listen()
+
+        QTimer.singleShot(500, retry)
+
+    def _on_voice_mode_failed(self, message: str) -> None:
+        if not self._voice_mode_active():
+            return
+        if "Nothing was heard" in message:
+            self._on_voice_mode_miss()
+        else:
+            self._end_voice_mode(message)
+
+    def _on_voice_mode_miss(self) -> None:
+        self._voice_misses += 1
+        if self._voice_misses >= 3:
+            self._end_voice_mode(
+                "Nothing was heard several times \u2014 voice mode stopped."
+            )
+        else:
+            self._set_voice_state(
+                "Nothing heard yet", "Speak a little louder. Click End to stop."
+            )
+            self._voice_mode_listen()
+
+    def _on_speech_finished(self) -> None:
+        if self._voice_mode_active():
+            self._set_voice_state("Listening \u2014 speak now", "Click End to stop.")
+            self._voice_mode_listen()
+
+    def _on_speech_failed(self, message: str) -> None:
+        self._end_voice_mode(message)
+
+    def _speak_reply(self, turn: Turn) -> None:
+        speech, truncated = to_speech(turn.text)
+        detail = "Click End to stop."
+        if truncated:
+            detail = "Full reply is in the chat. Click End to stop."
+        self._set_voice_state("Speaking\u2026", detail)
+        self._speaker.say(speech)
+
+    def _end_voice_mode(self, notice: str) -> None:
+        if not self._voice_mode_active():
+            return
+        self._voice_mode = False
+        cancel_active()  # stop any listening capture
+        self._speaker.stop()  # silence the current utterance
+        self.voice_bar.hide()
+        self.voice_mode_button.setChecked(False)
+        self.mic_button.setEnabled(True)
+        if notice:
+            self._notice = notice
+            self._refresh_status()
 
     def _on_busy_changed(self, busy: bool) -> None:
         self.input.setEnabled(not busy)

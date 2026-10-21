@@ -125,6 +125,24 @@ QLabel#StatusPill {{
     padding: 3px 10px;
     font-size: 11px;
 }}
+QToolButton#VoiceModeButton {{
+    color: {p['text_secondary']};
+    background: {p['surface']};
+    border: 1px solid {p['border_strong']};
+    border-radius: 14px;
+    padding: 5px 14px;
+    font-size: 12px;
+    font-weight: 600;
+}}
+QToolButton#VoiceModeButton:hover {{
+    color: {p['orange_deep']};
+    border-color: {p['border_orange']};
+}}
+QToolButton#VoiceModeButton:checked {{
+    color: {p['orange_deep']};
+    background: {p['tint_orange']};
+    border-color: {p['border_orange']};
+}}
 QLabel#StatusLive {{
     color: #15803D;
     background: transparent;
@@ -358,7 +376,24 @@ QPushButton#Send:hover {{
 }}
 QPushButton#Send:disabled {{ background: #DBD5D0; }}
 QLabel#Hint {{ color: #A5AEBC; font-size: 10px; }}
-
+/* ---------------- live voice bar ---------------- */
+QFrame#VoiceBar {{
+    background: {p['tint_orange']};
+    border: 1px solid {p['border_orange']};
+    border-radius: 12px;
+}}
+QLabel#VoiceState {{ color: {p['orange_deep']}; font-size: 12px; font-weight: 700; }}
+QLabel#VoiceDetail {{ color: {p['text_secondary']}; font-size: 10px; }}
+QToolButton#VoiceEnd {{
+    color: {p['orange_deep']};
+    background: {p['surface']};
+    border: 1px solid {p['border_orange']};
+    border-radius: 12px;
+    padding: 4px 14px;
+    font-size: 11px;
+    font-weight: 700;
+}}
+QToolButton#VoiceEnd:hover {{ background: {p['border_orange']}; }}
 /* ---------------- status strip ---------------- */
 QWidget#StatusStrip {{ background: {p['surface']}; border-top: 1px solid {p['border']}; }}
 QLabel#Status {{ color: {p['text_muted']}; font-size: 10px; }}

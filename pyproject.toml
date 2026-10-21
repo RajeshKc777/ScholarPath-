@@ -14,6 +14,10 @@ dependencies = [
     # Essentials = Core/Gui/Widgets/Network. The full PySide6 meta-package adds
     # ~400 MB of WebEngine/Pdf/Multimedia this app does not use.
     "PySide6-Essentials>=6.7,<7",
+    # Voice replies in live voice mode (G126): Windows SAPI speech through
+    # pyttsx3. Fully offline; no cloud service, no audio leaving the device.
+    "pyttsx3>=2.90,<3",
+    "pywin32>=306; sys_platform == 'win32'",
     # Voice-to-text (G124): microphone capture + the free web speech engine.
     # No API key and no model download; the UI states that the audio clip is
     # sent to the transcription service. Both wheels ship for Windows/py3.11.

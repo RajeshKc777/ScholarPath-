@@ -46,6 +46,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G123 | 22 | Voice input in chat: speak a prompt or a voice message, speech becomes editable text, then is sent like a normal message (Windows Speech engine, honest privacy copy) | `[x]` |
 | G124 | 23 | Voice engine switched to the Python SpeechRecognition library (no Windows speech toggle, no model download); UI copy states that audio is sent to the transcription service | `[x]` |
 | G125 | 24 | While the mic is recording, the mic button shows an animated listening ripple; the button stays clickable to stop | `[x]` |
+| G126 | 25 | Live voice conversation mode: hands-free listen → reply → speak loop in the chat, with a visible state and a stop control | `[ ]` |
 
 ---
 
