@@ -57,6 +57,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G134 | 30 | Find scholarships on a site the student trusts: the app lists the scholarship/funding links published on a page (same site only, no guessing), and one click reads and verifies the chosen page | `[x]` |
 | G135 | 31 | Let the chat use MCP tools: when a read-only MCP tool is configured and enabled, the chat can call it during a turn, with tool output treated as untrusted data, size-capped and never obeying instructions inside it | `[ ]` |
 | G136 | 32 | Web search in the chat: the app can run a keyless web search when the student needs current results, answer from those results with the pages named, and treat every result as untrusted data | `[x]` |
+| G137 | 33 | Saving the profile must be unmistakable: the save is confirmed on screen with the time, a failed save says so, and the side card always mirrors what is really stored locally | `[x]` |
 
 ---
 
@@ -975,3 +976,30 @@ Two requirements from the owner, dated, after seeing the running app leak
   web search service could not be reached"), never a silent answer from
   memory. The status line shows whether a search was used in the
   conversation.
+
+---
+
+## 19r. Saving the profile must be visible (G137, 2026-10-21)
+
+- **Owner ask:** "I clicked save, nothing happened" - the profile page was
+  open with the values filled in and the button clicked, and the screen gave
+  no sign that anything had been saved.
+- **What was actually true:** the write **did** happen (the database record
+  carried the values and a fresh timestamp), but nothing on screen changed:
+  the confirmation line already said "Saved locally - 75% complete." from an
+  earlier save, so a new save was invisible, and the right-hand card still
+  said "Not set up yet / 0% complete" - a stale panel that made a working
+  save look like a broken one.
+- **Fix.**
+  - The confirmation now carries the time ("Saved locally - 75% complete
+    (saved at 13:28:26)"), so every click visibly changes the screen.
+  - A save that fails says so ("The profile could not be saved: ...") and
+    never claims success.
+  - Every step of the refresh (profile page, side card, eligibility page) is
+    guarded separately and logged, so one broken view can neither stop the
+    others nor fail silently; if the side card could not be refreshed, the
+    confirmation says so.
+  - The side card is re-read from the database on every page change, so it
+    can never keep showing a stale "Not set up yet".
+  - The profile-suggestion card in the chat now follows the sticky
+    auto-scroll instead of jumping the transcript to the bottom.

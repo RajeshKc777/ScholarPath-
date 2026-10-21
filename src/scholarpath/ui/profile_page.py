@@ -7,6 +7,8 @@ this page never invents a fact.
 
 from __future__ import annotations
 
+import logging
+import time
 from typing import Callable
 
 from PySide6.QtCore import Qt
@@ -24,6 +26,8 @@ from PySide6.QtWidgets import (
 
 from scholarpath.profiles import Profile
 from scholarpath.storage import Database
+
+logger = logging.getLogger("scholarpath.ui.profile")
 
 DEGREE_LABELS = {
     "": "Not set",
@@ -223,13 +227,35 @@ class ProfilePage(QWidget):
         )
 
     def _on_save(self) -> None:
+        """Save the form and say, plainly, that it happened.
+
+        A save that fails, or a side panel that does not refresh, must never
+        look like a save that worked (G137).
+        """
         profile = self._apply_form_to_profile()
-        self._database.save_profile(profile.as_payload())
+        try:
+            self._database.save_profile(profile.as_payload())
+        except Exception as exc:  # noqa: BLE001 - the student must see this
+            logger.exception("profile save failed")
+            self._saved_label.setText(
+                f"The profile could not be saved: {exc}. Nothing was changed."
+            )
+            return
         self._profile = profile
-        feedback = f"Saved locally \u2014 {profile.completion()}% complete."
-        self._saved_label.setText(feedback)
+        stamp = time.strftime("%H:%M:%S")
+        self._saved_label.setText(
+            f"Saved locally \u2014 {profile.completion()}% complete (saved at {stamp})."
+        )
+        logger.info("profile saved locally, %d%% complete", profile.completion())
         if self._on_saved:
-            self._on_saved()
+            try:
+                self._on_saved()
+            except Exception:  # noqa: BLE001 - the save itself already worked
+                logger.exception("the views could not be refreshed after saving")
+                self._saved_label.setText(
+                    f"Saved locally \u2014 {profile.completion()}% complete (saved at "
+                    f"{stamp}), but the side panel could not be refreshed."
+                )
 
     def _on_clear(self) -> None:
         self._database.clear_profile()

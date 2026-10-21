@@ -93,6 +93,39 @@ timer stop, review notice shows.
 
 ---
 
+### 2026-10-21 — A24 — Saving the profile is now unmistakable (G137)
+
+**Satisfies:** G137 (the owner clicked Save profile and "nothing happened").
+
+Built:
+
+| Area | File(s) |
+| ---- | ------- |
+| Save feedback with the time, honest failure text, guarded refresh | `src/scholarpath/ui/profile_page.py` |
+| Side card re-read on every page change; each refresh step guarded and logged | `src/scholarpath/ui/main_window.py` |
+| Profile-suggestion card follows the sticky auto-scroll | `src/scholarpath/ui/main_window.py` |
+| Tests | `tests/test_profile_save.py` (6 tests) |
+
+Behaviour: the confirmation under the buttons now reads "Saved locally - 75%
+complete (saved at 13:28:26)", so every save visibly changes the screen; a
+save that fails says "The profile could not be saved: ..." instead of
+pretending; each view refresh (profile form, right-hand card, eligibility
+page) is guarded and logged so one broken view cannot leave the others stale
+or fail silently; and the right-hand card is re-read from the database on
+every page change, so it can no longer keep saying "Not set up yet" after a
+successful save.
+
+**Evidence:** 296 tests passing. Reproduced against a copy of the real
+profile database: the save wrote the values, the card showed
+"Rajesh Katuwal / 75% complete - stored locally", and the new tests assert
+exactly that the card is never stale and that the message always changes.
+
+**Known limits:** the profile form has no per-field validation beyond the
+model's own rules, so a value that fails validation is reported by the
+completion percentage rather than blocked.
+
+---
+
 ### 2026-10-21 — A23 — Web search in the chat (G136)
 
 **Satisfies:** G136 (the student asked for "search scholarship in uk" and the

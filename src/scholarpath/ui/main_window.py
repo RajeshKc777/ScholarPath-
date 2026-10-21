@@ -1159,6 +1159,11 @@ class MainWindow(QMainWindow):
         }.get(name, 0)
         self._pages.setCurrentIndex(index)
         self._page_name = name
+        # The side card always mirrors what is really stored locally (G137).
+        try:
+            self._refresh_profile_panel()
+        except Exception:  # noqa: BLE001 - a stale card must not break navigation
+            logger.exception("the profile panel could not be refreshed")
         titles = {
             "chat": "Chat Assistant",
             "profile": "My Profile",
@@ -1179,11 +1184,24 @@ class MainWindow(QMainWindow):
         self._refresh_status()
 
     def _on_profile_saved(self) -> None:
-        """Callback after the profile form or a document apply changed data."""
-        self._profile_page.refresh()
-        self._refresh_profile_panel()
+        """Callback after the profile form or a document apply changed data.
+
+        Each step is guarded: a failure in one view must not leave the others
+        stale, and it must be visible in the log (G137).
+        """
+        try:
+            self._profile_page.refresh()
+        except Exception:  # noqa: BLE001 - one broken view must not stop the rest
+            logger.exception("the profile page could not be reloaded")
+        try:
+            self._refresh_profile_panel()
+        except Exception:  # noqa: BLE001
+            logger.exception("the profile panel could not be refreshed")
         if getattr(self, "_eligibility_page", None) is not None:
-            self._eligibility_page.reload()
+            try:
+                self._eligibility_page.reload()
+            except Exception:  # noqa: BLE001
+                logger.exception("the eligibility page could not be reloaded")
         self._refresh_status()
 
     def _refresh_profile_panel(self) -> None:
@@ -1326,9 +1344,8 @@ class MainWindow(QMainWindow):
             updates, self._apply_profile_suggestion, self.transcript.widget()
         )
         self._turns_layout.insertWidget(self._turns_layout.count() - 1, card)
-        self.transcript.verticalScrollBar().setValue(
-            self.transcript.verticalScrollBar().maximum()
-        )
+        if getattr(self, "_stick_to_bottom", True):
+            self._scroll_transcript_to_bottom()
 
     def _apply_profile_suggestion(self, selected: dict[str, str]) -> None:
         payload = merge_selected(
