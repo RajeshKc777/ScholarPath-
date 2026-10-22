@@ -169,15 +169,11 @@ class VerifyPanel(QFrame):
             self._values.addWidget(line)
         missing = draft.unknown_fields()
         if missing:
-            names = ", ".join(SCHOLARSHIP_LABELS.get(name, name) for name in missing)
-            note = QLabel(
-                f"Not stated on the page: {names}. These stay empty rather than "
-                "being guessed.",
-                self,
+            self._status.setText(
+                self._status.text()
+                + f" {len(missing)} value(s) did not appear on the page and stay "
+                "empty rather than being guessed."
             )
-            note.setObjectName("VerifyNote")
-            note.setWordWrap(True)
-            self._values.addWidget(note)
         if verified:
             self._save.setVisible(True)
             self._save.setToolTip(
