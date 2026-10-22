@@ -37,7 +37,7 @@ is finished, not when it is started. Each entry names the goal it satisfies
   badges and eight real screenshots of the shipped pages (A30, re-captured in
   A34 and A35).
 - Licence: proprietary, source-available, view-only (`LICENSE`).
-- Tests: **642 passing** (`pytest`, ~56 s).
+- Tests: **651 passing** (`pytest`, ~56 s).
 - M7: packaged and bundle-audited (`dist\ScholarPathAI`,
   `packaging\build.ps1`), but **not clean-Windows verified**; there is no
   installer and no separate security/performance review. G138, G207 and G113
@@ -73,6 +73,8 @@ is finished, not when it is started. Each entry names the goal it satisfies
 - The button says "Checked" when the page was checked and "Could not check"
   when it was not, and it cannot be pressed twice.
 
+**Evidence:** **651 tests pass** (646 before plus 5 new), exit 0.
+
 ### 2026-10-22 - A43 - The links in a reply are a strong blue, not a faded one (G185)
 
 **Satisfies:** G185.
@@ -87,6 +89,8 @@ is finished, not when it is started. Each entry names the goal it satisfies
   value, so any anchor Qt still paints itself matches.
 - On the student's orange bubble a link is white, like the rest of the bubble.
 - The theme's rule uses the same constant, so there is one place to change it.
+
+**Evidence:** **646 tests pass** (642 before plus 4 new), exit 0.
 
 ### 2026-10-22 - A42 - "Verify this page" on the official links the chat gives (G184)
 
