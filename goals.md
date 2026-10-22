@@ -107,6 +107,8 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G184 | 50 | A "Verify this page" button on each official-looking link the chat lists, which runs the existing read-and-verify flow and offers to save the page to the catalog | `[x]` |
 | G185 | 51 | Links in a chat reply are a strong, clearly visible blue (not the faded shade Qt paints anchors with), underlined, on both the assistant and the user bubble | `[x]` |
 | G186 | 51 | "Verify this page" verifies in the chat itself: the page is read and checked in place, the verified values and the ones the page does not state are shown there, and the record can be saved to the catalog from the reply without opening the Scholarship Pages page | `[x]` |
+| G187 | 52 | Crawl discovery prefers scholarship pages: every same-site link is scored by scholarship/funding words (English plus common local-language terms), the highest scores are read first, links are capped per page, depth is capped per run, and obvious non-content (login, cart, news archives, calendars) is skipped | `[~]` |
+| G188 | 52 | The crawler reads PDFs published on the official domains it already walks (size-capped), extracts the text layer, and runs the same extract-and-word-for-word verify pipeline, storing the PDF's address and the hash of the PDF bytes | `[~]` |
 
 ---
 
@@ -1765,3 +1767,35 @@ Pages page.
 
 **Done (2026-10-22).** See `achievements.md` A43-A44.
 
+
+
+
+## 52. Crawler breadth without loosening verification (G187-G188)
+
+STEP 1 of the owner's four-step crawler plan. The rules that do **not** change:
+official pages only, word-for-word verification, source address + page hash
+stored, robots.txt obeyed, one request per second per host, no network in tests.
+
+1. **Scored discovery.** Links are ranked by scholarship/funding words - the
+   task's list (scholarship, fellowship, grant, funding, bursary, apply,
+   eligibility, deadline) plus common local-language terms (Nepali, Korean,
+   Japanese, Chinese, Indonesian/Malay, Vietnamese, Thai, German, French,
+   Spanish, Portuguese, Polish, Russian, Arabic). The highest scores are read
+   first, a page contributes at most a fixed number of links, and depth is
+   capped even when the registry asks for more.
+2. **Skip obvious non-content.** Login, sign-up, account, cart, checkout,
+   calendar, archive, tag, author and search-result paths are never queued.
+3. **PDF support.** A PDF inside the allowed paths of an official portal is
+   fetched (size cap), its text layer extracted, and the same extract -> verify
+   -> save pipeline runs on it. A scan with no text layer is refused and said
+   so; nothing is invented. The source address and the hash of the PDF bytes
+   are stored, and the record says it was read from a document.
+4. **Page cap per run.** The whole run stops at a fixed page total, so eight
+   portals cannot each spend the full per-portal allowance.
+
+Steps 2-4 of the plan (candidate finder, JS rendering, signed catalog
+snapshot) are **not** part of this one.
+
+**No new external dataset or service is used in STEP 1**: PDFs and links come
+from the portals already in the sources registry, so no third-party terms
+change what this step may do.
