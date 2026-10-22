@@ -92,6 +92,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G169 | 43 | Live catalog run with the real model on 3 portals, at most 8 pages each, with a per-field verbatim audit; every bug found is fixed with a fake-server/fake-gateway regression test | `[ ]` |
 | G170 | 44 | A live-proofs checklist in `docs/live_checks.md` for forced-429 failover, neural-voice audibility and clean-Windows packaging; the goals stay open until the owner runs it and reports back | `[ ]` |
 | G171 | 45 | Privacy switches are real toggles in Settings, on by default, and saved to `config.toml` from the app; no student edits the file to turn voice or web search on | `[x]` |
+| G172 | 46 | One name per page: the top bar names the page, the body no longer repeats it, and the one-line description under the name does not repeat it either | `[x]` |
 
 ---
 
@@ -1476,3 +1477,23 @@ defaults are on (`PrivacyConfig`), `config.example.toml` matches, and no
 user-facing text tells a student to edit a config key any more. An existing
 `config.toml` keeps its own values until a toggle is flipped. 579 tests pass,
 including 6 new ones.
+
+## 46. One name per page (G172)
+
+The window's top bar has always named the page ("Settings", "Discover", ...)
+and every page also drew its own big heading with the same word, so the name
+appeared twice on every page. The shell header is the single name:
+
+- The eight page bodies (Profile, Documents, Scholarship pages, Eligibility,
+  Catalog, Discover, Saved, Settings) lose their duplicated `PageTitle2`
+  heading and keep their lead sentence, which says what the page is for.
+- The top bar keeps the page name and gains a one-line description of that
+  page. The description no longer repeats the name, and the Catalog and
+  Discover pages get their own line instead of the chat one they used to
+  show.
+- The top-bar title block takes the spare width, so the description is one
+  line instead of wrapping after a few words.
+- The status strip gets matching lines for Catalog and Discover instead of
+  the chat line.
+- The README gallery is re-captured from the real window, so every screenshot
+  shows the shipped page.

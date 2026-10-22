@@ -173,8 +173,6 @@ class EligibilityPage(QWidget):
 
         header = QVBoxLayout()
         header.setSpacing(3)
-        title = QLabel("Eligibility checks", self)
-        title.setObjectName("PageTitle2")
         lead = QLabel(
             "Rule-based checks of your saved scholarship records against your "
             "local profile. No model and no probabilities: anything either side "
@@ -183,7 +181,6 @@ class EligibilityPage(QWidget):
         )
         lead.setObjectName("PageLead")
         lead.setWordWrap(True)
-        header.addWidget(title)
         header.addWidget(lead)
         outer.addLayout(header)
 

@@ -226,8 +226,6 @@ class CatalogPage(QWidget):
 
         header = QVBoxLayout()
         header.setSpacing(3)
-        title = QLabel("Catalog of official portals", self)
-        title.setObjectName("PageTitle2")
         lead = QLabel(
             "Read the official scholarship portals below and store what their "
             "pages state. Every portal is checked against its own robots.txt, "
@@ -237,7 +235,6 @@ class CatalogPage(QWidget):
         )
         lead.setObjectName("PageLead")
         lead.setWordWrap(True)
-        header.addWidget(title)
         header.addWidget(lead)
         outer.addLayout(header)
 

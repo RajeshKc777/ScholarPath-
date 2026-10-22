@@ -71,8 +71,6 @@ class ProfilePage(QWidget):
 
         header = QVBoxLayout()
         header.setSpacing(3)
-        title = QLabel("Your academic profile", self)
-        title.setObjectName("PageTitle2")
         lead = QLabel(
             "Local-only. This is what the app (later: research and eligibility "
             "checks) will work from. You fill it yourself or confirm extracted "
@@ -81,7 +79,6 @@ class ProfilePage(QWidget):
         )
         lead.setObjectName("PageLead")
         lead.setWordWrap(True)
-        header.addWidget(title)
         header.addWidget(lead)
         outer.addLayout(header)
 

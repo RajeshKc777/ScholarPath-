@@ -158,8 +158,6 @@ class SavedPage(QWidget):
 
         header = QVBoxLayout()
         header.setSpacing(3)
-        title = QLabel("Saved Opportunities", self)
-        title.setObjectName("PageTitle2")
         lead = QLabel(
             "Records you explicitly saved \u2014 nothing is auto-saved. Compare "
             "them side by side, and keep a per-record application checklist "
@@ -168,7 +166,6 @@ class SavedPage(QWidget):
         )
         lead.setObjectName("PageLead")
         lead.setWordWrap(True)
-        header.addWidget(title)
         header.addWidget(lead)
         outer.addLayout(header)
 

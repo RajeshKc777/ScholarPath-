@@ -820,8 +820,9 @@ class MainWindow(QMainWindow):
         self.subtitle.setWordWrap(True)
         titles.addWidget(title)
         titles.addWidget(self.subtitle)
-        row.addLayout(titles)
-        row.addStretch(1)
+        # The title block takes the spare width, so the one-line subtitle is
+        # not squeezed into a narrow column (it used to wrap after a few words).
+        row.addLayout(titles, 1)
 
         pill = QLabel("\u25cf  \u2026", bar)
         pill.setObjectName("StatusPill")
@@ -2149,6 +2150,16 @@ class MainWindow(QMainWindow):
                 text = (
                     f"{state}  \u00b7  eligibility  \u00b7  rule-based  \u00b7  no probabilities"
                 )
+            elif self._page_name == "catalog":
+                text = (
+                    f"{state}  \u00b7  catalog  \u00b7  official portals only  \u00b7  "
+                    f"verified values"
+                )
+            elif self._page_name == "discover":
+                text = (
+                    f"{state}  \u00b7  discover  \u00b7  the stored catalog  \u00b7  "
+                    f"nothing leaves this device"
+                )
             elif self._page_name == "saved":
                 text = f"{state}  \u00b7  saved  \u00b7  nothing is auto-saved"
             elif self._page_name == "settings":
@@ -2194,28 +2205,36 @@ class MainWindow(QMainWindow):
             self.subtitle.setText("Working on your message\u2026")
         elif self._page_name == "profile":
             self.subtitle.setText(
-                "Academic profile \u2014 local-only, private by design."
+                "Your academic details stay on this device."
             )
         elif self._page_name == "documents":
             self.subtitle.setText(
-                "Documents \u2014 parsed locally, every value confirmed by you."
+                "Parsed locally; every value is confirmed by you."
             )
         elif self._page_name == "research":
             self.subtitle.setText(
-                "Scholarship pages \u2014 you paste the official URL; every value is verified."
+                "You paste the official URL; every value is verified."
             )
         elif self._page_name == "eligibility":
             self.subtitle.setText(
-                "Eligibility \u2014 deterministic checks with honest unknowns."
+                "Deterministic checks with honest unknowns."
+            )
+        elif self._page_name == "catalog":
+            self.subtitle.setText(
+                "Eight official portals, read one by one; every value is "
+                "verified."
+            )
+        elif self._page_name == "discover":
+            self.subtitle.setText(
+                "Search the stored catalog; browsing never leaves this device."
             )
         elif self._page_name == "saved":
             self.subtitle.setText(
-                "Saved Opportunities \u2014 side-by-side reading and checklists; "
-                "nothing is auto-saved."
+                "Side-by-side reading and checklists; nothing is auto-saved."
             )
         elif self._page_name == "settings":
             self.subtitle.setText(
-                "Settings \u2014 privacy switches, model status and what stays local."
+                "Privacy switches, model status and what stays local."
             )
         elif live:
             web = "on" if self._privacy_flag("web_search") else "off (enable in Settings)"

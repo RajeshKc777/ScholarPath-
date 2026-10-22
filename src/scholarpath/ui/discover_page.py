@@ -210,8 +210,6 @@ class DiscoverPage(QWidget):
 
         header = QVBoxLayout()
         header.setSpacing(3)
-        title = QLabel("Discover", self)
-        title.setObjectName("PageTitle2")
         lead = QLabel(
             "Search the records your catalog already holds and filter them by "
             "what the pages state. Browsing changes nothing and the search never "
@@ -221,7 +219,6 @@ class DiscoverPage(QWidget):
         )
         lead.setObjectName("PageLead")
         lead.setWordWrap(True)
-        header.addWidget(title)
         header.addWidget(lead)
         outer.addLayout(header)
 

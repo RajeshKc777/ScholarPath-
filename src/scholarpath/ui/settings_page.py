@@ -307,8 +307,6 @@ class SettingsPage(QWidget):
 
         header = QVBoxLayout()
         header.setSpacing(3)
-        title = QLabel("Settings", self)
-        title.setObjectName("PageTitle2")
         lead = QLabel(
             "Privacy switches save automatically. Advanced settings live in "
             "config.toml, where unknown keys and bad values are rejected, not "
@@ -317,7 +315,6 @@ class SettingsPage(QWidget):
         )
         lead.setObjectName("PageLead")
         lead.setWordWrap(True)
-        header.addWidget(title)
         header.addWidget(lead)
         outer.addLayout(header)
 

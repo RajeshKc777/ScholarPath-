@@ -34,9 +34,10 @@ is finished, not when it is started. Each entry names the goal it satisfies
   (A28). The README now carries five Mermaid diagrams — the student journey,
   the system map, the record pipeline, the re-check decision and the device
   trust boundary (A29). The README now also carries a banner, seven
-  badges and eight real screenshots of the shipped pages (A30).
+  badges and eight real screenshots of the shipped pages (A30, re-captured in
+  A34).
 - Licence: proprietary, source-available, view-only (`LICENSE`).
-- Tests: **579 passing** (`pytest`, ~51 s).
+- Tests: **582 passing** (`pytest`, ~52 s).
 - M7: packaged and bundle-audited (`dist\ScholarPathAI`,
   `packaging\build.ps1`), but **not clean-Windows verified**; there is no
   installer and no separate security/performance review. G138, G207 and G113
@@ -49,6 +50,23 @@ is finished, not when it is started. Each entry names the goal it satisfies
 ---
 
 ## Log (newest first)
+
+### 2026-10-22 - A34 - One name per page (G172)
+
+**Satisfies:** G172.
+
+| Area | What changed |
+| ---- | ------------ |
+| The duplicate heading | The eight page bodies (Profile, Documents, Scholarship pages, Eligibility, Catalog, Discover, Saved, Settings) no longer draw their own big `PageTitle2` heading. The window's top bar has always named the page, so it is now the only place the name appears. Each page keeps its lead sentence, which says what the page is for. The Catalog page keeps its "Stored records" section heading - that one is a section, not a second page name. |
+| The description line | The top bar's one-line description under the name no longer repeats the name ("Settings - privacy switches..." became "Privacy switches, model status and what stays local."). Catalog and Discover, which fell through to the chat line, now describe themselves. The title block takes the spare width, so the description is one line instead of wrapping after three words. |
+| The status strip | Catalog and Discover get their own status lines instead of "chat: live - 0 messages - no web search yet". |
+| The gallery | Every README screenshot was re-captured from the real window (stub gateway, sample profile "Aarav Sharma", six sample records, one record with a stored page change), so the gallery shows the shipped pages. |
+
+**Evidence:** **582 tests pass** (579 before plus 3 in
+`tests/test_ui_page_titles.py`), exit 0. The new tests walk every page: the
+top-bar title is the page name, the page body holds no label with that same
+text, the description does not start with the name, and the Catalog still has
+its "Stored records" heading.
 
 ### 2026-10-22 - A33 - Privacy switches you can flip in the app (G171)
 

@@ -240,8 +240,6 @@ class DocumentsPage(QWidget):
 
         header = QVBoxLayout()
         header.setSpacing(3)
-        title = QLabel("Your documents", self)
-        title.setObjectName("PageTitle2")
         lead = QLabel(
             "Files stay on this machine. Text is read locally (or with Windows "
             "OCR) and sent to your model service only to propose values; you "
@@ -250,7 +248,6 @@ class DocumentsPage(QWidget):
         )
         lead.setObjectName("PageLead")
         lead.setWordWrap(True)
-        header.addWidget(title)
         header.addWidget(lead)
         outer.addLayout(header)
 

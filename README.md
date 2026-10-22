@@ -15,7 +15,7 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?style=flat-square&logo=windows&logoColor=white)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Qt](https://img.shields.io/badge/Qt-6.12-41CD52?style=flat-square&logo=qt&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-579%20passing-2ea043?style=flat-square&logo=pytest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-582%20passing-2ea043?style=flat-square&logo=pytest&logoColor=white)
 ![Local first](https://img.shields.io/badge/local--first-no%20cloud%20account-8B5CF6?style=flat-square)
 ![License](https://img.shields.io/badge/license-view--only%20%C2%B7%20all%20rights%20reserved-b3261e?style=flat-square)
 
@@ -46,7 +46,7 @@ built on the opposite rule set.
 | **Official sources only** | Universities, government portals, and programme administrators are the authority — not search snippets. |
 | **Explainable eligibility** | Every requirement is reported as satisfied, unmet, unknown, or needs manual verification. Never a bare "you qualify". |
 | **No fabrication** | If a fact cannot be verified, the app says so. It does not invent deadlines, amounts, or criteria. |
-| **Local-first** | Profiles and academic documents stay on your machine. Nothing leaves the device by default. |
+| **Local-first** | Profiles and academic documents stay on your machine. What may be sent is decided by three switches in Settings, and the app says who receives what. |
 | **Honest failure** | A broken provider produces an error, never a plausible-looking answer. |
 
 ---
@@ -402,7 +402,7 @@ scholarpath --init-config   # write the configuration template, then exit
 scholarpath --config path\to\config.toml
 scholarpath --version
 python -m scholarpath       # equivalent to the console script
-pytest                      # 579 tests, no network required (fake server on loopback)
+pytest                      # 582 tests, no network required (fake server on loopback)
 ```
 
 </details>

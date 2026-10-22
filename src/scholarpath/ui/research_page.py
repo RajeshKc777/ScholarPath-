@@ -355,8 +355,6 @@ class ResearchPage(QWidget):
 
         header = QVBoxLayout()
         header.setSpacing(3)
-        title = QLabel("Scholarship pages", self)
-        title.setObjectName("PageTitle2")
         lead = QLabel(
             "Paste an official scholarship page and the app reads it, or paste "
             "a site's scholarships/funding page and use Find pages to list the "
@@ -367,7 +365,6 @@ class ResearchPage(QWidget):
         )
         lead.setObjectName("PageLead")
         lead.setWordWrap(True)
-        header.addWidget(title)
         header.addWidget(lead)
         outer.addLayout(header)
 
