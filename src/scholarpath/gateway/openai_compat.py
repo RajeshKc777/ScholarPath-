@@ -356,6 +356,24 @@ class OpenAICompatibleGateway:
                 "The model endpoint has no /chat/completions route."
             )
         if exc.code == 400:
+            # Some providers answer 400 (not 401) when the Authorization header
+            # is missing or wrong. That is an authentication failure, and it
+            # must not be reported as a broken request shape.
+            lowered_message = message.lower()
+            if any(
+                token in lowered_message
+                for token in (
+                    "authorization",
+                    "api key",
+                    "api_key",
+                    "authentication",
+                    "unauthorized",
+                )
+            ):
+                return GatewayNotConfigured(
+                    "The model endpoint refused the request because the key or "
+                    f"the Authorization header is missing or wrong (HTTP 400): {message}"
+                )
             return _EndpointRejection(message)
         if exc.code >= 500:
             return GatewayUnavailable(

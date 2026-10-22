@@ -10,6 +10,9 @@ which one answers, in configuration order, and keeps the decision honest:
   whose configuration is unusable is disabled for the session, never retried
   in a loop;
 - a missing model on one provider is not fatal: the next provider may have it;
+- a profile that cannot serve the request at all (no ``/chat/completions``
+  route, a malformed answer) is skipped for that turn instead of ending it;
+  the error is reported when no profile answers;
 - ``free_only`` mode only considers profiles marked free-only, so a free user
   can never be routed to a paid endpoint by a fallback;
 - the conversation is the same ``ChatRequest`` object on every attempt. The
@@ -158,8 +161,10 @@ class ProviderRouter:
                     exc.message,
                 )
             except GatewayError as exc:
-                if not exc.retryable:
-                    raise
+                # Every profile is tried at most once per turn. A profile that
+                # cannot serve the request (no route, a malformed answer) is
+                # skipped - it is not disabled, because the next profile may
+                # still answer and this one may work later.
                 state.detail = exc.message
                 last_error = exc
                 logger.info(

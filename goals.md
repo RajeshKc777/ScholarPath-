@@ -1960,3 +1960,38 @@ is not added by this layer; OAuth connect buttons and a provider-management
 UI are not built here (G190 covers the OpenRouter helper); profiles are
 edited in `config.toml`.
 
+## 56. Gateway validation run and the fixes it found (G191 verification)
+
+**Why:** a router that was only tested with doubles can still be wrong in the
+field. This run checked the shipped code against the providers that exist on
+this machine, wrote the evidence into `failure.md`, and fixed only what was
+reproduced.
+
+**What was proven working (real answers, not reachability):** the local
+OpenCode service, AgentRouter through the user's local proxy, OpenRouter with
+a free model, and local Ollama (no key at all). NVIDIA NIM authenticates but
+is not entitled to any model; Groq, Gemini, Mistral, xAI and DeepSeek were
+reached far enough to confirm that a key is required, and nothing more.
+
+**Three defects were reproduced and fixed:**
+
+1. a profile that could not serve the request (no `/chat/completions` route)
+   ended the whole turn instead of letting the next profile answer - the
+   router now skips it and reports the error only if nobody answers;
+2. a 403 refusal stopped the provider chain, so the configured fallback
+   provider never got a chance - the chain now moves on for a refusal, while
+   a missing or rejected key still stops it;
+3. a 400 that means "no key" (Gemini's answer) was reported as a broken
+   request shape - it is now classified as an authentication failure.
+
+**Plus one gap closed:** the per-profile `timeout_seconds` had no test, and a
+local model on this CPU answers in 52-92 s, well past the default timeout.
+
+**Free-only routing was proven live,** not only in a unit test: a recording
+endpoint standing in for a paid host received **zero** requests while the
+free-only router answered from a real free provider.
+
+**Recorded in `failure.md`** with the evidence, the exact source locations,
+the re-verification after each fix, and what remains untested.
+
+

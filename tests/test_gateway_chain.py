@@ -8,6 +8,7 @@ from scholarpath.config import GatewayConfig
 from scholarpath.gateway.base import (
     ChatRequest,
     ChatResponse,
+    GatewayForbidden,
     GatewayNotConfigured,
     GatewayRateLimited,
     Message,
@@ -68,6 +69,29 @@ def test_a_broken_configuration_stops_the_chain_immediately() -> None:
         chain.complete(_chat())
 
     assert second.calls == 0
+
+
+def test_a_refused_request_moves_on_to_the_next_provider() -> None:
+    # A 403 answers one provider, not the request: the next one may serve it.
+    first = _Gateway(error=GatewayForbidden("refused by the provider"))
+    second = _Gateway(text="Second answer.")
+    chain = GatewayChain([first, second])
+
+    response = chain.complete(_chat())
+
+    assert response.text == "Second answer."
+    assert second.calls == 1
+
+
+def test_a_refusal_by_every_provider_is_reported() -> None:
+    first = _Gateway(error=GatewayForbidden("refused"))
+    second = _Gateway(error=GatewayForbidden("also refused"))
+    chain = GatewayChain([first, second])
+
+    with pytest.raises(GatewayForbidden) as excinfo:
+        chain.complete(_chat())
+
+    assert "also refused" in excinfo.value.message
 
 
 def test_every_provider_failing_reports_the_last_error() -> None:

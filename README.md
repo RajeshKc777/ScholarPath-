@@ -668,6 +668,9 @@ free_only = true
   reach another host.
 - `kind` is `openai`, `opencode`, or `stub`. An `openai` profile needs
   `base_url` and `model` (or `models`).
+- A profile may set its own `timeout_seconds`. A local model on a CPU answers
+  in 50-90 s, so give that profile `timeout_seconds = 300`; the global
+  timeout (30 s) is for cloud replies.
 - Settings shows counts only ("2 of 3 AI connections ready"), never provider
   names. Error replies distinguish a missing key, a rejected key, a refusal,
   a rate limit, and a missing model instead of calling everything a bad key.
@@ -678,6 +681,10 @@ flows for IDE accounts; OmniRoute needs Node 22+ and a 1.9 GB tree; llmrouter
 is a fine Go sidecar but gives model providers API-key auth only. All three
 were checked on 2026-10-22; see G191.) Streaming and model-side tool calls
 remain outside the gateway contract: one complete reply per turn.
+
+Every validation run against a real provider - what answered, what did not,
+and every defect that was found and fixed - is recorded in
+[failure.md](failure.md).
 
 ### Sources registry (catalog)
 

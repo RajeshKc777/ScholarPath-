@@ -393,6 +393,24 @@ def test_a_missing_model_is_retried_on_the_next_model(endpoint: _FakeEndpoint) -
     assert endpoint.received_models == ["retired-model", "current-model"]
 
 
+def test_a_missing_authorization_header_is_reported_as_an_auth_failure(
+    endpoint: _FakeEndpoint,
+) -> None:
+    # Some providers answer 400 (not 401) when the key is missing.
+    endpoint.status_by_model["deepseek-v4-flash"] = 400
+    endpoint.message_by_model["deepseek-v4-flash"] = (
+        "Missing or invalid Authorization header."
+    )
+    gateway = _gateway(endpoint, model="deepseek-v4-flash")
+
+    with pytest.raises(GatewayNotConfigured) as excinfo:
+        gateway.complete(_chat())
+
+    message = excinfo.value.message.lower()
+    assert "authorization" in message
+    assert "missing or wrong" in message
+
+
 def test_retry_after_is_read_from_the_header(endpoint: _FakeEndpoint) -> None:
     endpoint.status_by_model["deepseek-v4-flash"] = 429
     endpoint.retry_after_by_model["deepseek-v4-flash"] = "17"

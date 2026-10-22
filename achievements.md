@@ -37,7 +37,7 @@ is finished, not when it is started. Each entry names the goal it satisfies
   badges and eight real screenshots of the shipped pages (A30, re-captured in
   A34 and A35).
 - Licence: proprietary, source-available, view-only (`LICENSE`).
-- Tests: **728 passing** (`pytest`, ~77 s).
+- Tests: **733 passing** (`pytest`, ~70 s).
 - M7: packaged and bundle-audited (`dist\ScholarPathAI`,
   `packaging\build.ps1`), but **not clean-Windows verified**; there is no
   installer and no separate security/performance review. G138, G207 and G113
@@ -50,6 +50,41 @@ is finished, not when it is started. Each entry names the goal it satisfies
 ---
 
 ## Log (newest first)
+
+### 2026-10-22 - A49 - Gateway validation run: three defects found and fixed (G191)
+
+**Satisfies:** G191 (verification pass).
+
+- The shipped router was checked against the providers that exist on this
+  machine, and the evidence was written to **`failure.md`** (new file, first
+  run record).
+- **Proven working with a real answer:** the local OpenCode service
+  ("OK", 48.2 s), AgentRouter through the user's local proxy (`gpt-6.1-sol`,
+  3.84 s, through the `/v1/responses` fallback), **OpenRouter** with a free
+  model (1.99 s), and **local Ollama** with no key at all (`qwen2.5-coder:7b`,
+  52.2 s).
+- **Reachable but not usable:** NVIDIA NIM authenticates and then answers
+  `404 Function not found for account` for every model - the account is not
+  entitled. Groq, Gemini, Mistral, xAI and DeepSeek were reached only far
+  enough to confirm that a key is required; none of them was tested for
+  success.
+- **Free-only routing proven live:** a recording endpoint standing in for a
+  paid host received **0 requests** while the free-only router answered from
+  a real free provider.
+- **Three reproduced defects, fixed with regression tests:**
+  (1) a profile that could not serve the request ended the whole turn
+  (`router.py`, now skips it);
+  (2) a 403 refusal stopped the provider chain, so the configured fallback
+  never answered (`chain.py`, now moves on);
+  (3) a 400 that means "no key" (Gemini's answer) was reported as a broken
+  request (`openai_compat.py`, now an authentication failure).
+- **One gap closed:** the per-profile `timeout_seconds` had no test, and a
+  local model on this CPU needs its own (52-92 s per answer).
+- **Suite:** 728 passing before, **733 passing** after, ~70 s, no network
+  beyond loopback. The Ollama service was started for the run and stopped
+  again.
+- **Not done (out of scope by instruction):** in-app Connect flow, credential
+  store migration, streaming, tool calling.
 
 ### 2026-10-22 - A48 - A unified multi-provider model layer (G191)
 

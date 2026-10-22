@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
@@ -21,6 +22,7 @@ from scholarpath.gateway.base import (
     GatewayNotConfigured,
     GatewayProtocolError,
     GatewayRateLimited,
+    GatewayTimeout,
     GatewayUnavailable,
     Message,
 )
@@ -244,18 +246,52 @@ def test_a_retryable_failure_moves_on_to_the_next_provider() -> None:
     assert "down" in status.detail
 
 
-def test_a_non_retryable_failure_is_not_hidden_by_a_fallback() -> None:
-    first = _Gateway(errors=[GatewayProtocolError("broken payload")])
+def test_a_profile_that_cannot_serve_the_request_does_not_end_the_turn() -> None:
+    # A wrong base URL (no /chat/completions route) must not take the whole
+    # turn down: the next profile may still answer.
+    first = _Gateway(errors=[GatewayProtocolError("no /chat/completions route")])
     second = _Gateway(text="Fallback.")
     router = _router(
         ProviderProfile("one", first),
         ProviderProfile("two", second),
     )
 
-    with pytest.raises(GatewayProtocolError):
+    assert router.complete(_chat()).text == "Fallback."
+    assert len(first.requests) == 1
+
+
+def test_the_error_is_reported_when_no_profile_can_answer() -> None:
+    router = _router(
+        ProviderProfile("one", _Gateway(errors=[GatewayProtocolError("no route")])),
+        ProviderProfile("two", _Gateway(errors=[GatewayProtocolError("no route")])),
+    )
+
+    with pytest.raises(GatewayProtocolError) as excinfo:
         router.complete(_chat())
 
-    assert second.requests == []
+    assert "no route" in excinfo.value.message
+
+
+def test_a_profile_timeout_is_its_own() -> None:
+    """A local model needs its own, longer timeout (CPU inference is slow)."""
+    slow = _SlowEndpoint(delay=1.5)
+    with slow:
+        config = GatewayConfig(
+            timeout_seconds=30.0,
+            profiles=[
+                ProviderProfileConfig(
+                    name="slow-local",
+                    kind="openai",
+                    base_url=slow.base_url,
+                    model="slow-model",
+                    timeout_seconds=0.5,
+                )
+            ],
+        )
+        gateway = build_gateway(config)
+
+        with pytest.raises(GatewayTimeout):
+            gateway.complete(_chat())
 
 
 def test_status_reports_ready_cooling_and_disabled_states() -> None:
@@ -387,6 +423,55 @@ class _Endpoint:
         return f"http://127.0.0.1:{self.port}/v1"
 
     def __enter__(self) -> _Endpoint:
+        self._thread.start()
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        self._http.shutdown()
+        self._http.server_close()
+
+
+class _SlowEndpoint:
+    """A loopback endpoint that answers after a delay (timeout tests)."""
+
+    def __init__(self, delay: float = 1.5) -> None:
+        self.delay = delay
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *args) -> None:
+                pass
+
+            def do_POST(self) -> None:  # noqa: N802
+                length = int(self.headers.get("Content-Length") or 0)
+                self.rfile.read(length)
+                time.sleep(outer.delay)
+                raw = json.dumps(
+                    {
+                        "model": "slow-model",
+                        "choices": [
+                            {
+                                "message": {"role": "assistant", "content": "Too late."},
+                                "finish_reason": "stop",
+                            }
+                        ],
+                    }
+                ).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+
+        self._http = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.port = int(self._http.server_address[1])
+        self._thread = threading.Thread(target=self._http.serve_forever, daemon=True)
+
+    @property
+    def base_url(self) -> str:
+        return f"http://127.0.0.1:{self.port}/v1"
+
+    def __enter__(self) -> _SlowEndpoint:
         self._thread.start()
         return self
 

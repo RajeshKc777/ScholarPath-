@@ -7,7 +7,8 @@ wins; nothing is merged or invented.
 
 A non-retryable failure (a wrong key, a broken configuration) stops the
 chain immediately: repeating it on another provider would only produce the
-same mistake twice.
+same mistake twice. A refusal (HTTP 403) is different - it answers one
+provider, not the request - so the chain moves on to the next provider.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from scholarpath.gateway.base import (
     ChatRequest,
     ChatResponse,
     GatewayError,
+    GatewayForbidden,
     ModelGateway,
 )
 
@@ -47,6 +49,18 @@ class GatewayChain:
         for index, gateway in enumerate(self._gateways):
             try:
                 return gateway.complete(request)
+            except GatewayForbidden as exc:
+                # The provider accepted the credential but refused this request
+                # (a permission or region answer). The next provider may still
+                # serve the request, so the chain moves on.
+                last_error = exc
+                logger.info(
+                    "provider %s refused the request (%s); trying the next one",
+                    gateway.name,
+                    exc.message,
+                )
+                if index + 1 >= len(self._gateways):
+                    break
             except GatewayError as exc:
                 if not exc.retryable:
                     raise
