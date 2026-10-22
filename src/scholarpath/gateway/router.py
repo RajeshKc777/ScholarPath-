@@ -225,6 +225,7 @@ class ProviderRouter:
                     name=profile.name,
                     free_only=profile.free_only,
                     state="ready",
+                    detail=state.detail,
                 )
             )
         return tuple(rows)

@@ -237,6 +237,12 @@ def test_a_retryable_failure_moves_on_to_the_next_provider() -> None:
 
     assert router.complete(_chat()).text == "Fallback."
 
+    # A transient failure does not disable the profile; it stays eligible and
+    # keeps the reason, so the next turn tries it again.
+    status = router.status()[0]
+    assert status.state == "ready"
+    assert "down" in status.detail
+
 
 def test_a_non_retryable_failure_is_not_hidden_by_a_fallback() -> None:
     first = _Gateway(errors=[GatewayProtocolError("broken payload")])
