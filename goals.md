@@ -106,7 +106,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G183 | 50 | Level awareness: when the profile says a bachelor's is completed, the chat prefers graduate-level programmes, says why in one line, and says when a result is for another level | `[x]` |
 | G184 | 50 | A "Verify this page" button on each official-looking link the chat lists, which runs the existing read-and-verify flow and offers to save the page to the catalog | `[x]` |
 | G185 | 51 | Links in a chat reply are a strong, clearly visible blue (not the faded shade Qt paints anchors with), underlined, on both the assistant and the user bubble | `[x]` |
-| G186 | 51 | "Verify this page" verifies in the chat itself: the page is read and checked in place, the verified values and the ones the page does not state are shown there, and the record can be saved to the catalog from the reply without opening the Scholarship Pages page | `[ ]` |
+| G186 | 51 | "Verify this page" verifies in the chat itself: the page is read and checked in place, the verified values and the ones the page does not state are shown there, and the record can be saved to the catalog from the reply without opening the Scholarship Pages page | `[x]` |
 
 ---
 

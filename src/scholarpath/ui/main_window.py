@@ -337,13 +337,14 @@ class TurnWidget(QWidget):
         self,
         turn: Turn,
         parent: QWidget | None = None,
-        on_verify: Callable[[str], None] | None = None,
+        on_verify: Callable[[str], QWidget | None] | None = None,
     ) -> None:
         super().__init__(parent)
         self._turn = turn
         self._copy: QToolButton | None = None
         self._bubble: QFrame | None = None
         self._metrics: QFontMetrics | None = None
+        self._verify_box: QVBoxLayout | None = None
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
 
         if turn.role == "user":
@@ -416,7 +417,9 @@ class TurnWidget(QWidget):
         self._bubble = bubble
         outer.addWidget(bubble, 0)
 
-    def _build_assistant(self, on_verify: Callable[[str], None] | None = None) -> None:
+    def _build_assistant(
+        self, on_verify: Callable[[str], QWidget | None] | None = None
+    ) -> None:
         outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 10, 0, 10)
         outer.setSpacing(10)
@@ -484,12 +487,19 @@ class TurnWidget(QWidget):
         column.addStretch(1)
 
     def _add_verify_buttons(
-        self, column: QVBoxLayout, on_verify: Callable[[str], None]
+        self, column: QVBoxLayout, on_verify: Callable[[str], QWidget | None]
     ) -> None:
-        """A "Verify this page" button for each official link in the reply (G184)."""
+        """A "Verify this page" button for each official link in the reply (G184).
+
+        The button verifies the page **here**, in the chat: the panel with the
+        checked values opens under the reply, and the student never leaves the
+        conversation to do it (G186).
+        """
         links = official_links(humanize_reply(self._turn.text))
         if not links:
             return
+        self._verify_box = QVBoxLayout()
+        self._verify_box.setSpacing(6)
         row = QHBoxLayout()
         row.setSpacing(6)
         for url in links[:MAX_VERIFY_LINKS]:
@@ -499,14 +509,48 @@ class TurnWidget(QWidget):
             button.setCursor(Qt.PointingHandCursor)
             button.setToolTip(
                 f"Read {url} and check every value against the page itself, "
-                "then offer to save it to your catalog."
+                "here in the chat, then offer to save it to your catalog."
             )
             button.clicked.connect(
-                lambda _checked=False, target=url: on_verify(target)
+                lambda _checked=False, target=url, source=button: (
+                    self._verify_here(target, source, on_verify)
+                )
             )
             row.addWidget(button)
         row.addStretch(1)
-        column.addLayout(row)
+        holder = QWidget(self)
+        holder.setLayout(row)
+        self._verify_box.addWidget(holder)
+        column.addLayout(self._verify_box)
+
+    def _verify_here(
+        self,
+        url: str,
+        button: QToolButton,
+        on_verify: Callable[[str], QWidget | None],
+    ) -> None:
+        """Run the verification in the chat and show the result under it."""
+        from scholarpath.ui.chat_verify import VerifyPanel
+
+        button.setEnabled(False)
+        button.setText("Checking\u2026")
+        try:
+            panel = on_verify(url)
+        except Exception:  # noqa: BLE001 - a broken panel must not kill the chat
+            logger.exception("the page could not be verified from the chat")
+            button.setEnabled(True)
+            button.setText("Verify this page")
+            return
+        if panel is None:
+            button.setEnabled(True)
+            button.setText("Verify this page")
+            return
+        if isinstance(panel, VerifyPanel):
+            button.setText("Checked" if panel.checked_ok else "Could not check")
+            panel.checked.connect(
+                lambda ok: button.setText("Checked" if ok else "Could not check")
+            )
+        self._verify_box.addWidget(panel)
 
     def _copy_text(self) -> None:
         QApplication.clipboard().setText(humanize_reply(self._turn.text))
@@ -1781,6 +1825,10 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt API
         """Flush and release the local database; stop ingest threads."""
+        from scholarpath.ui.chat_verify import VerifyPanel
+
+        for panel in self.findChildren(VerifyPanel):
+            panel.cancel()
         if self._documents_page is not None:
             self._documents_page.cancel_worker()
         if self._research_page is not None:
@@ -1833,14 +1881,35 @@ class MainWindow(QMainWindow):
         logger.info("web search started for a %d-character query", len(query))
         self.subtitle.setText(f"Searching the web for \u201c{query}\u201d\u2026")
 
-    def _verify_from_chat(self, url: str) -> None:
-        """Read and verify a page the chat named, and offer to save it (G184)."""
+    def _verify_from_chat(self, url: str) -> QWidget | None:
+        """Read and verify a page the chat named, right there in the chat (G186).
+
+        The panel opens under the reply: the values that appear word-for-word
+        on the page, the ones it does not state, and a Save button that puts
+        the record into the catalog. The student stays in the conversation.
+        """
+        from scholarpath.ui.chat_verify import VerifyPanel
+
+        logger.info("verifying a page named in the chat: %s", url)
+        return VerifyPanel(
+            url,
+            self._controller.gateway,
+            self._config.gateway.model or None,
+            self._database,
+            on_saved=self._on_chat_saved,
+            parent=self,
+        )
+
+    def _on_chat_saved(self) -> None:
+        """A page verified in the chat was saved: refresh the views that show it."""
+        self._on_profile_saved()
         page = getattr(self, "_research_page", None)
         if page is None:
             return
-        logger.info("verifying a page named in the chat: %s", url)
-        self.select_page("research")
-        page.open_url(url)
+        try:
+            page.reload()
+        except Exception:  # noqa: BLE001 - one broken view must not stop the rest
+            logger.exception("the Scholarship Pages list could not be reloaded")
 
     def _on_turn_added(self, turn: Turn) -> None:
         if self._turns == 0:

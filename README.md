@@ -218,8 +218,10 @@ flowchart LR
   completed, it prefers graduate-level programmes and says why in one line,
   and it tells you when a result is for another level.
 - **"Verify this page"** — every official link in a reply gets a button that
-  reads that page, checks every value against the page itself and offers to
-  save it to your catalog.
+  verifies **in the chat**: the page is read, every value is checked against
+  the page itself, the checked values and the ones the page does not state are
+  shown under the reply, and the record can be saved to your catalog from there.
+  You never leave the conversation to do it.
 - **Tools (MCP) are opt-in and read-only** — off by default; configured in
   `config.toml` per server. With `read_only = true`, only tools advertising
   `readOnlyHint` may run; tool output is size-capped data, never instructions.
@@ -710,6 +712,8 @@ src/scholarpath/
     ├── profile_page.py    local-only academic profile form
     ├── documents_page.py  upload → parse → propose → confirm → apply
     ├── research_page.py   official-page verification: URL → fields → save with provenance, plus Find pages
+    ├── verify_worker.py   the page reader shared by the Scholarship Pages page and the chat (fetch → propose → check)
+    ├── chat_verify.py     the panel that verifies a page inside a chat reply and saves it to the catalog
     ├── eligibility_page.py ranked rule-based eligibility reports with cited evidence
     ├── saved_page.py      saved list, comparison grid, checklists, re-check states, export
     ├── catalog_page.py    official portals, background catalog run, progress, errors, stored records

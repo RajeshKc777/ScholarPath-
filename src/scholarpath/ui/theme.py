@@ -281,6 +281,14 @@ QToolButton#VerifyLink {{
     font-size: 11px;
 }}
 QToolButton#VerifyLink:hover {{ background: {p['border_orange']}; }}
+QFrame#VerifyPanel {{
+    background: {p['surface']};
+    border: 1px solid {p['border_orange']};
+    border-radius: 12px;
+}}
+QLabel#VerifyStatus {{ color: {p['text']}; font-size: 12px; font-weight: 600; }}
+QLabel#VerifyValue {{ color: {p['text_secondary']}; font-size: 11.5px; }}
+QLabel#VerifyNote {{ color: {p['text_muted']}; font-size: 11.5px; }}
 
 /* ---------------- right panel ---------------- */
 QScrollArea#RightScroll, QWidget#RightBody,

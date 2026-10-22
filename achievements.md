@@ -51,6 +51,28 @@ is finished, not when it is started. Each entry names the goal it satisfies
 
 ## Log (newest first)
 
+### 2026-10-22 - A44 - "Verify this page" verifies in the chat, not on another page (G186)
+
+**Satisfies:** G186.
+
+- The owner pressed the button in a reply and found the app had thrown them
+  onto the Scholarship Pages page, losing the conversation that had raised the
+  question. The verification now happens **in the chat**: the panel opens
+  under the reply, the student stays in the conversation.
+- The panel reads the page, asks the model to propose the fields and checks
+  every proposed value against the page text word for word - the same work the
+  Scholarship Pages page does, now in one shared worker (`ui/verify_worker.py`),
+  so the two can never drift apart.
+- It shows what the page states ("Host country: Netherlands") and what it does
+  not ("not on the page word-for-word (not saved)"), plus a one-line count of
+  how many proposed values were checked. A page that cannot be read, or a
+  model that cannot propose fields, is stated plainly - nothing is invented.
+- **Save to catalog** saves only the values that appear word-for-word, with
+  the source address, the time it was read and the page hash, exactly like
+  the Scholarship Pages page. Nothing is saved until the student presses it.
+- The button says "Checked" when the page was checked and "Could not check"
+  when it was not, and it cannot be pressed twice.
+
 ### 2026-10-22 - A43 - The links in a reply are a strong blue, not a faded one (G185)
 
 **Satisfies:** G185.

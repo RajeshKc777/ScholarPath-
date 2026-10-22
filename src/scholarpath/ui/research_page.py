@@ -28,18 +28,15 @@ from PySide6.QtWidgets import (
 )
 
 from scholarpath.discovery import Discovery, discover
-from scholarpath.gateway.base import ChatRequest, GatewayError, Message, ModelGateway
+from scholarpath.gateway.base import ModelGateway
 from scholarpath.research import (
-    SCHOLARSHIP_FIELD_NAMES,
     SCHOLARSHIP_LABELS,
     ScholarshipDraft,
-    build_scholarship_draft,
-    build_scholarship_prompt,
-    parse_model_json,
 )
-from scholarpath.sources import FetchError, fetch_page
+from scholarpath.sources import FetchError
 from scholarpath.storage import Database
 from scholarpath.ui.confirm_row import ConfirmRow
+from scholarpath.ui.verify_worker import VerifyWorker
 
 logger = logging.getLogger("scholarpath.ui.research")
 
@@ -65,43 +62,12 @@ class _DiscoveryWorker(QThread):
             self.found.emit(result, "")
 
 
-class _VerifyWorker(QThread):
-    """Fetch + gateway proposal, off the UI thread."""
+class _VerifyWorker(VerifyWorker):
+    """Kept as the page's own name; the work itself is shared (G186).
 
-    fetched = Signal(object, str)   # Page | None, error ("")
-    drafted = Signal(object, str)   # ScholarshipDraft | None, error ("")
-
-    def __init__(self, url: str, gateway: ModelGateway, model: str | None) -> None:
-        super().__init__()
-        self._url = url
-        self._gateway = gateway
-        self._model = model
-
-    def run(self) -> None:
-        try:
-            page = fetch_page(self._url)
-        except (FetchError, ValueError, OSError) as exc:
-            logger.info("page fetch failed: %s", exc)
-            self.fetched.emit(None, str(exc))
-            return
-        self.fetched.emit(page, "")
-
-        request = ChatRequest(
-            messages=[Message(role="user", content=build_scholarship_prompt(page))],
-            model=self._model,
-        )
-        try:
-            response = self._gateway.complete(request)
-            proposed = parse_model_json(response.text, allowed=SCHOLARSHIP_FIELD_NAMES)
-        except GatewayError as exc:
-            logger.info("scholarship proposal failed: %s", exc.message)
-            self.drafted.emit(None, exc.message)
-            return
-        except Exception:  # noqa: BLE001 - unexpected errors surface plainly
-            logger.exception("scholarship extraction crashed")
-            self.drafted.emit(None, "The extraction step failed unexpectedly.")
-            return
-        self.drafted.emit(build_scholarship_draft(page, proposed), "")
+    The chat bubble and this page read a page the same way, so the fetch and
+    the word-for-word check live in one place: `ui/verify_worker.py`.
+    """
 
 
 @dataclass
