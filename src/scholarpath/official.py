@@ -4,13 +4,15 @@ A domain is official when its **registrable** domain matches exactly:
 
 - ``.edu``            - a university or college (any country)
 - ``.ac.<cc>``        - a university in a country domain (university.ac.uk)
+- ``.edu.<cc>``       - a university (kathmandu.edu.np, harvard.edu.au)
 - ``.gov`` / ``.gov.<cc>``
+- ``.go.<cc>``        - a government (studyinkorea.go.kr, mofa.go.jp)
+- ``.nic.in``         - India's National Informatics Centre
 - ``.int``, ``.mil``  - public bodies
 - ``europa.eu``       - the European Union's own domains
-- the country-specific government conventions: ``.go.kr`` (Korea),
-  ``.go.jp`` (Japan), ``.gc.ca`` (Canada), ``.gouv.fr`` (France),
-  ``.gob.<cc>`` (Mexico, Spain, Peru, ...), ``.admin.ch`` (Switzerland),
-  ``.gv.at`` (Austria), ``.govt.nz`` (New Zealand)
+- the country-specific government conventions: ``.gc.ca`` (Canada),
+  ``.gouv.fr`` (France), ``.gob.<cc>`` (Mexico, Spain, Peru, ...),
+  ``.admin.ch`` (Switzerland), ``.gv.at`` (Austria), ``.govt.nz`` (New Zealand)
 
 The student's own ``search.trusted_domains`` are added on top (a scholarship
 body such as a foundation is not a university, and only the student can say
@@ -30,17 +32,17 @@ from urllib.parse import urlsplit
 OFFICIAL_TLDS = ("edu", "gov", "int", "mil")
 
 #: Second-level labels that make a country domain an academic or government
-#: one: "university.ac.uk", "agency.gov.jp".
-OFFICIAL_SECOND_LEVEL = ("ac", "gov", "edu")
+#: one: "university.ac.uk", "agency.gov.jp", "scholarships.go.kr",
+#: "kathmandu.edu.np". They are only accepted under a two-letter country code,
+#: never under a generic top-level domain.
+OFFICIAL_SECOND_LEVEL = ("ac", "edu", "go", "gov")
 
-#: Government conventions that are not "gov.<cc>". The country is named, so
-#: nothing is matched by a label alone: "studyinkorea.go.kr" is Korea's
-#: government portal, "foo.go.kr.example.com" is not government at all.
+#: Government conventions that are not "gov.<cc>" and not a generic label. The
+#: country is named, so nothing is matched by a label alone. "nic" is only
+#: India's National Informatics Centre ("nic.de" is a private company).
 OFFICIAL_SECOND_LEVEL_PAIRS = frozenset(
     {
-        ("go", "kr"),
-        ("go", "jp"),
-        ("go", "id"),
+        ("nic", "in"),
         ("gob", "mx"),
         ("gob", "es"),
         ("gob", "ar"),

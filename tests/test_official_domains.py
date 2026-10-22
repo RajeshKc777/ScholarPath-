@@ -64,6 +64,60 @@ def test_a_lookalike_of_a_government_domain_is_not_official() -> None:
     assert not is_official_domain("www.gc.ca.example.org")
 
 
+def test_every_country_convention_is_recognised() -> None:
+    """The education and government namespaces other countries actually use (G180)."""
+    for host in (
+        # universities
+        "kathmandu.edu.np",
+        "harvard.edu.au",
+        "tsinghua.edu.cn",
+        "nus.edu.sg",
+        "um.edu.my",
+        "iitb.edu.in",
+        "uni.ac.nz",
+        # governments
+        "scholarships.go.kr",
+        "mofa.go.jp",
+        "kemdikbud.go.id",
+        "scholarships.nic.in",
+        "gov.np",
+        "gov.uk",
+        "www.gov.uk",
+        # the plain namespaces themselves
+        "edu.np",
+        "edu.au",
+        "edu.cn",
+        "edu.sg",
+        "edu.my",
+        "edu.in",
+        "ac.uk",
+        "gov.in",
+        "nic.in",
+    ):
+        assert is_official_domain(host), host
+
+
+def test_lookalikes_of_the_new_conventions_stay_outside() -> None:
+    for host in (
+        "go.kr.fake.com",
+        "kaist.ac.kr.evil.com",
+        "fake-edu.np.net",
+        "edu.np.example.com",
+        "nic.in.example.net",
+        "go.kr.fake.co",
+        "fake-gov.in.evil.com",
+    ):
+        assert not is_official_domain(host), host
+
+
+def test_a_generic_top_level_domain_never_grants_official_status() -> None:
+    """The second-level labels only count under a two-letter country code."""
+    assert not is_official_domain("edu.com")
+    assert not is_official_domain("gov.app")
+    assert not is_official_domain("nic.de")
+    assert not is_official_domain("academy.info")
+
+
 def test_the_match_is_on_the_registrable_domain_only() -> None:
     """A host that merely contains an official-looking part is not official."""
     assert not is_official_domain("university.edu.example.com")

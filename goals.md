@@ -100,6 +100,11 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G177 | 49 | Every web address in a chat reply is a real clickable link that opens in the browser, with the text left as plain prose (no markdown) and the spoken reply unaffected | `[x]` |
 | G178 | 49 | Government and university domains outside the `.gov`/`.edu` convention (`.go.kr`, `.go.jp`, `.gc.ca`, `.gouv.fr`, `.gob.<cc>`, `.admin.ch`, `.gv.at`, `.govt.nz`) count as official, so a real government portal is never labelled third-party | `[x]` |
 | G179 | 49 | While web search is on, the assistant never tells the student it cannot search: it asks for the search, and if the model refuses, the app asks once more in the exact search-request form | `[x]` |
+| G180 | 50 | The official-domain rule also accepts the country conventions `edu.<cc>`, `go.<cc>`, `gov.<cc>`, `ac.<cc>` and `nic.in`, still matched exactly on the registrable domain, so lookalikes (`go.kr.fake.com`, `kaist.ac.kr.evil.com`, `fake-edu.np.net`) stay outside | `[x]` |
+| G181 | 50 | The chat receives a compact profile summary (degree level, GPA and scale, nationality, preferred countries, funding need, language scores - never the name and never document text) so it stops asking for facts already stored; disclosed in Settings with a switch to turn it off | `[ ]` |
+| G182 | 50 | The chat checks the local verified catalog first, using the same search as Discover, and cites each record with its source address and last-verified date; web results are marked "unverified lead" | `[ ]` |
+| G183 | 50 | Level awareness: when the profile says a bachelor's is completed, the chat prefers graduate-level programmes, says why in one line, and says when a result is for another level | `[ ]` |
+| G184 | 50 | A "Verify this page" button on each official-looking link the chat lists, which runs the existing read-and-verify flow and offers to save the page to the catalog | `[ ]` |
 
 ---
 
@@ -1688,3 +1693,42 @@ to search is asked once more in the exact form the app reads. Verified live:
 the same Korea query that returned six third-party results now returns the
 Korean government portal first, marked official, with the blogs behind it.
 
+
+## 50. Chat context: the profile, the catalog, the level, the verify button (G180-G184)
+
+The owner asked for five things in one pass, all about the chat using what the
+app already has instead of asking the student again:
+
+1. **Domain gaps.** The official rule missed the conventions other countries
+   use for their own ministries and universities: `edu.np`, `edu.au`, `edu.cn`,
+   `edu.sg`, `edu.my`, `edu.in` were already covered by the generic `edu.<cc>`
+   second level, but `go.<cc>` was only known for Korea, Japan and Indonesia,
+   and `nic.in` (India's National Informatics Centre) was unknown. The rule
+   now accepts `edu.<cc>`, `go.<cc>`, `gov.<cc>`, `ac.<cc>` and `nic.in`
+   generically. It is still matched **exactly on the registrable domain**, so
+   `go.kr.fake.com`, `kaist.ac.kr.evil.com` and `fake-edu.np.net` stay outside.
+   The registry's own portals and the student's `trusted_domains` keep working.
+2. **Profile summary.** The chat is given a compact summary of the saved
+   profile - degree level, GPA and scale, nationality, preferred countries,
+   funding need, language scores - so it never asks for a fact that is already
+   stored. The name and the documents are **never** included. It is sent with
+   the chat message to the model service, so Settings discloses it and a switch
+   (`privacy.chat_profile`) turns it off; off means the model gets nothing.
+3. **Catalog first.** On every turn the chat searches the local verified
+   catalog with the same search Discover uses (`search_records`, one content
+   word at a time so a whole sentence still finds a record). Matching records
+   go to the model **before** any web results, each with its source address and
+   last-verified date. Web results are labelled **unverified lead**.
+4. **Level awareness.** When the profile says a bachelor's degree is completed,
+   the model is told to prefer graduate-level programmes, say why in one line,
+   and say when a record or result is for another level. A catalog record whose
+   page states only bachelor's study is flagged as such in the catalog block.
+5. **Verify this page.** Every official-looking link in a reply gets a
+   "Verify this page" button. It opens the Scholarship Pages page with that
+   address and runs the existing read-and-verify flow (fetch, propose, verbatim
+   check, Save), so the student can put the page into the catalog without
+   pasting it again.
+
+Honesty rules that stay: nothing is called verified unless the page said it;
+the catalog block says which records were verified and when; web results are
+never called verified; the profile summary is exactly the listed fields.
