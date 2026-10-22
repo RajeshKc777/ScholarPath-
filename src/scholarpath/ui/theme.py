@@ -70,6 +70,22 @@ QWidget {{
 QWidget#Root {{ background: {p['page']}; }}
 QMainWindow {{ background: {p['page']}; }}
 
+/* Scroll areas paint the page colour themselves. The scroll area frame, the
+   viewport Qt creates inside it, and the widget set as its content are all
+   plain QWidgets; without a rule they fall back to the system palette, which
+   is near-black when Windows is in dark mode. One rule here covers every
+   page, the right-hand panel and the eligibility dialog. */
+QScrollArea {{
+    background: {p['page']};
+    border: none;
+}}
+QScrollArea > QWidget#qt_scrollarea_viewport {{
+    background: {p['page']};
+}}
+QScrollArea > QWidget > QWidget {{
+    background: {p['page']};
+}}
+
 /* ---------------- sidebar ---------------- */
 QWidget#Sidebar {{
     background: {p['surface']};

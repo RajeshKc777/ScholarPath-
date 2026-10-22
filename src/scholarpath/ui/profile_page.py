@@ -71,15 +71,21 @@ class ProfilePage(QWidget):
 
         header = QVBoxLayout()
         header.setSpacing(3)
+        intro = QFrame(self)
+        intro.setObjectName("PanelCard")
+        intro_row = QVBoxLayout(intro)
+        intro_row.setContentsMargins(16, 12, 16, 12)
+        intro_row.setSpacing(2)
         lead = QLabel(
             "Local-only. This is what the app (later: research and eligibility "
             "checks) will work from. You fill it yourself or confirm extracted "
             "values one by one - nothing is saved automatically.",
-            self,
+            intro,
         )
         lead.setObjectName("PageLead")
         lead.setWordWrap(True)
-        header.addWidget(lead)
+        intro_row.addWidget(lead)
+        header.addWidget(intro)
         outer.addLayout(header)
 
         card = QFrame(self)
