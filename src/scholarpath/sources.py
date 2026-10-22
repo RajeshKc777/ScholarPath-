@@ -28,14 +28,21 @@ import ssl
 from dataclasses import dataclass, field
 from datetime import datetime
 from html.parser import HTMLParser
+from io import BytesIO
 from urllib import request as urlrequest
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 MAX_BYTES = 2_000_000
 DEFAULT_TIMEOUT = 15.0
 _ALLOWED_SCHEMES = ("http", "https")
 _ALLOWED_TYPES = ("text/html", "application/xhtml+xml", "text/plain")
+#: A PDF published by an official portal can be read through its text layer.
+#: Its own size cap is larger than a page's, because a brochure with a text
+#: layer is legitimately bigger than an HTML page.
+PDF_TYPES = ("application/pdf",)
+MAX_PDF_BYTES = 8 * 1024 * 1024
+MAX_PDF_TEXT_CHARS = 200_000
 # XML types the crawler needs (sitemaps and feeds). They are never turned into
 # page text - only the URLs inside them are read.
 XML_TYPES = (
@@ -539,6 +546,85 @@ def page_from_resource(resource: Resource, max_bytes: int = MAX_BYTES) -> Page:
     if page.empty:
         raise FetchError("No readable text was found on that page.")
     return page
+
+
+def is_pdf(resource: Resource) -> bool:
+    """Was this file served as a PDF?"""
+    return resource.content_type.split(";", 1)[0].strip().casefold() == "application/pdf"
+
+
+def _pdf_title(reader, final_url: str) -> str:  # noqa: ANN001 - pypdf reader
+    try:
+        title = (reader.metadata.title or "").strip() if reader.metadata else ""
+    except Exception:  # noqa: BLE001 - broken metadata must not stop the read
+        title = ""
+    if title:
+        return title
+    path = urlsplit(final_url).path.rstrip("/")
+    tail = unquote(path.rsplit("/", 1)[-1]) if path else ""
+    if tail.casefold().endswith(".pdf"):
+        tail = tail[:-4]
+    words = " ".join(tail.replace("-", " ").replace("_", " ").split())
+    return words or "PDF document"
+
+
+def pdf_from_resource(
+    resource: Resource, max_bytes: int = MAX_PDF_BYTES
+) -> Page:
+    """Turn a fetched PDF into a page with provenance, using its text layer.
+
+    Only what the document itself prints is kept. A scan with no text layer is
+    refused with a plain reason rather than stored as an empty page, and an
+    encrypted PDF is refused too - neither can be checked word for word.
+    """
+    if len(resource.body) > max_bytes:
+        raise FetchError(
+            f"That PDF is larger than {max_bytes // (1024 * 1024)} MB - not read."
+        )
+    try:
+        from pypdf import PdfReader
+    except ImportError as exc:  # pragma: no cover - pypdf is a dependency
+        raise FetchError("PDF reading is not available in this build.") from exc
+
+    try:
+        reader = PdfReader(BytesIO(resource.body))
+        if reader.is_encrypted and not reader.decrypt(""):
+            raise FetchError("That PDF is password-protected - it cannot be read.")
+        chunks: list[str] = []
+        total = 0
+        for pdf_page in reader.pages:
+            try:
+                text = pdf_page.extract_text() or ""
+            except Exception:  # noqa: BLE001 - one bad page must not lose the rest
+                continue
+            if not text.strip():
+                continue
+            chunks.append(text.strip())
+            total += len(text)
+            if total >= MAX_PDF_TEXT_CHARS:
+                break
+    except FetchError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - any parser failure is a plain reason
+        raise FetchError("That file could not be read as a PDF.") from exc
+
+    text = "\n\n".join(chunks)
+    if not text.strip():
+        raise FetchError(
+            "This PDF has no text layer (it is a scan), so its words cannot be "
+            "checked - it was not read."
+        )
+    truncated = len(text) > MAX_PDF_TEXT_CHARS
+    return Page(
+        requested_url=resource.requested_url,
+        final_url=resource.final_url,
+        title=_pdf_title(reader, resource.final_url),
+        text=text[:MAX_PDF_TEXT_CHARS],
+        fetched_at=datetime.now().isoformat(timespec="seconds"),
+        sha256=hashlib.sha256(resource.body).hexdigest(),
+        truncated=truncated,
+        warnings=["read from a PDF document, not a web page"],
+    )
 
 
 def fetch_page(

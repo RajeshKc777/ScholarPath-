@@ -14,8 +14,8 @@ student confirms). Links are untrusted web content and are treated as data.
 
 Rules kept deliberately strict:
 - http(s) only, same site only (the page's own domain or its subdomains);
-- documents (PDF, DOCX, ...) are skipped because the reading pipeline only
-  accepts web pages;
+- documents (DOCX, XLSX, archives, images) are skipped; a PDF link is handed
+  only to the crawler, which can read a text layer, never to the page flow;
 - duplicates are dropped, and the list is capped so a big site cannot flood
   the screen;
 - the page's own anchors, mail/telephone links and scripts are ignored.
@@ -26,7 +26,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
-from urllib.parse import urldefrag, urljoin, urlsplit
+from urllib.parse import unquote, urldefrag, urljoin, urlsplit
 
 from scholarpath.sources import fetch_html
 
@@ -63,6 +63,116 @@ _SKIP_SUFFIXES = (
     ".zip", ".rar", ".7z", ".jpg", ".jpeg", ".png", ".gif", ".svg",
     ".mp4", ".mp3", ".webp", ".ico",
 )
+
+
+#: How strongly a word points at a scholarship page. The crawler reads the
+#: highest scores first, so this is what decides which pages of a portal are
+#: read in the time one run allows. 3 = the page is about money for study;
+#: 2 = likely; 1 = worth a look if there is room left.
+SCHOLARSHIP_TERMS: tuple[tuple[str, int], ...] = (
+    # English - the task's own list, plus close synonyms.
+    ("scholarship", 3),
+    ("fellowship", 3),
+    ("bursary", 3),
+    ("studentship", 3),
+    ("financial aid", 3),
+    ("fee waiver", 3),
+    ("tuition waiver", 3),
+    ("grant", 2),
+    ("funding", 2),
+    ("funded", 2),
+    ("fund", 2),
+    ("stipend", 2),
+    ("award", 2),
+    ("tuition", 2),
+    ("apply", 1),
+    ("application", 1),
+    ("eligib", 1),
+    ("deadline", 1),
+    # Local-language words for the same thing, so a portal that names the
+    # scheme in its own language is not missed. These are matched as plain
+    # substrings (no word boundaries exist for them in the regex sense).
+    ("chhatrabritti", 3),  # Nepali, romanised
+    ("छात्रवृत्ति", 3),  # Nepali / Hindi
+    ("장학", 3),  # Korean
+    ("奨学金", 3),  # Japanese
+    ("奖学金", 3),  # Chinese, simplified
+    ("獎學金", 3),  # Chinese, traditional
+    ("beasiswa", 3),  # Indonesian
+    ("biasiswa", 3),  # Malay
+    ("học bổng", 3),  # Vietnamese
+    ("hoc bong", 3),
+    ("ทุนการศึกษา", 3),  # Thai
+    ("stipendium", 3),  # German / Swedish / Danish
+    ("bourse", 3),  # French
+    ("beca", 3),  # Spanish
+    ("bolsa", 3),  # Portuguese / Spanish
+    ("stypendium", 3),  # Polish
+    ("стипендия", 3),  # Russian
+    ("منحة", 3),  # Arabic
+    ("apuraha", 3),  # Swahili
+)
+
+#: Path segments that never hold scholarship content. A link whose path has
+#: one of these as a whole segment is not queued: a login form, a shopping
+#: cart, a news archive, a calendar, a tag list.
+NOISE_SEGMENTS = frozenset(
+    {
+        "login",
+        "log-in",
+        "logout",
+        "signin",
+        "sign-in",
+        "signup",
+        "register",
+        "account",
+        "cart",
+        "basket",
+        "checkout",
+        "payment",
+        "calendar",
+        "archive",
+        "archives",
+        "tag",
+        "tags",
+        "author",
+        "search",
+        "wp-login",
+        "print",
+        "share",
+    }
+)
+
+
+def _term_present(term: str, haystack: str) -> bool:
+    """Is this term in the text, without matching the middle of a word?
+
+    Short ASCII words ("beca", "grant") would otherwise fire inside unrelated
+    words ("because", "granted"), so they must be a whole word, optionally
+    plural. Longer and non-Latin terms are distinctive enough as substrings.
+    """
+    if len(term) >= 6 or not term.isascii():
+        return term in haystack
+    return re.search(rf"(?<![a-z]){re.escape(term)}s?(?![a-z])", haystack) is not None
+
+
+def score_link(url: str, label: str = "") -> int:
+    """How strongly a link looks like a scholarship page (0 = not at all).
+
+    The path and the visible link text are both read, lower-cased, with the
+    separators a URL uses turned into spaces so "financial-aid" still matches.
+    Percent-encoded paths are decoded first, which is how local-language links
+    usually appear.
+    """
+    path = unquote(urlsplit(url).path)
+    haystack = re.sub(r"[-_+]+", " ", f"{path} {label}".casefold())
+    return sum(weight for term, weight in SCHOLARSHIP_TERMS if _term_present(term, haystack))
+
+
+def is_noise(url: str) -> bool:
+    """True for a page that cannot hold scholarship content (login, cart...)."""
+    path = unquote(urlsplit(url).path).casefold()
+    return any(segment in NOISE_SEGMENTS for segment in path.split("/") if segment)
 
 
 @dataclass(frozen=True)
@@ -166,10 +276,14 @@ def _fallback_label(url: str) -> str:
     return words.title() if words else "Open page"
 
 
-def page_links(html: str, page_url: str) -> list[tuple[str, str]]:
+def page_links(
+    html: str, page_url: str, *, allow_pdf: bool = False
+) -> list[tuple[str, str]]:
     """Every usable link on a page: (absolute URL, link text), in page order.
 
-    Documents, anchors, mail/telephone links and off-site links are dropped.
+    Documents, anchors, mail/telephone links and off-site links are dropped -
+    except PDFs when the caller asks for them (`allow_pdf`). The crawler can
+    read a PDF's text layer; the discovery flow below still only opens pages.
     The crawler uses this to follow a site's own navigation; the discovery
     flow below narrows the same links down to scholarship pages.
     """
@@ -194,7 +308,8 @@ def page_links(html: str, page_url: str) -> list[tuple[str, str]]:
         if not _same_site(parts.netloc, page_host):
             continue
         if parts.path.casefold().endswith(_SKIP_SUFFIXES):
-            continue
+            if not (allow_pdf and parts.path.casefold().endswith(".pdf")):
+                continue
         key = absolute.casefold().rstrip("/")
         if key in seen:
             continue

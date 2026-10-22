@@ -27,7 +27,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from scholarpath.catalog import CatalogEvent, CatalogRunner, CatalogStats
+from scholarpath.catalog import (
+    MAX_PAGES_PER_RUN,
+    CatalogEvent,
+    CatalogRunner,
+    CatalogStats,
+)
 from scholarpath.gateway.base import ModelGateway
 from scholarpath.registry import RegistryError, Source, load_registry, user_registry_path
 from scholarpath.storage import Database
@@ -230,7 +235,9 @@ class CatalogPage(QWidget):
             "Read the official scholarship portals below and store what their "
             "pages state. Every portal is checked against its own robots.txt, "
             "asked at most once a second, and every value is verified "
-            "word-for-word against the page before it is saved.",
+            "word-for-word against the page before it is saved. A PDF the "
+            "portal publishes is read through its text layer; a scan with no "
+            "text layer is left unread and said so.",
             self,
         )
         lead.setObjectName("PageLead")
@@ -290,7 +297,8 @@ class CatalogPage(QWidget):
         self._pages_spin.setRange(1, 20)
         self._pages_spin.setValue(DEFAULT_MAX_PAGES)
         self._pages_spin.setToolTip(
-            "How many pages one portal may contribute to a run."
+            "How many pages one portal may contribute to a run. The whole run "
+            f"stops at {MAX_PAGES_PER_RUN} pages."
         )
         actions.addWidget(QLabel("Pages per portal:", self))
         actions.addWidget(self._pages_spin)

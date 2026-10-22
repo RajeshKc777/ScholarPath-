@@ -39,6 +39,10 @@ from scholarpath.storage import Database, catalog_field_values
 
 logger = logging.getLogger("scholarpath.catalog")
 
+#: How many pages one whole run may read, across every portal. The per-portal
+#: cap still applies; this stops eight portals from each spending it.
+MAX_PAGES_PER_RUN = 40
+
 
 @dataclass(frozen=True)
 class CatalogEvent:
@@ -106,6 +110,7 @@ class CatalogRunner:
         sources: Iterable[Source] | None = None,
         crawler: Crawler | None = None,
         max_pages: int | None = None,
+        max_pages_per_run: int | None = None,
         cancel: Callable[[], bool] | None = None,
         progress: Callable[[CatalogEvent], None] | None = None,
     ) -> None:
@@ -115,6 +120,9 @@ class CatalogRunner:
         self._sources = list(sources) if sources is not None else load_registry()
         self._crawler = crawler
         self._max_pages = max_pages
+        self._max_pages_per_run = (
+            MAX_PAGES_PER_RUN if max_pages_per_run is None else max_pages_per_run
+        )
         self._cancel = cancel or (lambda: False)
         #: Where progress is reported. The Catalog page replaces this with a
         #: signal emitter, so the UI thread hears about every step.
@@ -146,12 +154,19 @@ class CatalogRunner:
         stats = CatalogStats()
         crawler = self._build_crawler()
 
+        capped = False
         for source in self._sources:
             if self._cancelled():
                 stats.cancelled = True
                 break
             if not source.enabled:
                 continue
+            remaining = self._max_pages_per_run - stats.pages_read
+            if remaining <= 0:
+                capped = True
+                break
+            if hasattr(crawler, "max_pages"):
+                crawler.max_pages = min(crawler.max_pages, remaining)
             stats.sources += 1
             self._emit(
                 CatalogEvent(kind="source", source=source.name, message=f"Reading {source.name}...")
@@ -162,6 +177,21 @@ class CatalogRunner:
                     stats.cancelled = True
                     break
                 self._handle_page(page, source, stats)
+
+        capped = capped or stats.pages_read >= self._max_pages_per_run
+        if capped and not stats.cancelled:
+            stats.skipped += 1
+            self._emit(
+                CatalogEvent(
+                    kind="page",
+                    message=(
+                        f"Stopped after {stats.pages_read} page(s) - the run's limit "
+                        f"of {self._max_pages_per_run} page(s). Run it again to "
+                        "continue with the remaining pages."
+                    ),
+                    pages=stats.pages_read,
+                )
+            )
 
         self._emit(
             CatalogEvent(

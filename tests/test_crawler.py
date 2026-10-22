@@ -6,11 +6,13 @@ touches the real internet.
 
 from __future__ import annotations
 
+import hashlib
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
+from fake_pdf import make_pdf
 from scholarpath.crawler import (
     MIN_INTERVAL_SECONDS,
     Crawler,
@@ -69,6 +71,11 @@ PAGE = """<html><head><title>Apply for the scholarship</title></head>
 PLAIN_PAGE = """<html><head><title>Another scholarship</title></head>
 <body><h1>Another scholarship</h1><p>Deadline: 1 March 2027.</p></body></html>"""
 
+#: A PDF the portal publishes, with a real text layer.
+BROCHURE_PDF = make_pdf(
+    "Scholarship brochure\nDeadline: 5 November 2026\nFully funded tuition."
+)
+
 
 class _Handler(BaseHTTPRequestHandler):
     def log_message(self, *args) -> None:  # silence the test output
@@ -102,6 +109,8 @@ class _Handler(BaseHTTPRequestHandler):
             self.end_headers()
         elif path == "/scholarships/poster":
             self._send(200, "application/octet-stream", b"\x00\x01\x02")
+        elif path == "/scholarships/file.pdf":
+            self._send(200, "application/pdf", BROCHURE_PDF)
         elif path == "/scholarships/etag-scholarship.html":
             if self.headers.get("If-None-Match") == '"v1"':
                 self.send_response(304)
@@ -311,9 +320,14 @@ def test_robots_txt_is_obeyed(base_url: str) -> None:
     assert any("robots.txt" in note for note in result.skipped)
 
 
-def test_documents_are_not_followed(base_url: str) -> None:
-    make_crawler(max_pages=20).crawl(make_source(base_url))
-    assert "/scholarships/file.pdf" not in requested_paths()
+def test_a_pdf_on_the_portal_is_read_through_its_text_layer(base_url: str) -> None:
+    result = make_crawler(max_pages=20).crawl(make_source(base_url))
+    pdf_pages = [page for page in result.pages if page.kind == "pdf"]
+    assert [page.url for page in pdf_pages] == [f"{base_url}/scholarships/file.pdf"]
+    page = pdf_pages[0]
+    assert "Deadline: 5 November 2026" in page.text
+    assert any("PDF" in warning for warning in page.warnings)
+    assert page.sha256 == hashlib.sha256(BROCHURE_PDF).hexdigest()
 
 
 def test_non_html_targets_are_reported_as_errors(base_url: str) -> None:

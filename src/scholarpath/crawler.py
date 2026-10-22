@@ -14,15 +14,22 @@ How it finds pages:
 3. **RSS / Atom feeds** the site publishes - the site's own list of new
    items.
 4. **Same-site links** on the pages it reads, one level per ``crawl_depth``.
+   Links are scored by scholarship/funding words (English and common local
+   terms), and the highest scores are read first, so a small page cap is spent
+   on the pages most likely to state a scholarship. Login forms, carts, news
+   archives and calendars are never queued.
 
 Rules it keeps:
 
 - one request per second per host (a portal's own ``Crawl-delay`` can make
   that slower, never faster);
-- **HTML only** - a PDF or an image is not a page the app can read;
+- **HTML and PDF** - a PDF inside the allowed paths is read through its text
+  layer (size-capped); a scan with no text layer is refused and reported.
+  Images and other documents are never read;
 - **conditional requests** - the ETag / Last-Modified of the last visit is
   sent back, and a page the server says has not changed is not re-read;
-- a hard cap on pages per run, so a run always ends.
+- a hard cap on pages per run, and a depth cap no registry entry can raise,
+  so a run always ends.
 
 Index files (robots.txt, sitemaps, feeds) are read even when they sit outside
 the allowed paths - they are the site's own table of contents, not content.
@@ -31,6 +38,7 @@ Every page whose *content* is read must be inside the allowed paths.
 
 from __future__ import annotations
 
+import heapq
 import logging
 import re
 import time
@@ -38,16 +46,26 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from urllib.parse import urljoin, urlsplit
 
-from scholarpath.discovery import KEYWORDS, alternate_feeds, page_links
+from scholarpath.discovery import (
+    alternate_feeds,
+    is_noise,
+    page_links,
+    score_link,
+)
 from scholarpath.registry import Source
 from scholarpath.sources import (
+    MAX_BYTES,
+    MAX_PDF_BYTES,
+    PDF_TYPES,
     XML_TYPES,
     BlockedRequest,
     FetchError,
     Page,
     Resource,
     fetch_resource,
+    is_pdf,
     page_from_resource,
+    pdf_from_resource,
 )
 
 logger = logging.getLogger("scholarpath.crawler")
@@ -64,7 +82,14 @@ MAX_PAGES_PER_SOURCE = 10
 #: How many sitemap files an index may point at.
 MAX_SITEMAP_FILES = 5
 
+#: A registry entry cannot make a run deeper than this, whatever it asks for.
+MAX_CRAWL_DEPTH = 3
+
+#: How many links a single page may contribute to the queue.
+MAX_LINKS_PER_PAGE = 60
+
 _HTML_TYPES = ("text/html", "application/xhtml+xml")
+_CONTENT_TYPES = _HTML_TYPES + PDF_TYPES
 _SITEMAP_PATHS = ("/sitemap.xml", "/sitemap_index.xml", "/wp-sitemap.xml")
 _FEED_PATHS = ("/feed", "/feed/", "/rss", "/rss.xml", "/feed.xml", "/atom.xml")
 
@@ -310,6 +335,8 @@ class CrawlPage:
     etag: str = ""
     last_modified: str = ""
     warnings: tuple[str, ...] = ()
+    #: "html" for a web page, "pdf" for a document read through its text layer.
+    kind: str = "html"
 
     @property
     def domain(self) -> str:
@@ -352,7 +379,8 @@ class Crawler:
     """Reads the scholarship pages of one official portal.
 
     The crawler is deliberately boring: it obeys robots.txt, asks once per
-    second, reads HTML only, and stops at the page cap.
+    second, reads HTML and PDFs only, prefers the links that score highest as
+    scholarship pages, and stops at the page and depth caps.
     """
 
     def __init__(
@@ -417,6 +445,7 @@ class Crawler:
         url: str,
         allowed_types: tuple[str, ...] = _HTML_TYPES,
         conditional: bool = False,
+        max_bytes: int = MAX_BYTES,
     ) -> Resource:
         host = (urlsplit(url).hostname or "").lower()
         self.throttle.wait(host)
@@ -426,6 +455,7 @@ class Crawler:
         return fetch_resource(
             url,
             timeout=self.timeout,
+            max_bytes=max_bytes,
             allow_loopback=self.allow_loopback,
             allowed_types=allowed_types,
             etag=etag or None,
@@ -484,19 +514,29 @@ class Crawler:
                 break
         return seeds
 
+    def ranked_links(
+        self, source: Source, page_url: str, html: str
+    ) -> list[tuple[str, int]]:
+        """Same-site links with their scholarship score, best first.
+
+        A link is kept when the path or its visible text scores above zero, and
+        obvious non-content (login, cart, calendar, archive) is dropped. The
+        list is capped so one very link-heavy page cannot flood the queue.
+        """
+        ranked: list[tuple[int, int, str, int]] = []
+        for index, (url, label) in enumerate(page_links(html, page_url, allow_pdf=True)):
+            if not source.allows_url(url) or is_noise(url):
+                continue
+            score = score_link(url, label)
+            if score <= 0:
+                continue
+            ranked.append((-score, index, url, score))
+        ranked.sort()
+        return [(url, score) for _neg, _index, url, score in ranked[:MAX_LINKS_PER_PAGE]]
+
     def link_seeds(self, source: Source, page_url: str, html: str) -> list[str]:
-        """Same-site links on a page that look like scholarship pages."""
-        seeds: list[str] = []
-        for url, label in page_links(html, page_url):
-            if not source.allows_url(url):
-                continue
-            path = urlsplit(url).path
-            haystack = f"{path} {label}".casefold()
-            if not any(keyword in haystack for keyword in KEYWORDS):
-                continue
-            if url not in seeds:
-                seeds.append(url)
-        return seeds
+        """Same-site links on a page, best scholarship candidates first."""
+        return [url for url, _score in self.ranked_links(source, page_url, html)]
 
     # -- the run ----------------------------------------------------------
     def crawl(self, source: Source) -> CrawlResult:
@@ -513,14 +553,20 @@ class Crawler:
             )
             return result
 
-        queue: list[tuple[str, int]] = []
+        # A priority queue: the highest-scoring link is read first, so the page
+        # cap of a run is spent on the pages most likely to state a scholarship.
+        queue: list[tuple[int, int, str, int]] = []
         seen: set[str] = set()
+        order = 0
 
-        def add(url: str, depth: int) -> None:
+        def add(url: str, depth: int, score: int | None = None) -> None:
+            nonlocal order
             if url in seen:
                 return
             seen.add(url)
-            queue.append((url, depth))
+            value = score_link(url) if score is None else score
+            heapq.heappush(queue, (-value, order, url, depth))
+            order += 1
 
         for prefix in source.allowed_path_prefixes:
             add(urljoin(source.site_root, prefix), 0)
@@ -528,14 +574,15 @@ class Crawler:
             add(source.base_url, 0)
 
         for url in self.sitemap_seeds(source):
-            add(url, 0)
-        feed_urls_found = self.feed_seeds(source)
-        for url in feed_urls_found:
-            add(url, 0)
+            if not is_noise(url):
+                add(url, 0)
+        for url in self.feed_seeds(source):
+            if not is_noise(url):
+                add(url, 0)
 
-        depth = 0
+        depth_limit = max(0, min(source.crawl_depth, MAX_CRAWL_DEPTH))
         while queue and len(result.pages) < self.max_pages:
-            url, depth = queue.pop(0)
+            _priority, _order, url, depth = heapq.heappop(queue)
             if not source.allows_url(url):
                 result.skipped.append(f"{url} - outside the paths this portal allows.")
                 continue
@@ -543,7 +590,9 @@ class Crawler:
                 result.skipped.append(f"{url} - robots.txt does not allow it.")
                 continue
             try:
-                resource = self._fetch(url, _HTML_TYPES, conditional=True)
+                resource = self._fetch(
+                    url, _CONTENT_TYPES, conditional=True, max_bytes=MAX_PDF_BYTES
+                )
             except FetchError as exc:
                 result.errors.append(f"{url} - {exc}")
                 continue
@@ -553,8 +602,13 @@ class Crawler:
                 continue
 
             self._remember(url, resource)
+            kind = "pdf" if is_pdf(resource) else "html"
             try:
-                page = page_from_resource(resource)
+                page = (
+                    pdf_from_resource(resource)
+                    if kind == "pdf"
+                    else page_from_resource(resource)
+                )
             except FetchError as exc:
                 result.errors.append(f"{url} - {exc}")
                 continue
@@ -570,15 +624,18 @@ class Crawler:
                     etag=resource.etag,
                     last_modified=resource.last_modified,
                     warnings=tuple(page.warnings),
+                    kind=kind,
                 )
             )
 
-            if depth < source.crawl_depth:
-                html = resource.text()
-                for link in self.link_seeds(source, page.final_url, html):
-                    add(link, depth + 1)
-                for feed in alternate_feeds(html, page.final_url):
-                    for item in self.feed_seeds(source, [feed]):
+            if kind != "html" or depth >= depth_limit:
+                continue
+            html = resource.text()
+            for link, score in self.ranked_links(source, page.final_url, html):
+                add(link, depth + 1, score)
+            for feed in alternate_feeds(html, page.final_url):
+                for item in self.feed_seeds(source, [feed]):
+                    if not is_noise(item):
                         add(item, depth + 1)
 
         if queue:

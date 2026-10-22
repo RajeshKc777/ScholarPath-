@@ -80,11 +80,12 @@ class _FakeCrawler:
         self._pages = pages
         self._errors = errors or {}
         self.crawled: list[str] = []
+        self.max_pages = 10
 
     def crawl(self, source: Source) -> CrawlResult:
         self.crawled.append(source.name)
         result = CrawlResult(source_name=source.name)
-        result.pages.extend(self._pages.get(source.name, []))
+        result.pages.extend(self._pages.get(source.name, [])[: self.max_pages])
         result.errors.extend(self._errors.get(source.name, []))
         return result
 
@@ -482,6 +483,45 @@ def test_the_catalog_values_mapping_is_explicit() -> None:
         "language_req": "LR",
         "apply_url": "U",
     }
+
+
+def test_the_whole_run_stops_at_its_page_cap(temp_db: Database) -> None:
+    pages = [
+        make_page(sha=f"hash-{index}", url=f"https://example.gov/open-grant/{index}")
+        for index in range(4)
+    ]
+    events: list = []
+    runner = CatalogRunner(
+        temp_db,
+        _FakeGateway(_reply(PROPOSAL)),
+        sources=[make_source()],
+        crawler=_FakeCrawler({PROVIDER: pages}),
+        max_pages_per_run=2,
+        progress=events.append,
+    )
+    stats = runner.run()
+    assert stats.pages_read == 2
+    assert stats.skipped == 1
+    assert any("run's limit" in event.message for event in events)
+
+
+def test_a_record_read_from_a_pdf_keeps_its_address_and_hash(temp_db: Database) -> None:
+    url = "https://example.gov/open-grant/brochure.pdf"
+    page = CrawlPage(
+        url=url,
+        final_url=url,
+        title="OPEN GRANT 2026",
+        text=PAGE_TEXT,
+        sha256="pdf-hash",
+        fetched_at="2026-10-21T10:00:00",
+        warnings=("read from a PDF document, not a web page",),
+        kind="pdf",
+    )
+    run(temp_db, [page], _reply(PROPOSAL))
+    record = only_record(temp_db)
+    sources = temp_db.sources_for(int(record["id"]))
+    assert sources[0]["source_url"] == url
+    assert sources[0]["sha256"] == "pdf-hash"
 
 
 # -- database migration -----------------------------------------------------
