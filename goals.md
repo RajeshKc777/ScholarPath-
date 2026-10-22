@@ -109,6 +109,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G186 | 51 | "Verify this page" verifies in the chat itself: the page is read and checked in place, the verified values and the ones the page does not state are shown there, and the record can be saved to the catalog from the reply without opening the Scholarship Pages page | `[x]` |
 | G187 | 52 | Crawl discovery prefers scholarship pages: every same-site link is scored by scholarship/funding words (English plus common local-language terms), the highest scores are read first, links are capped per page, depth is capped per run, and obvious non-content (login, cart, news archives, calendars) is skipped | `[x]` |
 | G188 | 52 | The crawler reads PDFs published on the official domains it already walks (size-capped), extracts the text layer, and runs the same extract-and-word-for-word verify pipeline, storing the PDF's address and the hash of the PDF bytes | `[x]` |
+| G189 | 53 | A dev-side candidate finder, `tools/find_candidates.py` (never shipped in the app): it queries the Common Crawl *URL index* for pages under chosen official suffixes whose paths carry scholarship keywords, and writes a review file of candidates - the app never reads that file, nothing is saved to the catalog from it, and every candidate still has to be fetched live from its official site and verified word-for-word | `[~]` |
 
 ---
 
@@ -1808,3 +1809,40 @@ change what this step may do.
 `sources.py` (`pdf_from_resource`, `MAX_PDF_BYTES`), `catalog.py`
 (`MAX_PAGES_PER_RUN`), `ui/catalog_page.py` (page copy), tests
 `test_crawler_discovery.py`, `test_crawler.py`, `test_catalog.py`.
+
+
+## 53. Dev-side candidate finder over the Common Crawl URL index (G189)
+
+STEP 2 of the owner's four-step crawler plan: a tool that lives in
+`tools/`, never in the packaged app (`packaging/scholarpath.spec` bundles only
+`src/scholarpath`, so the tool stays out).
+
+What it does:
+
+1. **One source of candidates:** the Common Crawl **URL index** (metadata only)
+   - the Crawl-Bytes/WARC content is never downloaded for candidates.
+2. **Queries:** for each official suffix the owner names (`go.kr`, `ac.kr`,
+   `gov.np`, ...) and each keyword (`scholarship`, `janghak`, `beasiswa`,
+   `stipendium`, ...), one index query shaped like `*.<suffix>/<keyword>*`.
+3. **Filter before review:** http(s) only, host must match the suffix the
+   registrable way (a host *is* the suffix or ends with `.suffix`), non-content
+   paths (login, cart, archive...) are dropped, non-2xx rows are counted not
+   kept, duplicates collapse, PDF rows are kept and labelled, and results are
+   ordered by the same scholarship score the crawler uses.
+4. **The review file** is written where the developer asks. Its header says
+   what was queried, from which collection, when, and that the candidates are
+   **not verified** and the app never reads the file. Nothing reaches the
+   catalog from here: each candidate must still be fetched live from its
+   official site and pass the word-for-word pipeline.
+5. **Politeness and caps:** one index request per second, a cap on queries per
+   run, a cap on candidates collected, and a failed query is reported instead
+   of ending the run.
+
+**Terms check (2026-10-22):** Common Crawl's Terms of Use (revised 7 March
+2024) were read. URL-index access as a metadata lookup is permitted use; the
+conditions that touch us are: no harvesting of personal data separately from
+the content, no use of the *Crawled Content* for AI/Generated Content
+(indemnity under their section 9), and politeness to the shared index. This
+tool's answer to all three: metadata only, no crawled content is stored or
+redistributed, and one polite request per second.
+
