@@ -270,6 +270,15 @@ QToolButton#Copy {{
     font-size: 11px;
 }}
 QToolButton#Copy:hover {{ color: {p['orange_deep']}; background: {p['tint_orange']}; }}
+QToolButton#VerifyLink {{
+    color: {p['orange_deep']};
+    background: {p['tint_orange']};
+    border: 1px solid {p['border_orange']};
+    border-radius: 8px;
+    padding: 3px 9px;
+    font-size: 11px;
+}}
+QToolButton#VerifyLink:hover {{ background: {p['border_orange']}; }}
 
 /* ---------------- right panel ---------------- */
 QScrollArea#RightScroll, QWidget#RightBody,

@@ -423,6 +423,20 @@ class ResearchPage(QWidget):
 
         self.reload()
 
+    def open_url(self, url: str) -> None:
+        """Read and verify a page the chat named (G184).
+
+        The same flow as pasting the address here: fetch the page, ask the
+        model to propose fields, check every value against the page, and
+        offer to save it to the catalog.
+        """
+        address = (url or "").strip()
+        if not address:
+            return
+        self.url_input.setText(address)
+        self._clear_suggestions()
+        self._on_read()
+
     # -- finding links on a page (G134) --------------------------------------
     def _on_find(self) -> None:
         url = self.url_input.text().strip()

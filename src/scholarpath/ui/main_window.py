@@ -44,7 +44,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from scholarpath.chat_context import catalog_hits
+from scholarpath.chat_context import catalog_hits, official_links
 from scholarpath.chat_profile import merge_selected
 from scholarpath.config import AppConfig, config_path
 from scholarpath.profiles import Profile
@@ -76,6 +76,9 @@ GLYPH_SEARCH = "\uE721"
 
 # How close to the bottom still counts as "following the conversation".
 SCROLL_STICK_THRESHOLD = 12
+
+#: How many "Verify this page" buttons one reply may carry.
+MAX_VERIFY_LINKS = 3
 
 
 def should_stick_to_bottom(
@@ -324,7 +327,12 @@ class ChatInput(QPlainTextEdit):
 class TurnWidget(QWidget):
     """One conversation turn: gradient user bubble, light assistant card."""
 
-    def __init__(self, turn: Turn, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        turn: Turn,
+        parent: QWidget | None = None,
+        on_verify: Callable[[str], None] | None = None,
+    ) -> None:
         super().__init__(parent)
         self._turn = turn
         self._copy: QToolButton | None = None
@@ -335,7 +343,7 @@ class TurnWidget(QWidget):
         if turn.role == "user":
             self._build_user()
         else:
-            self._build_assistant()
+            self._build_assistant(on_verify)
 
     @staticmethod
     def _linkable_body(text: str, parent: QWidget, name: str) -> QLabel:
@@ -390,7 +398,7 @@ class TurnWidget(QWidget):
         self._bubble = bubble
         outer.addWidget(bubble, 0)
 
-    def _build_assistant(self) -> None:
+    def _build_assistant(self, on_verify: Callable[[str], None] | None = None) -> None:
         outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 10, 0, 10)
         outer.setSpacing(10)
@@ -452,7 +460,35 @@ class TurnWidget(QWidget):
             inner.addWidget(body)
             column.addWidget(block)
 
+        if on_verify is not None:
+            self._add_verify_buttons(column, on_verify)
+
         column.addStretch(1)
+
+    def _add_verify_buttons(
+        self, column: QVBoxLayout, on_verify: Callable[[str], None]
+    ) -> None:
+        """A "Verify this page" button for each official link in the reply (G184)."""
+        links = official_links(humanize_reply(self._turn.text))
+        if not links:
+            return
+        row = QHBoxLayout()
+        row.setSpacing(6)
+        for url in links[:MAX_VERIFY_LINKS]:
+            button = QToolButton(self)
+            button.setObjectName("VerifyLink")
+            button.setText("Verify this page")
+            button.setCursor(Qt.PointingHandCursor)
+            button.setToolTip(
+                f"Read {url} and check every value against the page itself, "
+                "then offer to save it to your catalog."
+            )
+            button.clicked.connect(
+                lambda _checked=False, target=url: on_verify(target)
+            )
+            row.addWidget(button)
+        row.addStretch(1)
+        column.addLayout(row)
 
     def _copy_text(self) -> None:
         QApplication.clipboard().setText(humanize_reply(self._turn.text))
@@ -1779,6 +1815,15 @@ class MainWindow(QMainWindow):
         logger.info("web search started for a %d-character query", len(query))
         self.subtitle.setText(f"Searching the web for \u201c{query}\u201d\u2026")
 
+    def _verify_from_chat(self, url: str) -> None:
+        """Read and verify a page the chat named, and offer to save it (G184)."""
+        page = getattr(self, "_research_page", None)
+        if page is None:
+            return
+        logger.info("verifying a page named in the chat: %s", url)
+        self.select_page("research")
+        page.open_url(url)
+
     def _on_turn_added(self, turn: Turn) -> None:
         if self._turns == 0:
             self.empty_state.setVisible(False)
@@ -1786,7 +1831,9 @@ class MainWindow(QMainWindow):
         self._notice = None
         if turn.role == "user":
             self._last_user_text = turn.text
-        widget = TurnWidget(turn, self.transcript.widget())
+        widget = TurnWidget(
+            turn, self.transcript.widget(), on_verify=self._verify_from_chat
+        )
         self._turns_layout.insertWidget(self._turns_layout.count() - 1, widget)
         if getattr(self, "_stick_to_bottom", True):
             self._scroll_transcript_to_bottom()  # follow the conversation (G130)

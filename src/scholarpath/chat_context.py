@@ -21,7 +21,9 @@ from __future__ import annotations
 
 import re
 from typing import Any
+from urllib.parse import urlsplit
 
+from scholarpath.official import is_official_domain
 from scholarpath.search import (
     LEVEL_BACHELOR,
     LEVEL_MASTER,
@@ -104,6 +106,30 @@ def profile_summary(profile: dict | None) -> str:
         "Saved profile facts (already on this device, so never ask for them "
         "again): " + "; ".join(parts) + "."
     )
+
+
+# -- the links a reply names (G184) ----------------------------------------------
+
+_URL_IN_TEXT_RE = re.compile(r"https?://[^\s<>\"']+")
+
+
+def official_links(text: str) -> list[str]:
+    """The official-looking addresses a reply names, in the order they appear.
+
+    A third-party address is left out: the app may not fetch it as if it were
+    an official page.
+    """
+    links: list[str] = []
+    for raw in _URL_IN_TEXT_RE.findall(text or ""):
+        url = raw.rstrip(".,;:!?)]}'\"")
+        if not url:
+            continue
+        host = urlsplit(url).netloc
+        if not host or not is_official_domain(host):
+            continue
+        if url not in links:
+            links.append(url)
+    return links
 
 
 # -- levels (G183) ---------------------------------------------------------------
