@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from scholarpath.chat_context import catalog_hits
 from scholarpath.ui.chat_controller import ChatController, parse_search_request
 from scholarpath.websearch import (
     MAX_QUERY,
@@ -257,3 +258,83 @@ def test_an_ordinary_reply_is_not_retried() -> None:
     controller.send("what is open in korea?")
 
     assert len(gateway.requests) == 1
+
+
+# -- G182: the verified catalog comes before the web results ---------------------
+
+CATALOG_RECORD = {
+    "id": 1,
+    "title": "DAAD Development-Related Postgraduate Courses",
+    "provider": "DAAD",
+    "provider_domain": "daad.de",
+    "level": "Master's",
+    "countries": "Germany",
+    "fields_of_study": "Development Studies",
+    "funding_type": "Full funding",
+    "amount_text": "EUR 1,000 per month",
+    "deadline_text": "15 August",
+    "deadline_date": "2027-08-15",
+    "language_req": "English",
+    "apply_url": "https://www.daad.de/en/apply",
+    "final_url": "https://www.daad.de/en/graduate-scholarships",
+    "retrieved_at": "2026-10-20T09:00:00+00:00",
+    "data": {"last_checked_at": "2026-10-21T08:00:00+00:00"},
+}
+
+
+def test_the_catalog_block_reaches_the_model_with_its_provenance() -> None:
+    gateway = FakeGateway(["Here is what I found."])
+    controller = ChatController(
+        gateway,
+        "fake-model",
+        dispatch=lambda work: work(),
+        searcher=lambda query: [],
+        catalog=lambda question: catalog_hits([CATALOG_RECORD], question),
+    )
+    controller.send("is there a daad scholarship for germany?")
+
+    sent = " ".join(message.content for message in gateway.requests[0].messages)
+    assert "verified in your catalog" in sent.casefold()
+    assert "https://www.daad.de/en/graduate-scholarships" in sent
+    assert "2026-10-21" in sent
+
+
+def test_the_catalog_comes_before_the_web_results() -> None:
+    gateway = FakeGateway(
+        [
+            '{"search": "germany scholarship 2027"}',
+            "The DAAD page is the one to read.",
+        ]
+    )
+    controller = ChatController(
+        gateway,
+        "fake-model",
+        dispatch=lambda work: work(),
+        searcher=lambda query: [
+            SearchResult(title="Blog", url="https://blog.example.com/x", snippet="s")
+        ],
+        catalog=lambda question: catalog_hits([CATALOG_RECORD], question),
+    )
+    controller.send("is there a daad scholarship for germany?")
+
+    messages = gateway.requests[1].messages
+    catalog_index = next(
+        index
+        for index, message in enumerate(messages)
+        if "verified in your catalog" in message.content.casefold()
+    )
+    web_index = next(
+        index
+        for index, message in enumerate(messages)
+        if "Web search results" in message.content
+    )
+    assert catalog_index < web_index, "the verified catalog goes first"
+
+
+def test_web_results_are_marked_as_unverified_leads() -> None:
+    block = format_results(
+        "germany scholarship",
+        [SearchResult(title="Blog", url="https://blog.example.com/x", snippet="s")],
+    )
+    assert "unverified lead" in block.casefold()
+    assert "not an official domain" in block

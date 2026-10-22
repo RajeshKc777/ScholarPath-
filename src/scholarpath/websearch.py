@@ -271,20 +271,23 @@ def format_results(query: str, results: list[SearchResult]) -> str:
             source = "a domain you marked as trusted"
         else:
             source = "third-party site, not an official domain"
-        lines.append(f"{index}. {result.title} - {result.url} ({source})")
+        lines.append(f"{index}. {result.title} - {result.url} (unverified lead; {source})")
         if result.snippet:
             lines.append(f"   {result.snippet}")
     lines += [
         "",
-        "Answer the student's last message using these results only. Name the "
-        "pages you used with their URLs, each URL on its own line, and say "
-        "which of them are third-party sites. A third-party page is a lead, "
-        "not proof: use it to find the award, then tell the student to confirm "
-        "the deadline, the amount and the eligibility on the official page. "
-        "Never say that you cannot search and never say that you could not "
-        "check a page: the search above already ran, and these are its "
-        "results. If the results do not answer the question, say plainly what "
-        "is missing. Never invent deadlines, amounts, eligibility or document "
-        "lists that the results do not state. Plain prose, no markdown.",
+        "Everything below is an **unverified lead** from a web search: the "
+        "page was not read and checked, so it is not proof of anything. A "
+        "record from the verified catalog is stronger - use it first. Answer "
+        "the student's last message using these results only. Name the pages "
+        "you used with their URLs, each URL on its own line, and say which of "
+        "them are third-party sites. A third-party page is a lead, not proof: "
+        "use it to find the award, then tell the student to confirm the "
+        "deadline, the amount and the eligibility on the official page. Never "
+        "say that you cannot search and never say that you could not check a "
+        "page: the search above already ran, and these are its results. If "
+        "the results do not answer the question, say plainly what is missing. "
+        "Never invent deadlines, amounts, eligibility or document lists that "
+        "the results do not state. Plain prose, no markdown.",
     ]
     return "\n".join(lines)

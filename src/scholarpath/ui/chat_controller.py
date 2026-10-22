@@ -15,7 +15,7 @@ from datetime import datetime
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 
-from scholarpath.chat_context import profile_summary
+from scholarpath.chat_context import catalog_message, profile_summary
 from scholarpath.gateway.base import (
     ChatRequest,
     ChatResponse,
@@ -35,6 +35,7 @@ from scholarpath.identity import (
     is_identity_probe,
     scrub_reply,
 )
+from scholarpath.search import SearchHit
 from scholarpath.websearch import SearchError, SearchResult, format_results, search
 
 logger = logging.getLogger("scholarpath.chat")
@@ -42,6 +43,7 @@ logger = logging.getLogger("scholarpath.chat")
 Dispatcher = Callable[[Callable[[], None]], None]
 Searcher = Callable[[str], list[SearchResult]]
 ProfileProvider = Callable[[], dict | None]
+CatalogProvider = Callable[[str], list[SearchHit]]
 
 _JSON_BLOCK_RE = re.compile(r"\{.*\}", re.DOTALL)
 
@@ -177,6 +179,7 @@ class ChatController(QObject):
         searcher: Searcher | None = None,
         search_enabled: bool = True,
         profile: ProfileProvider | None = None,
+        catalog: CatalogProvider | None = None,
         context_enabled: bool = True,
         parent: QObject | None = None,
     ) -> None:
@@ -187,6 +190,7 @@ class ChatController(QObject):
         self._searcher = searcher or search
         self._search_enabled = search_enabled
         self._profile = profile
+        self._catalog = catalog
         self._context_enabled = bool(context_enabled)
         self._last_search: str | None = None
         self._history: list[Turn] = []
@@ -227,6 +231,15 @@ class ChatController(QObject):
     @profile_provider.setter
     def profile_provider(self, provider: ProfileProvider | None) -> None:
         self._profile = provider
+
+    @property
+    def catalog_provider(self) -> CatalogProvider | None:
+        """Where the verified catalog comes from (set by the window)."""
+        return self._catalog
+
+    @catalog_provider.setter
+    def catalog_provider(self, provider: CatalogProvider | None) -> None:
+        self._catalog = provider
 
     @property
     def gateway_name(self) -> str:
@@ -273,19 +286,30 @@ class ChatController(QObject):
         self._history.clear()
 
     # -- internals ---------------------------------------------------------
-    def _context_messages(self) -> list[Message]:
-        """The profile summary, when the switch allows it (G181)."""
-        if not self._context_enabled or self._profile is None:
+    def _context_messages(self, question: str) -> list[Message]:
+        """The profile summary and the verified catalog (G181, G182)."""
+        if not self._context_enabled:
             return []
-        try:
-            profile = self._profile()
-        except Exception:  # noqa: BLE001 - a profile problem must not break chat
-            logger.exception("the profile could not be read for the chat")
-            return []
-        summary = profile_summary(profile)
-        if not summary:
-            return []
-        return [Message(role="system", content=summary)]
+        messages: list[Message] = []
+        if self._profile is not None:
+            try:
+                profile = self._profile()
+            except Exception:  # noqa: BLE001 - a profile problem must not break chat
+                logger.exception("the profile could not be read for the chat")
+                profile = None
+            summary = profile_summary(profile)
+            if summary:
+                messages.append(Message(role="system", content=summary))
+        if self._catalog is not None:
+            try:
+                hits = self._catalog(question) or []
+            except Exception:  # noqa: BLE001 - a catalog problem must not break chat
+                logger.exception("the catalog could not be searched for the chat")
+                hits = []
+            block = catalog_message(hits)
+            if block:
+                messages.append(Message(role="system", content=block))
+        return messages
 
     def _run_turn(self) -> None:
         latest_user = next(
@@ -302,7 +326,7 @@ class ChatController(QObject):
         request = ChatRequest(
             messages=[
                 Message(role="system", content=SYSTEM_PROMPT),
-                *self._context_messages(),
+                *self._context_messages(latest_user),
                 *(
                     [Message(role="system", content=SEARCH_OFF_NOTE)]
                     if not self._search_enabled

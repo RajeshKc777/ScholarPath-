@@ -44,11 +44,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from scholarpath.chat_context import catalog_hits
 from scholarpath.chat_profile import merge_selected
 from scholarpath.config import AppConfig, config_path
 from scholarpath.profiles import Profile
 from scholarpath.prose import humanize_reply, linkify_html
 from scholarpath.recheck import RecheckStore
+from scholarpath.search import SearchHit
 from scholarpath.storage import Database, database_path
 from scholarpath.ui import theme
 from scholarpath.ui.chat_controller import ChatController, Turn
@@ -644,6 +646,8 @@ class MainWindow(QMainWindow):
         # student turned that off (G181).
         self._controller.profile_provider = self._profile_for_chat
         self._controller.context_enabled = self._privacy_flag("chat_profile")
+        # The chat checks the verified catalog first (G182).
+        self._controller.catalog_provider = self._catalog_for_chat
         self._scroll_timer = QTimer(self)  # deferred auto-scroll (G130)
         self._scroll_timer.setSingleShot(True)
         self._scroll_timer.timeout.connect(self._apply_scroll_to_bottom)
@@ -1870,6 +1874,15 @@ class MainWindow(QMainWindow):
             return None
         data = stored.get("data")
         return dict(data) if isinstance(data, dict) else None
+
+    def _catalog_for_chat(self, question: str) -> list[SearchHit]:
+        """The verified catalog records that match the question (G182).
+
+        The same search the Discover page runs, over the same records, so the
+        chat and the Discover page never disagree about what is stored.
+        """
+        records = list(self._database.catalog_records())
+        return catalog_hits(records, question, limit=3)
 
     def _apply_privacy_gates(self) -> None:
         """Grey out what privacy keeps off, and keep it clickable to Settings."""

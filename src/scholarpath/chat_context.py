@@ -9,11 +9,20 @@ documents are **never** part of it - only the fields below are read.
 The summary travels with the chat message to the model service, so Settings
 discloses it and a switch (`privacy.chat_profile`) turns it off. With the
 switch off the chat is given nothing.
+
+The second thing the chat may use is the **verified catalog**: the records
+this device already holds, each read from its official page and checked word
+for word. They go to the model before any web result, with their source
+address and the date they were last verified, so the student is told what is
+checked and what is only a lead.
 """
 
 from __future__ import annotations
 
+import re
 from typing import Any
+
+from scholarpath.search import SearchFilters, SearchHit, search_records
 
 #: How each degree level in the profile is worded for the model.
 DEGREE_WORDS = {
@@ -87,3 +96,123 @@ def profile_summary(profile: dict | None) -> str:
         "Saved profile facts (already on this device, so never ask for them "
         "again): " + "; ".join(parts) + "."
     )
+
+
+# -- the verified catalog (G182) -------------------------------------------------
+
+#: Words that say nothing about which record is meant: function words, and
+#: the words every scholarship page uses.
+STOPWORDS = frozenset(
+    {
+        "a", "an", "the", "and", "or", "but", "if", "then", "than", "so",
+        "for", "from", "to", "of", "in", "on", "at", "by", "with", "without",
+        "about", "as", "into", "over", "after", "before", "during", "is",
+        "are", "was", "were", "be", "been", "am", "do", "does", "did", "can",
+        "could", "will", "would", "shall", "should", "may", "might", "must",
+        "i", "me", "my", "we", "our", "you", "your", "he", "she", "it",
+        "they", "them", "their", "this", "that", "these", "those", "there",
+        "here", "what", "which", "who", "whom", "whose", "when", "where",
+        "why", "how", "get", "got", "give", "tell", "show", "find", "found",
+        "know", "like", "please", "help", "want", "need", "any", "some",
+        "scholarship", "scholarships", "funding", "funded", "opportunity",
+        "opportunities", "programme", "programmes", "program", "programs",
+        "study", "studies", "apply", "application", "applications", "award",
+        "awards", "grant", "grants", "university", "universities", "college",
+    }
+)
+
+
+def content_words(message: str) -> list[str]:
+    """The words of a message that can pick out a record."""
+    words: list[str] = []
+    for word in re.findall(r"[\w']+", (message or "").casefold()):
+        if word in STOPWORDS or word in words:
+            continue
+        words.append(word)
+    return words
+
+
+def catalog_hits(
+    records: list[dict] | tuple[dict, ...],
+    message: str,
+    limit: int = 3,
+) -> list[SearchHit]:
+    """The stored records that match a message, using Discover's own search.
+
+    The same `search_records` the Discover page runs is used here, one
+    content word at a time, so a whole sentence still finds the record that
+    mentions it. Records that match more words come first.
+    """
+    words = content_words(message)
+    if not words:
+        return []
+    scores: dict[str, tuple[int, SearchHit]] = {}
+    for word in words:
+        for hit in search_records(records, SearchFilters(text=word)):
+            key = str(
+                hit.record.get("id")
+                or hit.record.get("canonical_key")
+                or id(hit.record)
+            )
+            count, best = scores.get(key, (0, hit))
+            scores[key] = (count + 1, best)
+    ordered = sorted(
+        scores.values(), key=lambda pair: (-pair[0], pair[1].title.casefold())
+    )
+    return [hit for _count, hit in ordered[:limit]]
+
+
+def last_verified(record: dict) -> str:
+    """The date the record was last checked against its page (or "")."""
+    data = record.get("data")
+    stamp = ""
+    if isinstance(data, dict):
+        stamp = str(data.get("last_checked_at") or "").strip()
+    stamp = stamp or str(record.get("retrieved_at") or "").strip()
+    return stamp[:10]
+
+
+def source_of(record: dict) -> str:
+    """The address the record was verified from."""
+    for key in ("final_url", "requested_url", "apply_url"):
+        value = str(record.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def catalog_message(hits: list[SearchHit], limit: int = 3) -> str:
+    """The verified records, ready for the model, with their provenance."""
+    if not hits:
+        return ""
+    lines = [
+        "Records already verified in your catalog (every value was read from "
+        "the official page and checked word for word):",
+    ]
+    for index, hit in enumerate(hits[:limit], start=1):
+        record = hit.record
+        title = hit.title or "untitled record"
+        provider = str(
+            record.get("provider") or record.get("provider_domain") or ""
+        ).strip()
+        level = str(record.get("level") or "").strip() or "level not stated"
+        source = source_of(record)
+        verified = last_verified(record)
+        parts = [title]
+        if provider:
+            parts.append(f"provider: {provider}")
+        parts.append(f"level: {level}")
+        parts.append(f"deadline: {hit.deadline_phrase}")
+        if source:
+            parts.append(f"source: {source}")
+        if verified:
+            parts.append(f"last verified: {verified}")
+        lines.append(f"{index}. " + " | ".join(parts))
+    lines += [
+        "",
+        "Use these first, and say that they come from the verified catalog. "
+        "When you name one, give its source address and the date it was last "
+        "verified. Anything that comes from a web search is only an "
+        "unverified lead: say so, and never call it verified.",
+    ]
+    return "\n".join(lines)
