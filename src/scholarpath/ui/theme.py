@@ -265,6 +265,11 @@ QFrame#PanelCard {{
     border: 1px solid {p['border']};
     border-radius: 16px;
 }}
+QFrame#PrivacyRow {{
+    background: transparent;
+    border: none;
+    border-top: 1px solid {p['border']};
+}}
 QLabel#CardTitle {{ font-size: 13px; font-weight: 700; color: {p['text']}; }}
 QLabel#CardLink {{ color: {p['orange_deep']}; font-size: 11px; font-weight: 600; }}
 QLabel#ProfileName {{ font-size: 14px; font-weight: 700; }}

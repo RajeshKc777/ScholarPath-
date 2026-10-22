@@ -91,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
             search, trusted_domains=config.search.trusted_domains
         ),
     )
-    window = MainWindow(controller, config)
+    window = MainWindow(controller, config, config_file=args.config)
     window.show()
     return app.exec()
 

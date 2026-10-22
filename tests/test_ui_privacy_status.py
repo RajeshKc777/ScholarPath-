@@ -13,7 +13,7 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QScrollArea
 
 import scholarpath.ui.main_window as main_window
-from scholarpath.config import AppConfig, PrivacyConfig
+from scholarpath.config import AppConfig, PrivacyConfig, load_config
 from scholarpath.gateway.stub import StubGateway
 from scholarpath.ui.chat_controller import ChatController
 from scholarpath.ui.main_window import GLYPH_PERSON, ActionTile, MainWindow
@@ -27,11 +27,15 @@ class LiveStub(StubGateway):
 
 def _window(tmp_path, monkeypatch, privacy: PrivacyConfig | None = None, live: bool = False) -> MainWindow:
     monkeypatch.setattr(main_window, "database_path", lambda: tmp_path / "ui.db")
-    config = AppConfig()
-    if privacy is not None:
-        config.privacy = privacy
+    config = AppConfig(
+        privacy=privacy
+        or PrivacyConfig(voice_stt=False, voice_tts=False, web_search=False)
+    )
     gateway = LiveStub() if live else StubGateway()
-    return MainWindow(ChatController(gateway, "stub"), config)
+    controller = ChatController(
+        gateway, "stub", search_enabled=config.privacy.web_search
+    )
+    return MainWindow(controller, config)
 
 
 @pytest.fixture
@@ -73,6 +77,36 @@ def test_turning_privacy_on_enables_the_controls(window: MainWindow) -> None:
     assert window._mic_gate.toolTip() == ""
     assert window._voice_gate.toolTip() == ""
     assert window._capability_tags["voice"].text() == "On"
+
+
+def test_a_settings_toggle_updates_the_window_and_saves(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(main_window, "database_path", lambda: tmp_path / "toggle.db")
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        "[privacy]\nvoice_stt = false\nvoice_tts = false\nweb_search = false\n",
+        encoding="utf-8",
+    )
+    config = AppConfig(
+        privacy=PrivacyConfig(voice_stt=False, voice_tts=False, web_search=False)
+    )
+    controller = ChatController(StubGateway(), "stub", search_enabled=False)
+    window = MainWindow(controller, config, config_file=config_file)
+    try:
+        rows = window._settings_page._privacy_rows
+        rows["voice_stt"].toggle.click()
+
+        assert config.privacy.voice_stt is True
+        assert load_config(config_file).privacy.voice_stt is True
+        assert window.mic_button.isEnabled()
+
+        rows["web_search"].toggle.click()
+
+        assert config.privacy.web_search is True
+        assert controller.search_enabled is True
+        assert window._capability_tags["web"].text() == "On"
+    finally:
+        window._database.close()
+        window.close()
 
 
 def test_a_gated_control_opens_the_privacy_section(window: MainWindow, monkeypatch) -> None:

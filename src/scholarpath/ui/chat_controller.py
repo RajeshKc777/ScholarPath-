@@ -147,6 +147,16 @@ class ChatController(QObject):
         return self._last_search
 
     @property
+    def search_enabled(self) -> bool:
+        """Whether the next model turn may search the web."""
+        return self._search_enabled
+
+    @search_enabled.setter
+    def search_enabled(self, enabled: bool) -> None:
+        self._search_enabled = bool(enabled)
+        logger.info("web search %s", "enabled" if self._search_enabled else "disabled")
+
+    @property
     def gateway_name(self) -> str:
         """Internal identifier - shown in logs, never in the student-facing UI."""
         return self._gateway.name

@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 from datetime import timedelta
+from pathlib import Path
 
 from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import (
@@ -614,10 +615,12 @@ class MainWindow(QMainWindow):
         controller: ChatController,
         config: AppConfig,
         parent: QWidget | None = None,
+        config_file: Path | None = None,
     ) -> None:
         super().__init__(parent)
         self._controller = controller
         self._config = config
+        self._config_file = config_file or config_path()
         self._error_text: str | None = None
         self._notice: str | None = None
         self._turns = 0
@@ -762,7 +765,7 @@ class MainWindow(QMainWindow):
         self._nav_buttons["saved"] = saved_item
 
         settings = NavButton(GLYPH_SETTING, "Settings", parent=side)
-        settings.setToolTip("Config, model status, local data, and MCP tools.")
+        settings.setToolTip("Privacy switches, model status, local data, and MCP tools.")
         settings.clicked.connect(lambda: self.select_page("settings"))
         column.addWidget(settings)
         self._nav_buttons["settings"] = settings
@@ -953,7 +956,9 @@ class MainWindow(QMainWindow):
             gateway_name=lambda: self._controller.gateway_name,
             stats=self._database.counts,
             parent=self,
+            config_file=self._config_file,
         )
+        self._settings_page.privacy_changed.connect(self._on_privacy_changed)
         self._pages.addWidget(self._settings_page)
 
         row.addWidget(self._pages, 1)
@@ -1144,9 +1149,9 @@ class MainWindow(QMainWindow):
         self.mic_button.clicked.connect(self._toggle_voice)
         if not self._voice_stt_allowed():
             self.mic_button.setToolTip(
-                "Voice input is off in this build. Turn on privacy.voice_stt in "
-                "Settings to let a short microphone clip reach Google's speech "
-                "service for transcription."
+                "Voice input is off. Turn it on in Settings > Privacy to let a "
+                "short microphone clip reach Google's speech service for "
+                "transcription."
             )
         self._mic_gate = PrivacyGate(self.mic_button, self.composer)
         self._mic_gate.clicked.connect(self._open_privacy_settings)
@@ -1829,6 +1834,11 @@ class MainWindow(QMainWindow):
     def _privacy_flag(self, name: str) -> bool:
         return bool(getattr(self._privacy(), name, False))
 
+    def _on_privacy_changed(self) -> None:
+        """A Settings toggle saved; make the running app obey it immediately."""
+        self._controller.search_enabled = self._privacy_flag("web_search")
+        self._refresh_status()
+
     def _apply_privacy_gates(self) -> None:
         """Grey out what privacy keeps off, and keep it clickable to Settings."""
         stt = self._voice_stt_allowed()
@@ -1857,9 +1867,9 @@ class MainWindow(QMainWindow):
         if not self._voice_stt_allowed():
             self.mic_button.set_listening(False)
             self._notice = (
-                "Voice input is off. Turning it on (privacy.voice_stt in "
-                "Settings) sends a short microphone clip to Google's speech "
-                "service to turn it into text."
+                "Voice input is off. Turning it on in Settings sends a short "
+                "microphone clip to Google's speech service to turn it into "
+                "text."
             )
             self._refresh_status()
             return
@@ -1930,14 +1940,14 @@ class MainWindow(QMainWindow):
             return
         missing = []
         if not self._voice_stt_allowed():
-            missing.append("voice_stt")
+            missing.append("voice input")
         if not self._voice_tts_allowed():
-            missing.append("voice_tts")
+            missing.append("spoken replies")
         if missing:
             self.voice_mode_button.setChecked(False)
             self._notice = (
                 "Live voice is off. It needs "
-                + " and ".join(f"privacy.{name}" for name in missing)
+                + " and ".join(missing)
                 + " turned on in Settings: the microphone clip goes to Google's "
                 "speech service and the reply text to Microsoft's."
             )
@@ -2142,7 +2152,7 @@ class MainWindow(QMainWindow):
             elif self._page_name == "saved":
                 text = f"{state}  \u00b7  saved  \u00b7  nothing is auto-saved"
             elif self._page_name == "settings":
-                text = f"{state}  \u00b7  settings  \u00b7  status only  \u00b7  config stays in config.toml"
+                text = f"{state}  \u00b7  settings  \u00b7  privacy saves automatically"
             else:
                 if not self._privacy_flag("web_search"):
                     search_state = "web search off (enable in Settings)"
@@ -2205,8 +2215,7 @@ class MainWindow(QMainWindow):
             )
         elif self._page_name == "settings":
             self.subtitle.setText(
-                "Settings \u2014 an honest description of what runs and what "
-                "stays local."
+                "Settings \u2014 privacy switches, model status and what stays local."
             )
         elif live:
             web = "on" if self._privacy_flag("web_search") else "off (enable in Settings)"

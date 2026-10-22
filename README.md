@@ -15,7 +15,7 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?style=flat-square&logo=windows&logoColor=white)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Qt](https://img.shields.io/badge/Qt-6.12-41CD52?style=flat-square&logo=qt&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-573%20passing-2ea043?style=flat-square&logo=pytest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-579%20passing-2ea043?style=flat-square&logo=pytest&logoColor=white)
 ![Local first](https://img.shields.io/badge/local--first-no%20cloud%20account-8B5CF6?style=flat-square)
 ![License](https://img.shields.io/badge/license-view--only%20%C2%B7%20all%20rights%20reserved-b3261e?style=flat-square)
 
@@ -85,9 +85,9 @@ Click any image to open it full size.
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/screens/settings.png" alt="Settings page: privacy disclosures, local data counts and MCP status" width="420">
+      <img src="docs/screens/settings.png" alt="Settings page: privacy switches, local data counts and MCP status" width="420">
       <br>
-      <sub><b>Settings</b> — what runs, what stays local, and exactly which third party receives each opt-in feature.</sub>
+      <sub><b>Settings</b> — what runs, what stays local, and the switches that decide what may leave the device.</sub>
     </td>
     <td width="50%" valign="top">
       <img src="docs/screens/profile.png" alt="My Profile page with a filled local academic profile" width="420">
@@ -128,11 +128,12 @@ Click any image to open it full size.
 > **Catalog** page reads a registry of official portals and stores what those
 > pages state, merged into one record per scholarship; **Discover** searches and
 > filters those records and hands one to the same deterministic eligibility
-> checks. The chat can also **search the web** (off by default), list the
+> checks. The chat can also **search the web**, list the
 > scholarship links a site publishes, and the saved list **exports to CSV and to
 > a calendar file**, with **opt-in deadline reminders**. Voice input and a spoken
-> reply are available too — both **off by default**, because they send data to a
-> third party. There is a packaged Windows build (`packaging\build.ps1`).
+> reply are available too — both **on by default** and switchable in Settings,
+> because they send data to a third party. There is a packaged Windows build
+> (`packaging\build.ps1`).
 
 | # | Milestone | Status |
 | - | --------- | :----: |
@@ -199,6 +200,10 @@ flowchart LR
   `config.toml` per server. With `read_only = true`, only tools advertising
   `readOnlyHint` may run; tool output is size-capped data, never instructions.
   The Settings page shows honest status and can check a server's tool list.
+- **Privacy switches you can flip** — the three switches that decide what may
+  leave the device live on the Settings page, not in a file you have to edit.
+  Flipping one saves your choice to `config.toml` and the running app obeys it
+  at once.
 
 ### 🎓 Your profile, on your machine
 
@@ -312,12 +317,13 @@ flowchart LR
   reply stays in the chat, and the transcript follows the conversation as it
   grows. If a reply cannot be fetched, the app says so out loud and keeps
   listening instead of stopping.
-- **Privacy switches** — voice input, the spoken reply and web search are all
-  **off by default** (`[privacy]` in config.toml). The Settings page states
-  exactly what each one sends and to whom; nothing leaves the device until
-  you switch one on. While a switch is off, the mic and Live voice controls
-  are disabled and greyed out; clicking one opens Settings at the privacy
-  section, which names the exact config key.
+- **Privacy switches** — voice input, the spoken reply and web search are
+  **on by default**, so the features work without editing a file, and each one
+  is a **real toggle in Settings**: flip it and the running app obeys it at
+  once, and the choice is saved back to `config.toml` (comments and your other
+  settings are left alone). The Settings page states exactly what each switch
+  sends and to whom. While a switch is off, the mic and Live voice controls are
+  disabled and greyed out; clicking one opens Settings at the privacy section.
 
 ### ⚙️ Under the hood
 
@@ -334,9 +340,9 @@ flowchart LR
 ## 🚫 What it deliberately does not do yet
 
 > [!TIP]
-> **Nothing leaves your device unless you turn it on.** Voice input, the spoken
-> reply and web search are all off by default; the Settings page names the third
-> party and the data for each one.
+> **You decide what leaves your device.** Voice input, the spoken reply and web
+> search are on by default; the Settings page names the third party and the
+> data for each one, and one click turns any of them off.
 
 - Search results are **candidates, not proof**. A page is only "verified"
   when the values literally appear in its text; the app tells you which
@@ -396,7 +402,7 @@ scholarpath --init-config   # write the configuration template, then exit
 scholarpath --config path\to\config.toml
 scholarpath --version
 python -m scholarpath       # equivalent to the console script
-pytest                      # 573 tests, no network required (fake server on loopback)
+pytest                      # 579 tests, no network required (fake server on loopback)
 ```
 
 </details>
@@ -477,11 +483,12 @@ theme = "dark"                # dark | light | system
 window_width = 1100
 window_height = 720
 
-# What may leave this device. All three are OFF by default.
+# What may leave this device. All three are ON by default; the Settings page
+# has a toggle for each one and saves your choice here.
 [privacy]
-voice_stt = false   # microphone clip -> Google's speech service
-voice_tts = false   # reply text -> Microsoft's speech service
-web_search = false  # search question -> the web-search service
+voice_stt = true    # microphone clip -> Google's speech service
+voice_tts = true    # reply text -> Microsoft's speech service
+web_search = true   # search question -> the web-search service
 
 # Domains you trust for scholarship information (matched on the registrable domain).
 [search]
@@ -677,7 +684,7 @@ src/scholarpath/
     ├── freshness.py       the background re-check worker (no UI code in the runner)
     ├── reminders.py       the Windows notification for a due deadline (local only)
     ├── recheck.py         the Re-check worker shared by the eligibility and saved pages
-    ├── settings_page.py    honest status: model, local data, privacy disclosures, MCP tools
+    ├── settings_page.py    the privacy switches that save to config.toml, plus honest status: model, local data, MCP tools
     ├── profile_suggestion.py transcript card confirming chat-stated facts
     ├── confirm_row.py     shared per-value confirm row (tick, edit, marker)
     ├── mic_button.py      microphone button with the listening ripple
@@ -741,7 +748,7 @@ flowchart LR
 
     model["Model service you configure<br/>local OpenCode service,<br/>or an<br/>OpenAI compatible<br/>endpoint"]
 
-    subgraph OPTIN["OFF until you switch it on"]
+    subgraph OPTIN["ON until you switch it off"]
         stt["voice_stt<br/>microphone clip"]
         tts["voice_tts<br/>reply text"]
         web["web_search<br/>your question"]
@@ -758,10 +765,10 @@ flowchart LR
     web --> ddg
 ```
 
-The arrows out of the "off until you switch it on" box exist only while that
-switch is on; the Settings page names the third party and the data for each
-one. Deadline reminders are Windows notifications drawn on this machine and
-send nothing.
+The arrows out of the "on until you switch it off" box exist only while that
+switch is on; the Settings page has a toggle for each one and names the third
+party and the data it sends. Deadline reminders are Windows notifications
+drawn on this machine and send nothing.
 
 ---
 

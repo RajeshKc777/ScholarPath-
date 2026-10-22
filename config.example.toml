@@ -89,16 +89,17 @@ window_width = 1100
 window_height = 720
 
 # --- Privacy: what may leave this device -------------------------------------
-# Everything here is OFF by default. Turn a switch on only if you are happy
-# for that data to reach the third party named below. The Settings page shows
-# the same information inside the app.
+# Everything here is ON by default so the features work without editing a file.
+# The Settings page has a real toggle for each one and saves the choice here.
+# Turn a switch off if you do not want that data to reach the third party named
+# below. The same information is shown next to each switch inside the app.
 [privacy]
 # Microphone audio -> Google's speech service (the clip is transcribed to text).
-voice_stt = false
+voice_stt = true
 # Reply text -> Microsoft's speech service (the text is turned into audio).
-voice_tts = false
+voice_tts = true
 # Search question -> the web-search service (and the pages it returns).
-web_search = false
+web_search = true
 
 # --- Web search ---------------------------------------------------------------
 # Domains you trust for scholarship information. They are matched exactly, on

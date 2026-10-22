@@ -1,4 +1,4 @@
-"""Privacy switches: nothing leaves the device until the student says so (G140)."""
+"""Privacy switches: on by default, gated, and changeable from Settings (G140, G171)."""
 
 from __future__ import annotations
 
@@ -17,23 +17,23 @@ def app() -> QApplication:
     return QApplication.instance() or QApplication([])
 
 
-def test_every_switch_is_off_by_default() -> None:
+def test_every_switch_is_on_by_default() -> None:
     privacy = AppConfig().privacy
-    assert privacy.voice_stt is False
-    assert privacy.voice_tts is False
-    assert privacy.web_search is False
+    assert privacy.voice_stt is True
+    assert privacy.voice_tts is True
+    assert privacy.web_search is True
 
 
-def test_a_config_file_can_turn_them_on(tmp_path) -> None:
+def test_a_config_file_can_turn_them_off(tmp_path) -> None:
     path = tmp_path / "config.toml"
     path.write_text(
-        "[privacy]\nvoice_stt = true\nvoice_tts = true\nweb_search = false\n",
+        "[privacy]\nvoice_stt = false\nvoice_tts = false\nweb_search = true\n",
         encoding="utf-8",
     )
     config = load_config(path)
-    assert config.privacy.voice_stt is True
-    assert config.privacy.voice_tts is True
-    assert config.privacy.web_search is False
+    assert config.privacy.voice_stt is False
+    assert config.privacy.voice_tts is False
+    assert config.privacy.web_search is True
 
 
 def test_an_unknown_privacy_key_is_rejected() -> None:
@@ -113,7 +113,11 @@ def _window(app: QApplication, tmp_path, privacy: PrivacyConfig) -> MainWindow:
 
 
 def test_the_mic_does_nothing_while_voice_input_is_off(app, tmp_path) -> None:
-    window = _window(app, tmp_path, PrivacyConfig())
+    window = _window(
+        app,
+        tmp_path,
+        PrivacyConfig(voice_stt=False, voice_tts=True, web_search=True),
+    )
     try:
         window._toggle_voice()
         worker = getattr(window, "_voice_worker", None)
@@ -129,7 +133,7 @@ def test_live_voice_stays_off_without_both_switches(app, tmp_path) -> None:
     try:
         window._toggle_voice_mode()
         assert not window._voice_mode_active()
-        assert "privacy.voice_tts" in (window._notice or "")
+        assert "spoken replies" in (window._notice or "").casefold()
     finally:
         window._database.close()
         window.close()

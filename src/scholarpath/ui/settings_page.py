@@ -1,8 +1,9 @@
-"""Settings page (M6): honest status of what this build uses and stores.
+"""Settings page: privacy toggles, honest status, and local checks.
 
-No switches it cannot honour: configuration is config.toml (validated, extra
-keys rejected), so this page describes state and offers checks - it does not
-pretend to edit the file. Gateway providers stay unnamed for students.
+The three privacy switches are real: changing one updates the running app and
+writes the value to ``config.toml`` without touching the rest of the file. The
+other sections describe what the build uses and offer a read-only MCP check.
+Gateway providers stay unnamed for students.
 """
 
 from __future__ import annotations
@@ -11,9 +12,10 @@ import logging
 from pathlib import Path
 from typing import Callable
 
-from PySide6.QtCore import QThread, Signal, QUrl, Qt
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import QRectF, QSignalBlocker, QSize, QThread, Signal, QUrl, Qt
+from PySide6.QtGui import QColor, QDesktopServices, QPainter, QPen
 from PySide6.QtWidgets import (
+    QAbstractButton,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -23,8 +25,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from scholarpath.config import AppConfig, config_path
+from scholarpath.config import (
+    AppConfig,
+    ConfigError,
+    config_path,
+    save_privacy_config,
+)
 from scholarpath.mcp import McpError, probe_server
+from scholarpath.ui import theme
 
 logger = logging.getLogger("scholarpath.ui.settings")
 
@@ -72,6 +80,131 @@ class _ProbeWorker(QThread):
 def _short(text: str, limit: int = 90) -> str:
     text = " ".join(str(text).split())
     return text if len(text) <= limit else text[:limit].rstrip() + " …"
+
+
+class ToggleSwitch(QAbstractButton):
+    """A small, keyboard-accessible on/off switch.
+
+    Qt has no switch widget. A styled ``QCheckBox`` cannot draw a sliding knob,
+    so this paints one; it still behaves like a button (Space clicks it, and
+    Return/Enter does too).
+    """
+
+    def __init__(self, checked: bool = False, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setCheckable(True)
+        self.setChecked(checked)
+        self.setFixedSize(46, 26)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.toggled.connect(self.update)
+
+    def sizeHint(self) -> QSize:  # noqa: N802 - Qt API
+        return QSize(46, 26)
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802 - Qt API
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            self.click()
+            return
+        super().keyPressEvent(event)
+
+    def paintEvent(self, _event) -> None:  # noqa: N802 - Qt API
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = QRectF(1.5, 1.5, self.width() - 3, self.height() - 3)
+        radius = rect.height() / 2
+        track = QColor(
+            theme.PALETTE["mint"] if self.isChecked() else theme.PALETTE["border_strong"]
+        )
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(track)
+        painter.drawRoundedRect(rect, radius, radius)
+
+        diameter = rect.height() - 6
+        top = rect.top() + 3
+        left = (
+            rect.right() - diameter - 3
+            if self.isChecked()
+            else rect.left() + 3
+        )
+        painter.setBrush(QColor("#FFFFFF"))
+        painter.drawEllipse(QRectF(left, top, diameter, diameter))
+
+        if self.hasFocus():
+            painter.setBrush(Qt.NoBrush)
+            painter.setPen(QPen(QColor(theme.PALETTE["orange"]), 1.5))
+            painter.drawRoundedRect(rect.adjusted(-0.5, -0.5, 0.5, 0.5), radius, radius)
+
+
+class PrivacySwitchRow(QFrame):
+    """One privacy choice: feature name, disclosure, state and a real toggle."""
+
+    toggled = Signal(str, bool)
+
+    def __init__(
+        self,
+        name: str,
+        feature: str,
+        enabled: bool,
+        party: str,
+        data: str,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._name = name
+        self._feature = feature
+        self.setObjectName("PrivacyRow")
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 10, 0, 10)
+        row.setSpacing(12)
+
+        text = QVBoxLayout()
+        text.setSpacing(2)
+        title = QLabel(feature, self)
+        title.setObjectName("CardTitle")
+        detail = QLabel(f"When on, {data} goes to {party}.", self)
+        detail.setObjectName("StateWhat")
+        detail.setWordWrap(True)
+        text.addWidget(title)
+        text.addWidget(detail)
+        row.addLayout(text, 1)
+
+        self._state = QLabel("", self)
+        self._state.setFixedWidth(28)
+        self._state.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        row.addWidget(self._state, 0, Qt.AlignVCenter)
+
+        self._toggle = ToggleSwitch(enabled, self)
+        self._toggle.setObjectName("PrivacyToggle")
+        self._toggle.setAccessibleName(feature)
+        self._toggle.setAccessibleDescription(
+            f"{feature}: when on, {data} goes to {party}."
+        )
+        self._toggle.toggled.connect(self._on_toggled)
+        row.addWidget(self._toggle, 0, Qt.AlignVCenter)
+        self._sync(enabled)
+
+    @property
+    def toggle(self) -> ToggleSwitch:
+        return self._toggle
+
+    def set_checked(self, checked: bool) -> None:
+        blocker = QSignalBlocker(self._toggle)
+        self._toggle.setChecked(checked)
+        del blocker
+        self._sync(checked)
+
+    def _on_toggled(self, checked: bool) -> None:
+        self._sync(checked)
+        self.toggled.emit(self._name, checked)
+
+    def _sync(self, checked: bool) -> None:
+        self._state.setText("On" if checked else "Off")
+        self._state.setObjectName("VerifyOK" if checked else "StateWhat")
+        self._state.style().unpolish(self._state)
+        self._state.style().polish(self._state)
+        action = "off" if checked else "on"
+        self._toggle.setToolTip(f"Turn {action} {self._feature}.")
 
 
 class ServerRow(QFrame):
@@ -151,17 +284,22 @@ class ServerRow(QFrame):
 
 
 class SettingsPage(QWidget):
+    privacy_changed = Signal()
+
     def __init__(
         self,
         config: AppConfig,
         gateway_name: Callable[[], str],
         stats: Callable[[], dict],
         parent: QWidget | None = None,
+        config_file: Path | None = None,
     ) -> None:
         super().__init__(parent)
         self._config = config
         self._gateway_name = gateway_name
         self._stats = stats
+        self._config_file = config_file or config_path()
+        self._privacy_rows: dict[str, PrivacySwitchRow] = {}
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -172,9 +310,9 @@ class SettingsPage(QWidget):
         title = QLabel("Settings", self)
         title.setObjectName("PageTitle2")
         lead = QLabel(
-            "A plain description of what this build uses and stores. The one "
-            "configuration file is config.toml - unknown keys and bad values "
-            "are rejected, not ignored.",
+            "Privacy switches save automatically. Advanced settings live in "
+            "config.toml, where unknown keys and bad values are rejected, not "
+            "ignored.",
             self,
         )
         lead.setObjectName("PageLead")
@@ -227,9 +365,8 @@ class SettingsPage(QWidget):
 
         # -- local data -----------------------------------------------------
         data_layout = card("Local data")
-        path = config_path()
         try:
-            path_text = str(path)
+            path_text = str(self._config_file)
         except Exception:  # noqa: BLE001 - config path is only display
             path_text = "(not resolvable)"
         file_label = QLabel(f"config file: {path_text}", self)
@@ -293,9 +430,10 @@ class SettingsPage(QWidget):
         self._privacy_card = privacy_layout.parentWidget()
         switches = self._config.privacy
         intro = QLabel(
-            "All three are OFF by default. Nothing you type, say or search "
-            "leaves this device until you turn one on in config.toml "
-            "([privacy]). Here is exactly what each one sends, and to whom.",
+            "These switches decide what may leave this device. They start ON "
+            "so voice and web search work without editing a file. Every change "
+            "saves automatically; turn off anything you do not want to share. "
+            "Here is exactly what each one sends, and to whom.",
             self,
         )
         intro.setObjectName("StateWhy")
@@ -329,18 +467,15 @@ class SettingsPage(QWidget):
             ),
         )
         for name, enabled, feature, party, data in disclosures:
-            state = "ON" if enabled else "off"
-            line = QLabel(
-                f"{feature} — {state}. When on, {data} goes to {party}.",
-                self,
-            )
-            line.setObjectName("StateWhat" if not enabled else "CardTitle")
-            line.setWordWrap(True)
-            privacy_layout.addWidget(line)
-            key = QLabel(f"switch: privacy.{name} in config.toml", self)
-            key.setObjectName("DocMeta")
-            key.setWordWrap(True)
-            privacy_layout.addWidget(key)
+            row = PrivacySwitchRow(name, feature, enabled, party, data, self)
+            row.toggled.connect(self._on_privacy_toggled)
+            privacy_layout.addWidget(row)
+            self._privacy_rows[name] = row
+
+        self._privacy_saved = QLabel("", self)
+        self._privacy_saved.setObjectName("DocMeta")
+        self._privacy_saved.setWordWrap(True)
+        privacy_layout.addWidget(self._privacy_saved)
 
         always = QLabel(
             "Always local, never sent anywhere: your profile, your documents, "
@@ -359,10 +494,6 @@ class SettingsPage(QWidget):
         reminders_note.setObjectName("StateWhat")
         reminders_note.setWordWrap(True)
         privacy_layout.addWidget(reminders_note)
-        open_config = QPushButton("Open config file", self)
-        open_config.setObjectName("GhostButton")
-        open_config.clicked.connect(self._open_config)
-        privacy_layout.addWidget(open_config)
 
         # -- freshness and reminders (Phase 3) ------------------------------
         fresh_layout = card("Freshness and reminders")
@@ -409,31 +540,46 @@ class SettingsPage(QWidget):
         if card is None:
             return
         self._scroll.ensureWidgetVisible(card)
-        card.setFocusPolicy(Qt.StrongFocus)
-        card.setFocus()
+        first = self._privacy_rows.get("voice_stt")
+        if first is not None:
+            first.toggle.setFocus()
+
+    def _on_privacy_toggled(self, name: str, enabled: bool) -> None:
+        """Apply the switch at once, then save only if the write succeeds."""
+        row = self._privacy_rows.get(name)
+        if row is None:
+            return
+        previous = bool(getattr(self._config.privacy, name))
+        if previous == enabled:
+            return
+        setattr(self._config.privacy, name, enabled)
+        try:
+            save_privacy_config(self._config.privacy, self._config_file)
+        except Exception as exc:  # noqa: BLE001 - a failed write must never lie
+            setattr(self._config.privacy, name, previous)
+            row.set_checked(previous)
+            logger.warning("privacy switch %s could not be saved: %s", name, exc)
+            self._set_privacy_message(
+                f"Could not save that change: {_short(str(exc), 160)}", ok=False
+            )
+            return
+        logger.info("privacy switch %s set to %s", name, enabled)
+        self._set_privacy_message("Saved. This choice is remembered.", ok=True)
+        self.privacy_changed.emit()
+
+    def _set_privacy_message(self, text: str, ok: bool) -> None:
+        self._privacy_saved.setText(text)
+        self._privacy_saved.setObjectName("VerifyOK" if ok else "VerifyWarn")
+        self._privacy_saved.style().unpolish(self._privacy_saved)
+        self._privacy_saved.style().polish(self._privacy_saved)
 
     def _open_folder(self) -> None:
-        folder = config_path().parent
+        folder = self._config_file.parent
         try:
             folder.mkdir(parents=True, exist_ok=True)
         except OSError:
             return
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
-
-    def _open_config(self) -> None:
-        """Open the config file itself (or its folder when it does not exist)."""
-        target = config_path()
-        try:
-            if not target.exists():
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(
-                    "[privacy]\nvoice_stt = false\nvoice_tts = false\n"
-                    "web_search = false\n",
-                    encoding="utf-8",
-                )
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(target)))
-        except OSError:
-            self._open_folder()
 
     def shutdown(self) -> None:
         """Stop any running tool probes at window close."""

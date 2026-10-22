@@ -7,6 +7,7 @@ explicit schemas, and never contains credentials in the repository.
 from __future__ import annotations
 
 import os
+import re
 import tomllib
 from pathlib import Path
 from typing import Literal
@@ -115,7 +116,7 @@ class McpConfig(BaseModel):
 
 
 class PrivacyConfig(BaseModel):
-    """What may leave this device. Everything is off until the student says so.
+    """What may leave this device.
 
     Each switch is about one third party and one kind of data:
 
@@ -126,15 +127,16 @@ class PrivacyConfig(BaseModel):
     - ``web_search``: the search question is sent to the web-search service,
       and the pages it returns are fetched.
 
-    All three default to off. The Settings page states exactly what each one
-    sends and to whom.
+    All three default to on so the features work without a config-file edit.
+    The Settings page states exactly what each one sends and to whom, and its
+    toggles save the student's choice back to ``config.toml``.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    voice_stt: bool = False
-    voice_tts: bool = False
-    web_search: bool = False
+    voice_stt: bool = True
+    voice_tts: bool = True
+    web_search: bool = True
 
 
 class SearchConfig(BaseModel):
@@ -261,4 +263,109 @@ def init_config(path: Path | None = None, overwrite: bool = False) -> Path:
         return target
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(template_path().read_text(encoding="utf-8"), encoding="utf-8")
+    return target
+
+
+_PRIVACY_KEYS = ("voice_stt", "voice_tts", "web_search")
+_PRIVACY_HEADER_RE = re.compile(r"^[ \t]*\[privacy\][ \t]*(?:#.*)?$", re.MULTILINE)
+
+
+def _privacy_block(privacy: PrivacyConfig) -> str:
+    lines = ["[privacy]"]
+    for key in _PRIVACY_KEYS:
+        lines.append(f"{key} = {'true' if getattr(privacy, key) else 'false'}")
+    return "\n".join(lines) + "\n"
+
+
+def _replace_privacy_values(text: str, privacy: PrivacyConfig) -> str:
+    """Change only the three privacy values in an existing TOML document."""
+    header = _PRIVACY_HEADER_RE.search(text)
+    if header is None:
+        if text and not text.endswith("\n"):
+            text += "\n"
+        if text and not text.endswith("\n\n"):
+            text += "\n"
+        return text + _privacy_block(privacy)
+
+    start = header.end()
+    prefix = ""
+    if start < len(text) and text[start] == "\n":
+        start += 1
+    else:
+        prefix = "\n"
+    following = re.search(r"^[ \t]*\[", text[start:], re.MULTILINE)
+    end = start + following.start() if following else len(text)
+    section = text[start:end]
+
+    missing: list[str] = []
+    for key in _PRIVACY_KEYS:
+        value = "true" if getattr(privacy, key) else "false"
+        pattern = re.compile(
+            rf"^([ \t]*{re.escape(key)}[ \t]*=[ \t]*)(true|false)([ \t]*(?:#.*)?)$",
+            re.MULTILINE,
+        )
+        if pattern.search(section):
+            section = pattern.sub(
+                lambda match, new=value: match.group(1) + new + match.group(3),
+                section,
+                count=1,
+            )
+        else:
+            missing.append(f"{key} = {value}")
+    if missing:
+        if section and not section.endswith("\n"):
+            section += "\n"
+        section += "\n".join(missing) + "\n"
+    return text[:start] + prefix + section + text[end:]
+
+
+def _write_config_atomic(target: Path, text: str) -> None:
+    """Write a config update without risking the live file on a failed write."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+    try:
+        temporary.write_text(text, encoding="utf-8", newline="\n")
+        os.replace(temporary, target)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def save_privacy_config(privacy: PrivacyConfig, path: Path | None = None) -> Path:
+    """Save the three privacy switches, preserving everything else in the file.
+
+    The Settings page calls this when a toggle changes. The edit is deliberately
+    narrow: comments, gateway keys, trusted domains and every other section stay
+    exactly as the student wrote them. The result is parsed and validated before
+    it replaces the live file, so a bad edit cannot leave the app unable to
+    start. A missing file is created with just the privacy section; defaults
+    fill in the rest.
+    """
+    target = path or config_path()
+    try:
+        text = target.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        text = ""
+    except OSError as exc:
+        raise ConfigError(f"Cannot read configuration file:\n  {target}\n  {exc}") from exc
+
+    updated = _replace_privacy_values(text, privacy)
+    try:
+        raw = tomllib.loads(updated)
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError(f"Refusing to save invalid TOML in {target}:\n  {exc}") from exc
+    try:
+        AppConfig.model_validate(raw)
+    except ValidationError as exc:
+        raise ConfigError(
+            f"Refusing to save an invalid configuration in {target}:\n"
+            f"{_format_errors(exc)}"
+        ) from exc
+
+    try:
+        _write_config_atomic(target, updated)
+    except OSError as exc:
+        raise ConfigError(f"Cannot write configuration file:\n  {target}\n  {exc}") from exc
     return target

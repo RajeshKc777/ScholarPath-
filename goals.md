@@ -60,7 +60,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G137 | 33 | Saving the profile must be unmistakable: the save is confirmed on screen with the time, a failed save says so, and the side card always mirrors what is really stored locally | `[x]` |
 | G138 | 33 | A packaged Windows build: ScholarPath ships as a self-contained app that starts on a clean Windows, keeps all user data and secrets outside the bundle, and passes a security and performance review | `[~]` |
 | G139 | 34 | Verbatim verification tolerates spelling differences (unicode, quotes, dashes, hyphenated line breaks, dates compared by value) without ever accepting a value the page does not state | `[x]` |
-| G140 | 34 | Privacy switches: voice input, the spoken reply and web search are off by default, each is gated on its own switch, and the Settings page states exactly which third party receives what | `[x]` |
+| G140 | 34 | Privacy switches: voice input, the spoken reply and web search are off by default, each is gated on its own switch, and the Settings page states exactly which third party receives what (the "off by default" half was replaced by G171 on 2026-10-22: the switches are on by default and are now toggles in Settings) | `[x]` |
 | G141 | 34 | Official pages are recognised by an exact suffix allowlist on the registrable domain (.edu, .ac.xx, .gov, .gov.xx), plus the student's own trusted_domains - never by a substring | `[x]` |
 | G142 | 34 | A Re-check action on saved records: the page is fetched again, the sha256 compared, and changed pages and passed deadlines are flagged on the eligibility and saved pages | `[x]` |
 | G143 | 34 | Page fetching is hardened against SSRF: the host is resolved and checked before connecting, private, loopback, link-local and metadata addresses are refused with a typed error, every redirect hop is checked again, and the checked address is the one that is connected to | `[x]` |
@@ -79,7 +79,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G156 | 37 | Deadline reminders: an opt-in Windows notification at 30, 14, 7 and 1 days before a saved record's unambiguous deadline, off by default, never repeated for the same day | `[x]` |
 | G157 | 37 | Export: the saved list as CSV and as an ICS calendar file, each carrying the source URL, the deadline text exactly as the page wrote it, and the date the page was last verified | `[x]` |
 | G158 | 37 | Warning signs: payment/fee wording on the page, a domain that is neither official nor trusted (exact registrable-domain match, never a substring), a missing source and a missing deadline are shown on the cards and in the why panel; nothing is hidden or deleted, and the wording never calls a page a scam or safe | `[x]` |
-| G159 | 37 | Privacy toggles: voice_stt, voice_tts and web_search stay off by default, each feature is gated on its own switch, and the Settings page names the third party and the data for each | `[x]` |
+| G159 | 37 | Privacy toggles: voice_stt, voice_tts and web_search stay off by default, each feature is gated on its own switch, and the Settings page names the third party and the data for each (the "stay off by default" half was replaced by G171 on 2026-10-22: on by default, with real toggles in Settings) | `[x]` |
 | G160 | 38 | The README carries Mermaid diagrams - the student journey, the layered system map, the record pipeline, the re-check decision and the device trust boundary - and every box and arrow describes shipped behaviour | `[x]` |
 | G161 | 39 | A visual README: a coloured banner, live badges, and a gallery of fresh screenshots of the shipped pages (Chat, Discover, Saved Opportunities, Eligibility, Catalog, Settings) with captions and a sample-data notice; the grouping of the feature list, the technical content and the honesty rules are unchanged | `[x]` |
 | G162 | 39 | The chat quick-action "Explore Countries" opens the Discover page instead of showing a stale "Soon" chip, so no screenshot or shortcut claims a shipped feature is missing | `[x]` |
@@ -91,6 +91,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G168 | 42 | UI privacy and status correctness: voice buttons disabled (and linked to Settings) when their switch is off, status text never cut mid-word, copy follows config, accurate tooltips, profile initial, and no clipped panels | `[x]` |
 | G169 | 43 | Live catalog run with the real model on 3 portals, at most 8 pages each, with a per-field verbatim audit; every bug found is fixed with a fake-server/fake-gateway regression test | `[ ]` |
 | G170 | 44 | A live-proofs checklist in `docs/live_checks.md` for forced-429 failover, neural-voice audibility and clean-Windows packaging; the goals stay open until the owner runs it and reports back | `[ ]` |
+| G171 | 45 | Privacy switches are real toggles in Settings, on by default, and saved to `config.toml` from the app; no student edits the file to turn voice or web search on | `[x]` |
 
 ---
 
@@ -1442,3 +1443,36 @@ the packaged app on a clean Windows VM (M7). `fallback_providers` and
 `account_keys` are documented in `config.example.toml`; the checklist tells the
 owner how to use them. These goals stay `[ ]` / `[~]` until the owner runs the
 checklist and reports back; the file is a procedure, not evidence.
+
+## 45. Editable privacy settings (G171)
+
+The Settings page showed the privacy switches as read-only lines and told the
+student to edit `config.toml` by hand. That assumes every student is a
+programmer. Change it:
+
+- The three privacy switches (voice input, spoken replies, web search) are
+  real toggles on the Settings page. Turning one changes the running app
+  immediately and writes the value to the local `config.toml`.
+- They are **on by default** so voice and web search work out of the box. The
+  page still states, next to each switch, exactly what leaves the device and
+  to which third party; turning one off is one click.
+- The write is atomic and preserves the rest of the file, including comments
+  and the user's gateway keys. A failed write is shown on the page and the
+  toggle returns to its previous value; it never pretends to have saved.
+- Tests cover the default values, the save/round-trip, a failed write, and the
+  toggles changing the main window's gates and search behaviour.
+
+**Where it stands (2026-10-22).** Built in A33. `SettingsPage` draws a
+`PrivacySwitchRow` per switch: the feature name, the disclosure (what leaves
+the device and to whom), an On/Off state and a painted `ToggleSwitch` (Space
+and Return work, it is keyboard reachable). Flipping one writes the file
+through `config.save_privacy_config`, which changes only the three privacy
+values, keeps every comment and every other section, validates the result and
+replaces the file atomically; a failed write is reported on the page and the
+toggle returns to its old value. `MainWindow` listens to `privacy_changed`, so
+the mic gate, the Live voice gate, the "What works today" tags, the status
+line and `ChatController.search_enabled` follow the switch at once. The
+defaults are on (`PrivacyConfig`), `config.example.toml` matches, and no
+user-facing text tells a student to edit a config key any more. An existing
+`config.toml` keeps its own values until a toggle is flipped. 579 tests pass,
+including 6 new ones.

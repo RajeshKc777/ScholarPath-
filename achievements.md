@@ -1,6 +1,6 @@
 # ScholarPath AI — Achievements
 
-Last updated: 2026-10-21
+Last updated: 2026-10-22
 
 What has actually been **built and verified**. A feature appears here only when it
 is finished, not when it is started. Each entry names the goal it satisfies
@@ -20,7 +20,8 @@ is finished, not when it is started. Each entry names the goal it satisfies
   (`main`).
 - Working app: **yes** — M1–M5 plus **M6**: saved opportunities with explicit
   save toggles, side-by-side comparison, per-record application checklists
-  drafted only from verbatim record values, an honest Settings page, and
+  drafted only from verbatim record values, a Settings page whose privacy
+  switches you can flip and save (A33), and
   opt-in read-only MCP tools behind a stdlib adapter. Plus two owner mandates:
   the model/provider can never be disclosed in chat (probes answered
   deterministically, leaky replies withheld), and profile facts stated in chat
@@ -35,18 +36,46 @@ is finished, not when it is started. Each entry names the goal it satisfies
   trust boundary (A29). The README now also carries a banner, seven
   badges and eight real screenshots of the shipped pages (A30).
 - Licence: proprietary, source-available, view-only (`LICENSE`).
-- Tests: **573 passing** (`pytest`, ~57 s).
+- Tests: **579 passing** (`pytest`, ~51 s).
 - M7: packaged and bundle-audited (`dist\ScholarPathAI`,
   `packaging\build.ps1`), but **not clean-Windows verified**; there is no
   installer and no separate security/performance review. G138, G207 and G113
   are `[~]` (A31).
 - Next: **G165** (database encryption), **G166** (OCR/TTS interfaces) and
   **G167** (GitHub Actions CI), then the live checks (G169-G170). G164 (the
-  truthful README) and G168 (UI privacy/status) are done in A31 and A32.
+  truthful README), G168 (UI privacy/status) and G171 (privacy switches you
+  can flip in the app) are done in A31, A32 and A33.
 
 ---
 
 ## Log (newest first)
+
+### 2026-10-22 - A33 - Privacy switches you can flip in the app (G171)
+
+**Satisfies:** G171, and the changed half of G140/G159 (the switches are on by
+default now, and they are real toggles).
+
+| Area | What changed |
+| ---- | ------------ |
+| Settings page | The three read-only privacy lines became `PrivacySwitchRow`s: the feature name, the disclosure (what leaves the device and to whom), an On/Off state and a painted `ToggleSwitch` (keyboard reachable, Space and Return work). The card says the switches start ON and that every change saves itself. The "switch: privacy.x in config.toml" lines and the "Open config file" button are gone. |
+| Saving | `config.save_privacy_config` rewrites only the three values in the `[privacy]` table, keeps every comment and every other section, validates the parsed result and replaces the file atomically (temp file, then `os.replace`). A missing file is created; a failed write raises `ConfigError` and leaves the live file untouched. |
+| The running app | `MainWindow` connects `SettingsPage.privacy_changed`: the mic gate, the Live voice gate, the "What works today" tags, the status line and `ChatController.search_enabled` (a new setter) follow the switch at once. The gate tooltip and the voice notices no longer name a config key, and the status line reads "privacy saves automatically". |
+| Defaults | `PrivacyConfig.voice_stt / voice_tts / web_search` default to on, `config.example.toml` matches, and the README, the trust-boundary diagram and the Settings screenshot say so. |
+| Owner machine | The live `%APPDATA%\ScholarPath\config.toml` privacy block was a verbatim copy of the old template (no deliberate edit), so its three values were switched to on with the new writer. The gateway keys, the comments and every other section are unchanged. |
+
+**Evidence:** **579 tests pass** (573 before plus 6 new), exit 0. The new tests
+in `tests/test_privacy_toggles.py` cover the defaults, the save round-trip
+with comments and unrelated settings preserved, a missing config file, a
+failed write (the file is unchanged) and a failed save in the UI (the toggle
+reverts and the page says so). `tests/test_ui_privacy_status.py` builds the
+real window, flips a toggle and checks the value in the file, the mic gate and
+`ChatController.search_enabled`. The Settings page was rendered and captured
+into `docs/screens/settings.png` (1280x792) with the three switches on.
+
+**Known limits:** an existing `config.toml` keeps its own values until a
+toggle is flipped - the app never silently rewrites a student's file. The MCP
+server list, the freshness switch and the reminder switch are still
+config-file only; they were not part of this change.
 
 ### 2026-10-21 - A32 - Privacy gates, word-aware status, and panels that fit (G168)
 
@@ -1238,4 +1267,4 @@ pydantic 2.14.1, pytest 9.1.1 — all import-tested.
   clean-Windows install, installer and a separate security/performance review
   are still missing.
 - G165, G166, G167, G169, G170 - Phase 4 and the next steps; G164 is done in
-  A31 and G168 in A32.
+  A31, G168 in A32 and G171 in A33.
