@@ -17,12 +17,15 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 from pydantic import ValidationError
 
+from scholarpath import __version__
 from scholarpath.config import GatewayConfig
 from scholarpath.gateway.base import (
     ChatRequest,
+    GatewayForbidden,
     GatewayNotConfigured,
     GatewayProtocolError,
     GatewayRateLimited,
+    GatewayUnavailable,
     Message,
 )
 from scholarpath.gateway.openai_compat import OpenAICompatibleGateway
@@ -41,6 +44,10 @@ class _FakeEndpoint:
         self.received_models: list[str] = []
         self.received_paths: list[str] = []
         self.received_auth: list[str | None] = []
+        self.received_user_agents: list[str | None] = []
+        self.retry_after_by_model: dict[str, str] = {}
+        self.message_by_model: dict[str, str] = {}
+        self.raw_error_by_status: dict[int, str] = {}
         self.raw_response: str | None = None
 
         outer = self
@@ -49,11 +56,18 @@ class _FakeEndpoint:
             def log_message(self, *args) -> None:
                 pass
 
-            def _respond(self, code: int, payload: str) -> None:
+            def _respond(
+                self,
+                code: int,
+                payload: str,
+                headers: dict[str, str] | None = None,
+            ) -> None:
                 raw = payload.encode()
                 self.send_response(code)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(raw)))
+                for name, value in (headers or {}).items():
+                    self.send_header(name, value)
                 self.end_headers()
                 self.wfile.write(raw)
 
@@ -66,6 +80,7 @@ class _FakeEndpoint:
                 outer.received_paths.append(self.path)
                 auth = self.headers.get("Authorization")
                 outer.received_auth.append(auth)
+                outer.received_user_agents.append(self.headers.get("User-Agent"))
 
                 if self.path.endswith("/responses"):
                     self._respond(
@@ -127,10 +142,22 @@ class _FakeEndpoint:
 
                 status = outer.status_by_model.get(model, 200)
                 if status != 200:
-                    self._respond(
+                    payload_text = outer.raw_error_by_status.get(
                         status,
-                        json.dumps({"error": {"message": f"status {status}"}}),
+                        json.dumps(
+                            {
+                                "error": {
+                                    "message": outer.message_by_model.get(
+                                        model, f"status {status}"
+                                    )
+                                }
+                            }
+                        ),
                     )
+                    headers = {}
+                    if model in outer.retry_after_by_model:
+                        headers["Retry-After"] = outer.retry_after_by_model[model]
+                    self._respond(status, payload_text, headers)
                     return
                 if model in outer.body_by_model:
                     self._respond(200, json.dumps(outer.body_by_model[model]))
@@ -293,3 +320,127 @@ def test_the_provider_needs_a_base_url() -> None:
 def test_an_unusable_base_url_is_refused() -> None:
     with pytest.raises(GatewayNotConfigured):
         OpenAICompatibleGateway(GatewayConfig(provider="openai", api_base_url="not-a-url"))
+
+
+def test_the_app_identifies_itself_with_a_user_agent(endpoint: _FakeEndpoint) -> None:
+    gateway = _gateway(endpoint, model="deepseek-v4-flash")
+
+    gateway.complete(_chat())
+
+    assert endpoint.received_user_agents == [f"ScholarPath/{__version__}"]
+
+
+def test_a_missing_key_is_reported_as_missing_not_rejected(
+    endpoint: _FakeEndpoint,
+) -> None:
+    endpoint.require_key = True
+    gateway = _gateway(endpoint, model="deepseek-v4-flash")
+
+    with pytest.raises(GatewayNotConfigured) as excinfo:
+        gateway.complete(_chat())
+
+    message = excinfo.value.message.lower()
+    assert "none is configured" in message
+    assert "rejected" not in message
+
+
+def test_a_forbidden_request_is_not_called_a_quota_limit(
+    endpoint: _FakeEndpoint,
+) -> None:
+    endpoint.status_by_model["deepseek-v4-flash"] = 403
+    gateway = _gateway(
+        endpoint,
+        model="deepseek-v4-flash",
+        api_keys=["restricted-key"],
+    )
+
+    with pytest.raises(GatewayForbidden) as excinfo:
+        gateway.complete(_chat())
+
+    message = excinfo.value.message.lower()
+    assert "refused" in message
+    assert "not a quota limit" in message
+    assert "rejected the configured" not in message
+
+
+def test_a_cloudflare_client_block_is_not_reported_as_a_bad_key(
+    endpoint: _FakeEndpoint,
+) -> None:
+    endpoint.status_by_model["deepseek-v4-flash"] = 403
+    endpoint.raw_error_by_status[403] = '{"error": "error code: 1010"}'
+    gateway = _gateway(endpoint, model="deepseek-v4-flash")
+
+    with pytest.raises(GatewayUnavailable) as excinfo:
+        gateway.complete(_chat())
+
+    message = excinfo.value.message.lower()
+    assert "1010" in message
+    assert "not an authentication" in message
+
+
+def test_a_missing_model_is_retried_on_the_next_model(endpoint: _FakeEndpoint) -> None:
+    endpoint.status_by_model["retired-model"] = 404
+    endpoint.message_by_model["retired-model"] = "model not found for this account"
+    gateway = _gateway(
+        endpoint,
+        model="retired-model",
+        models=["current-model"],
+    )
+
+    response = gateway.complete(_chat())
+
+    assert response.text == "Model reply."
+    assert endpoint.received_models == ["retired-model", "current-model"]
+
+
+def test_retry_after_is_read_from_the_header(endpoint: _FakeEndpoint) -> None:
+    endpoint.status_by_model["deepseek-v4-flash"] = 429
+    endpoint.retry_after_by_model["deepseek-v4-flash"] = "17"
+    gateway = _gateway(
+        endpoint,
+        model="deepseek-v4-flash",
+        failover_attempts=1,
+    )
+
+    with pytest.raises(GatewayRateLimited) as excinfo:
+        gateway.complete(_chat())
+
+    assert excinfo.value.retry_after == 17.0
+
+
+def test_every_rejected_key_stops_before_an_unauthenticated_attempt(
+    endpoint: _FakeEndpoint,
+) -> None:
+    endpoint.require_key = True
+    endpoint.status_by_key["only-key"] = 401
+    gateway = _gateway(
+        endpoint,
+        model="deepseek-v4-flash",
+        api_keys=["only-key"],
+    )
+
+    with pytest.raises(GatewayNotConfigured):
+        gateway.complete(_chat())
+
+    assert endpoint.received_auth == ["Bearer only-key"]
+
+
+def test_a_key_that_failed_last_turn_is_offered_again(
+    endpoint: _FakeEndpoint,
+) -> None:
+    endpoint.require_key = True
+    endpoint.status_by_key["recovering-key"] = 401
+    gateway = _gateway(
+        endpoint,
+        model="deepseek-v4-flash",
+        api_keys=["recovering-key"],
+    )
+
+    with pytest.raises(GatewayNotConfigured):
+        gateway.complete(_chat())
+    endpoint.status_by_key.pop("recovering-key")
+
+    response = gateway.complete(_chat())
+
+    assert response.text == "Model reply."
+    assert endpoint.received_auth == ["Bearer recovering-key", "Bearer recovering-key"]

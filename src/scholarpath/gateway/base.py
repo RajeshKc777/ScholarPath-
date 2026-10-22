@@ -79,8 +79,23 @@ class GatewayTimeout(GatewayError):
 class GatewayRateLimited(GatewayError):
     retryable = True
 
+    def __init__(self, message: str, retry_after: float | None = None) -> None:
+        super().__init__(message)
+        # Seconds the provider asked us to wait, when it said so (Retry-After).
+        self.retry_after = retry_after
+
 
 class GatewayProtocolError(GatewayError):
+    retryable = False
+
+
+class GatewayForbidden(GatewayError):
+    """The provider accepted the credential but refused this request (403).
+
+    Not retried: a refusal is a policy or permission answer, not a transient
+    failure. The router disables the profile for the session and moves on.
+    """
+
     retryable = False
 
 

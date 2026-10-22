@@ -4,6 +4,7 @@ from scholarpath.gateway.base import (
     ChatRequest,
     ChatResponse,
     GatewayError,
+    GatewayForbidden,
     GatewayNotConfigured,
     GatewayProtocolError,
     GatewayRateLimited,
@@ -15,12 +16,14 @@ from scholarpath.gateway.base import (
 from scholarpath.gateway.factory import build_gateway
 from scholarpath.gateway.opencode import OpenCodeGateway
 from scholarpath.gateway.registry import ModelEntry, ModelRef, ModelRegistry
+from scholarpath.gateway.router import ProviderProfile, ProviderRouter, ProviderStatus
 from scholarpath.gateway.stub import StubGateway
 
 __all__ = [
     "ChatRequest",
     "ChatResponse",
     "GatewayError",
+    "GatewayForbidden",
     "GatewayNotConfigured",
     "GatewayProtocolError",
     "GatewayRateLimited",
@@ -32,6 +35,9 @@ __all__ = [
     "ModelRef",
     "ModelRegistry",
     "OpenCodeGateway",
+    "ProviderProfile",
+    "ProviderRouter",
+    "ProviderStatus",
     "StubGateway",
     "build_gateway",
 ]

@@ -111,6 +111,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G188 | 52 | The crawler reads PDFs published on the official domains it already walks (size-capped), extracts the text layer, and runs the same extract-and-word-for-word verify pipeline, storing the PDF's address and the hash of the PDF bytes | `[x]` |
 | G189 | 53 | A dev-side candidate finder, `tools/find_candidates.py` (never shipped in the app): it queries the Common Crawl *URL index* for pages under chosen official suffixes whose paths carry scholarship keywords, and writes a review file of candidates - the app never reads that file, nothing is saved to the catalog from it, and every candidate still has to be fetched live from its official site and verified word-for-word | `[x]` |
 | G190 | 54 | Bring-your-own model key in one click: a helper (dev-side first, `tools/openrouter_key.py`) runs OpenRouter's official **OAuth PKCE** flow so the user connects their own OpenRouter account in a browser click and the helper stores the returned key in the *user's own config* - the app never sees the OpenRouter login, no key is pasted into chat or the repo, and a headless mode (no callback, paste the shown code - the documented "SSH server" route) covers machines without a browser. Chat itself keeps going through the existing OpenAI-compatible adapter (`https://openrouter.ai/api/v1`); free models stay free and the failover chain never spends money silently | `[ ]` |
+| G191 | 55 | A unified multi-provider model layer built into the app, with **no bundled third-party gateway and no extra runtime**: named provider **profiles** in config (`[[gateway.profiles]]`, each with its own endpoint, model chain and keys) behind one router that tries them in order, honours `Retry-After`, cools down a rate-limited provider instead of retrying it every turn, disables a provider whose key was rejected instead of retrying it all turn, sends the same conversation to the fallback, and in `free_only` mode can never fall back to a paid provider; errors distinguish auth (401), refusal/Cloudflare (403 / 1010), rate limit (429), unsupported model (404), server and network failures instead of calling everything a bad key | `[x]` |
 
 ---
 
@@ -1895,4 +1896,67 @@ later if it earns its place.
 guide is written for apps that "let users bring their own key"); the user's
 key, their receipts, no key escrow by us; politeness = the same one-request
 cadence the rest of the app uses; no batching of users' traffic.
+
+## 55. Unified multi-provider model layer (G191)
+
+**Why:** one chat interface should survive a provider that is exhausted,
+unreachable, or has a revoked key. Today the app has one OpenAI-compatible
+endpoint plus a chain of *provider kinds* that all share the same endpoint
+config, so two independently configured cloud providers cannot be expressed.
+
+**Research (2026-10-22), from the repositories and their docs:**
+
+- **SwayRouter** (`envielxyz/SwayRouter`): JavaScript on **Bun >= 1.3**,
+  MIT, 10 stars, 5 MB, active. It can compile a binary with Bun, but its
+  OAuth directory contains adapter flows for Claude, Codex, Cursor, Windsurf,
+  Gemini CLI, Kiro, Qoder, Trae, Antigravity and more, plus cookie/session
+  token import. Those are not provider-documented consumer app flows, so
+  bundling it into ScholarPath would mean shipping credential handling that
+  violates provider terms. **Rejected.**
+- **OmniRoute** (`cheaper-inference/OmniRoute`): TypeScript, MIT, 79.6k
+  stars, **1.93 GB repository**, **Node >= 22.22.2** required, Electron
+  build targets. It advertises 375 providers and stacking of 150+ free
+  tiers. Too heavy for a low-spec desktop app, a runtime the user must have,
+  and a scope (free-tier stacking) that conflicts with the app's terms rule.
+  **Rejected.**
+- **llmrouter** (`paularlott/llmrouter`): Go, MIT, 7 stars, 1.8 MB, 133
+  files. Single binary, Windows cross-compile, OpenAI/Anthropic/Ollama
+  translation, weighted routing, MCP aggregation. But model providers are
+  configured with **API keys only**; its OAuth support is for MCP servers,
+  not model access. It would add a second process and still not deliver
+  one-click authorization. **Best sidecar alternative, not chosen.**
+- **OpenRouter**: a service, not a bundleable router. Its **OAuth PKCE** flow
+  is documented for localhost apps (any port) and headless apps (show the
+  code, user pastes it), exchanges a single-use 10-minute code for a key tied
+  to the user's own account. This remains the one legitimate one-click
+  authorization route (G190) and needs no new adapter.
+
+**Decision:** implement a small router in this package. It adds no runtime,
+no sidecar, no new credential store; it reuses `OpenAICompatibleGateway`,
+`OpenCodeGateway`, the existing `KeyPool` and `ModelChain`, and keeps
+conversation state in the app where it already lives.
+
+**Design:**
+
+- `gateway.profiles` is a list of `{name, kind, base_url, model, models,
+  api_keys, free_only, enabled}`. When it is non-empty it takes precedence
+  over `provider` / `fallback_providers`.
+- `ProviderRouter` tries eligible profiles in order. `free_only = true`
+  filters to profiles marked `free_only`, so a free-only user never reaches a
+  paid endpoint.
+- `429` sets a per-provider cooldown from `Retry-After` (seconds or HTTP
+  date), default 60 s, capped at 1 h; the router skips cooling profiles.
+- `401` / `403` disable that profile for the session; the router tries the
+  next profile and never loops on a rejected key.
+- A missing model (404 with a model/function message) is retryable on another
+  profile; a Cloudflare `1010` client block is reported as a client block,
+  not as a key rejection.
+- The conversation is the same `ChatRequest` object; retries do not trim or
+  rewrite history.
+
+**Honest limits:** requests are non-streaming (the app's UI consumes one
+complete reply); `ChatRequest` carries no tool definitions, so tool calling
+is not added by this layer; OAuth connect buttons and a provider-management
+UI are not built here (G190 covers the OpenRouter helper); profiles are
+edited in `config.toml`.
 

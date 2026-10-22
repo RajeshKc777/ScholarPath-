@@ -372,6 +372,9 @@ flowchart LR
   rules) built on the provider's advertised capabilities.
 - Strict configuration: unknown keys and bad values are rejected, not ignored.
 - Typed gateway contract — one seam for every model provider.
+- Named provider profiles behind one router: ordered fallback, `Retry-After`
+  cooldowns, a rejected key disables only that profile, and free-only mode can
+  never fall back to a paid endpoint.
 - Background execution so the window never freezes.
 - Typed error surfaces: rate limit, timeout, unavailable, protocol error.
 - Rotating logs that never contain message bodies or secrets.
@@ -414,6 +417,9 @@ flowchart LR
   there is no email or phone notification.
 - MCP servers never start, and no model uses tools mid-conversation, until a
   concrete student-facing use and a documented injection policy exist.
+- Chat is one complete reply per turn: no token streaming. Provider profiles
+  are configured in `config.toml`; there is no in-app "Connect" button yet
+  (the OpenRouter OAuth PKCE route is G190).
 - Extraction is a proposal engine, not an authority: a value the source does not
   literally contain is flagged and never applied without you typing it yourself.
 
@@ -542,6 +548,7 @@ log_level = "INFO"            # top-level keys must come before the first [table
 
 [gateway]
 provider = "stub"             # "stub" | "opencode" | "openai"
+free_only = false             # never fall back to a profile not marked free_only
 model = ""                    # "provider/model" or a bare id; empty = the provider default
 models = []                   # failover chain when a model is rate-limited
 fallback_providers = []       # e.g. ["opencode", "openai"]; tried after the primary
@@ -561,6 +568,14 @@ api_model = ""                # endpoint's own model; empty = use model above
 api_models = []               # endpoint's own chain; empty = use models above
 api_keys = []                 # app's keys, tried in order; or SCHOLARPATH_API_KEYS
 account_keys = []             # console keys rotated when a quota is exhausted
+
+# Optional named profiles (see "Provider profiles and routing" below).
+# [[gateway.profiles]]
+# name = "local"
+# kind = "openai"             # openai | opencode | stub
+# base_url = "http://127.0.0.1:11434/v1"
+# model = "qwen2.5-coder:7b"
+# free_only = true
 
 [ui]
 theme = "dark"                # dark | light | system
@@ -612,6 +627,57 @@ read_only = true
   password is read from OpenCode's registration file, or from the
   `OPENCODE_SERVICE_PASSWORD` environment variable when `base_url` is set.
 - Template: [`config.example.toml`](config.example.toml) — contains no credentials.
+
+### Provider profiles and routing
+
+One OpenAI-compatible endpoint is enough to chat. Profiles let several stand
+side by side (a local model, a free cloud tier, an endpoint you added
+yourself). When any profile is enabled it replaces `provider` /
+`fallback_providers`, and profiles are tried in the order written:
+
+```toml
+[gateway]
+free_only = false
+
+[[gateway.profiles]]
+name = "local"
+kind = "openai"
+base_url = "http://127.0.0.1:11434/v1"
+model = "qwen2.5-coder:7b"
+free_only = true
+
+[[gateway.profiles]]
+name = "cloud"
+kind = "openai"
+base_url = "https://openrouter.ai/api/v1"
+model = "deepseek/deepseek-chat-v3-0324:free"
+free_only = true
+```
+
+- A `429` puts that profile on a cooldown taken from `Retry-After` (default
+  60 s, capped at 1 h). A rejected key (`401`), a refusal (`403`), or a broken
+  configuration disables that profile for the session, and the next one
+  answers. A missing model (`404`) moves on. The conversation is sent
+  unchanged to every attempt.
+- `free_only = true` at the top level only considers profiles marked
+  `free_only = true`; a free-only user is never failed over to a paid
+  endpoint.
+- Profile keys come from `api_keys` or `SCHOLARPATH_<NAME>_API_KEYS` (name
+  upper-cased, non-alphanumerics become `_`). The global
+  `SCHOLARPATH_API_KEYS` is not sent to a profile, so one provider's key cannot
+  reach another host.
+- `kind` is `openai`, `opencode`, or `stub`. An `openai` profile needs
+  `base_url` and `model` (or `models`).
+- Settings shows counts only ("2 of 3 AI connections ready"), never provider
+  names. Error replies distinguish a missing key, a rejected key, a refusal,
+  a rate limit, and a missing model instead of calling everything a bad key.
+
+No third-party gateway is bundled and no extra runtime is required: the
+router is part of this package. (SwayRouter needs Bun and ships OAuth/cookie
+flows for IDE accounts; OmniRoute needs Node 22+ and a 1.9 GB tree; llmrouter
+is a fine Go sidecar but gives model providers API-key auth only. All three
+were checked on 2026-10-22; see G191.) Streaming and model-side tool calls
+remain outside the gateway contract: one complete reply per turn.
 
 ### Sources registry (catalog)
 

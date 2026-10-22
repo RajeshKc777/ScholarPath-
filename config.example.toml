@@ -24,6 +24,11 @@ log_level = "INFO"
 # "openai"   = direct replies from any OpenAI-compatible endpoint
 provider = "stub"
 
+# Never route to a provider profile that is not marked free_only. Use this
+# together with profiles below; a free-only user is never failed over to a
+# paid endpoint.
+free_only = false
+
 # Model identifier. Use "provider/model" (for example
 # "opencode/minimax-m3.1-flash-free") or a bare model id. Empty = the default
 # model that OpenCode reports.
@@ -81,6 +86,35 @@ api_keys = []
 # Console keys the app registers with the model service and rotates between
 # when a model quota is exhausted. Keep them here or out of the repository.
 account_keys = []
+
+# --- Provider profiles (G191) ------------------------------------------------
+# Optional. Each enabled profile is an independent provider endpoint with its
+# own model chain and keys. When any profile is enabled it replaces
+# provider / fallback_providers above, and the app routes across profiles in
+# the order written here (rate-limited ones cool down, rejected keys disable
+# that profile for the session).
+#
+# Keys: put them in api_keys below, or in SCHOLARPATH_<NAME>_API_KEYS
+# (name upper-cased, every non-alphanumeric run replaced by _). The global
+# SCHOLARPATH_API_KEYS variable is NOT sent to a profile, so one provider's
+# key can never reach another host.
+#
+# [[gateway.profiles]]
+# name = "openrouter-free"
+# kind = "openai"                   # openai | opencode | stub
+# enabled = true
+# free_only = true                  # only free models / a free endpoint
+# base_url = "https://openrouter.ai/api/v1"
+# model = "deepseek/deepseek-chat-v3-0324:free"
+# models = []
+# api_keys = []
+#
+# [[gateway.profiles]]
+# name = "local"
+# kind = "openai"
+# base_url = "http://127.0.0.1:11434/v1"
+# model = "qwen2.5-coder:7b"
+# free_only = true
 
 # --- Interface ---------------------------------------------------------------
 [ui]

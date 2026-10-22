@@ -23,6 +23,38 @@ class ConfigError(Exception):
     """Raised when configuration cannot be read or fails validation."""
 
 
+class ProviderProfileConfig(BaseModel):
+    """One independently configured provider endpoint (G191).
+
+    A profile carries its own base URL, model chain and keys, so two cloud
+    providers can be configured side by side instead of sharing one endpoint.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1)
+    kind: Literal["openai", "opencode", "stub"] = "openai"
+    enabled: bool = True
+    # The endpoint serves free models only (or is local). Global free-only
+    # routing never leaves these profiles.
+    free_only: bool = False
+    base_url: str = ""
+    model: str = ""
+    models: list[str] = []
+    api_keys: list[str] = []
+    timeout_seconds: float | None = Field(default=None, gt=0, le=600)
+
+    @pydantic.model_validator(mode="after")
+    def _check_endpoint(self) -> ProviderProfileConfig:
+        if self.kind == "openai" and not self.base_url.strip():
+            raise ValueError("gateway.profiles: an 'openai' profile needs base_url.")
+        if self.kind == "openai" and not (self.model.strip() or self.models):
+            raise ValueError(
+                "gateway.profiles: an 'openai' profile needs model or models."
+            )
+        return self
+
+
 class GatewayConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -56,11 +88,21 @@ class GatewayConfig(BaseModel):
     # The app's own keys. They live in the user's local config file or in the
     # SCHOLARPATH_API_KEYS environment variable - never in the repository.
     api_keys: list[str] = []
+    # Which environment variable may add keys. Provider profiles set their own
+    # name so one provider's key is never sent to another endpoint.
+    api_keys_env: str = "SCHOLARPATH_API_KEYS"
     # Console keys the app registers with the model service and rotates
     # between when a model quota is exhausted.
     account_keys: list[str] = []
     # Ask the model service to switch account when a model quota is exhausted.
     rotate_credentials: bool = True
+
+    # Named provider profiles (G191). When at least one is enabled they take
+    # precedence over provider / fallback_providers: each profile is its own
+    # endpoint with its own model chain and keys.
+    profiles: list[ProviderProfileConfig] = []
+    # Never route to a profile that is not marked free_only.
+    free_only: bool = False
 
     @pydantic.model_validator(mode="after")
     def _check_providers(self) -> GatewayConfig:
@@ -71,7 +113,10 @@ class GatewayConfig(BaseModel):
                 "gateway.fallback_providers contains unknown providers: "
                 + ", ".join(sorted(unknown))
             )
-        if self.provider == "openai" and not self.api_base_url.strip():
+        names = [profile.name for profile in self.profiles]
+        if len(names) != len(set(names)):
+            raise ValueError("gateway.profiles names must be unique.")
+        if self.provider == "openai" and not self.api_base_url.strip() and not self.profiles:
             raise ValueError(
                 "gateway.api_base_url is required when provider = 'openai'."
             )

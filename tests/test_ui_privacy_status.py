@@ -222,3 +222,32 @@ def test_right_panel_needs_no_scroll_at_the_default_size(window: MainWindow) -> 
     QApplication.processEvents()
 
     assert not window._right_scroll.verticalScrollBar().isVisible()
+
+
+def test_settings_reports_connection_health_without_provider_names(tmp_path) -> None:
+    from types import SimpleNamespace
+
+    from scholarpath.ui.settings_page import SettingsPage
+
+    rows = (
+        SimpleNamespace(state="ready"),
+        SimpleNamespace(state="cooling_down"),
+        SimpleNamespace(state="disabled"),
+    )
+    page = SettingsPage(
+        AppConfig(),
+        gateway_name=lambda: "router",
+        stats=lambda: {},
+        config_file=tmp_path / "config.toml",
+        provider_status=lambda: rows,
+    )
+    try:
+        summary = page._connection_summary()
+        assert summary == (
+            "1 of 3 AI connections ready \u00b7 1 cooling down \u00b7 "
+            "1 need attention"
+        )
+        assert "openai" not in summary.casefold()
+        assert "gemini" not in summary.casefold()
+    finally:
+        page.close()

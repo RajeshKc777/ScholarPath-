@@ -293,12 +293,14 @@ class SettingsPage(QWidget):
         stats: Callable[[], dict],
         parent: QWidget | None = None,
         config_file: Path | None = None,
+        provider_status: Callable[[], object] | None = None,
     ) -> None:
         super().__init__(parent)
         self._config = config
         self._gateway_name = gateway_name
         self._stats = stats
         self._config_file = config_file or config_path()
+        self._provider_status = provider_status
         self._privacy_rows: dict[str, PrivacySwitchRow] = {}
 
         outer = QVBoxLayout(self)
@@ -348,9 +350,8 @@ class SettingsPage(QWidget):
         model_layout = card("Model replies")
         live = self._gateway_name() != "stub"
         state = QLabel(
-            "Live - replies run through the local model service. That service "
-            "must be running separately; no student-visible provider names "
-            "exist in this interface."
+            "Live - replies run through a configured model provider. Provider "
+            "names are never shown in this interface."
             if live
             else "Offline preview - replies are placeholder text with no model "
             "behind them.",
@@ -359,6 +360,13 @@ class SettingsPage(QWidget):
         state.setObjectName("StateWhy")
         state.setWordWrap(True)
         model_layout.addWidget(state)
+        if self._provider_status is not None:
+            summary = self._connection_summary()
+            if summary:
+                connections = QLabel(summary, self)
+                connections.setObjectName("DocMeta")
+                connections.setWordWrap(True)
+                model_layout.addWidget(connections)
 
         # -- local data -----------------------------------------------------
         data_layout = card("Local data")
@@ -579,6 +587,26 @@ class SettingsPage(QWidget):
         self._privacy_saved.setObjectName("VerifyOK" if ok else "VerifyWarn")
         self._privacy_saved.style().unpolish(self._privacy_saved)
         self._privacy_saved.style().polish(self._privacy_saved)
+
+    def _connection_summary(self) -> str:
+        """How many connections are usable - counts only, never provider names."""
+        if self._provider_status is None:
+            return ""
+        try:
+            rows = tuple(self._provider_status())  # type: ignore[arg-type]
+        except Exception:  # noqa: BLE001 - a status problem must not break Settings
+            return ""
+        if not rows:
+            return ""
+        ready = sum(1 for row in rows if getattr(row, "state", "") == "ready")
+        cooling = sum(1 for row in rows if getattr(row, "state", "") == "cooling_down")
+        attention = sum(1 for row in rows if getattr(row, "state", "") == "disabled")
+        parts = [f"{ready} of {len(rows)} AI connections ready"]
+        if cooling:
+            parts.append(f"{cooling} cooling down")
+        if attention:
+            parts.append(f"{attention} need attention")
+        return " \u00b7 ".join(parts)
 
     def _open_folder(self) -> None:
         folder = self._config_file.parent

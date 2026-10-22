@@ -49,9 +49,11 @@ def configured_keys(config: GatewayConfig) -> tuple[str, ...]:
     """Keys for the OpenAI-compatible endpoint.
 
     These live in the user's local config or environment - never in the
-    repository, the logs, or the student UI.
+    repository, the logs, or the student UI. A provider profile names its own
+    environment variable so keys are not shared between unrelated endpoints.
     """
-    return _keys(config.api_keys, KEY_ENV)
+    env_name = (config.api_keys_env or KEY_ENV).strip() or KEY_ENV
+    return _keys(config.api_keys, env_name)
 
 
 def configured_account_keys(config: GatewayConfig) -> tuple[str, ...]:

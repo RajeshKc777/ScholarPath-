@@ -1078,6 +1078,9 @@ class MainWindow(QMainWindow):
             stats=self._database.counts,
             parent=self,
             config_file=self._config_file,
+            provider_status=lambda: getattr(
+                self._controller.gateway, "status", lambda: ()
+            )(),
         )
         self._settings_page.privacy_changed.connect(self._on_privacy_changed)
         self._pages.addWidget(self._settings_page)
@@ -1520,7 +1523,7 @@ class MainWindow(QMainWindow):
             "conversation",
             "LIVE" if live else "Offline",
             live,
-            "Chat replies run through the local model service."
+            "Chat replies run through a configured model provider."
             if live
             else "Offline preview - placeholder replies with no model behind them.",
         )

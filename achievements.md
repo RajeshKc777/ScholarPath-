@@ -37,7 +37,7 @@ is finished, not when it is started. Each entry names the goal it satisfies
   badges and eight real screenshots of the shipped pages (A30, re-captured in
   A34 and A35).
 - Licence: proprietary, source-available, view-only (`LICENSE`).
-- Tests: **701 passing** (`pytest`, ~74 s).
+- Tests: **728 passing** (`pytest`, ~77 s).
 - M7: packaged and bundle-audited (`dist\ScholarPathAI`,
   `packaging\build.ps1`), but **not clean-Windows verified**; there is no
   installer and no separate security/performance review. G138, G207 and G113
@@ -50,6 +50,44 @@ is finished, not when it is started. Each entry names the goal it satisfies
 ---
 
 ## Log (newest first)
+
+### 2026-10-22 - A48 - A unified multi-provider model layer (G191)
+
+**Satisfies:** G191.
+
+- Research first (2026-10-22, read from the repositories themselves):
+  **SwayRouter** (JavaScript, MIT, 10 stars) needs **Bun >= 1.3** and ships
+  OAuth/cookie token flows for IDE accounts (claude, codex, cursor, windsurf,
+  gemini-cli, kiro, ...); **OmniRoute** (TypeScript, MIT, 79.6k stars) has a
+  **1.93 GB** tree, needs **Node >= 22.22.2**, and stacks 150+ free tiers;
+  **llmrouter** (Go, MIT, 133 files) is the one clean sidecar candidate, but
+  its model providers are **API-key only** (its OAuth is for MCP servers).
+  **OpenRouter's OAuth PKCE** was verified in its docs (localhost callbacks on
+  any port, headless code paste, single-use 10-minute code) and stays the one
+  legitimate one-click authorization route (G190). No gateway was bundled: the
+  router is part of this package, so the exe gains no runtime.
+- `src/scholarpath/gateway/router.py` (new): named profiles, ordered fallback,
+  `Retry-After` cooldowns (default 60 s, capped at 1 h), session disable on a
+  rejected key or a refused request, missing-model fallback, free-only
+  routing, and a `status()` view that carries no secret.
+- `config.py`: `ProviderProfileConfig`, `gateway.profiles`, `gateway.free_only`
+  (unique names; an `openai` profile needs `base_url` and a model).
+- `factory.py`: profiles take precedence over `provider` / `fallback_providers`;
+  every profile reads its own key source (`SCHOLARPATH_<NAME>_API_KEYS`), so
+  the global key list never reaches another host.
+- `openai_compat.py`: sends `User-Agent: ScholarPath/<version>` (Cloudflare
+  answered 1010 to clients without one), reports a **missing** key as missing
+  instead of "rejected", separates a refusal (403) from a quota limit, treats
+  a missing model (404) as retryable, reads `Retry-After`, and no longer sends
+  an unauthenticated request after every key was rejected.
+- `base.py`: `GatewayForbidden` and `GatewayRateLimited.retry_after`.
+- Settings shows connection **counts** only ("2 of 3 AI connections ready"),
+  never provider names.
+- Evidence: 27 new tests (router, config, adapter, settings); suite **728
+  passing** (~77 s), no network beyond loopback.
+- Known limits: no streaming, no model-side tool calls, no in-app Connect
+  button (G190), and profile keys are still read from the user's own config
+  file - Windows Credential Manager storage is not wired yet.
 
 ### 2026-10-22 - A47 - A dev-side candidate finder over the Common Crawl URL index (G189)
 
