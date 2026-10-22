@@ -107,8 +107,8 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G184 | 50 | A "Verify this page" button on each official-looking link the chat lists, which runs the existing read-and-verify flow and offers to save the page to the catalog | `[x]` |
 | G185 | 51 | Links in a chat reply are a strong, clearly visible blue (not the faded shade Qt paints anchors with), underlined, on both the assistant and the user bubble | `[x]` |
 | G186 | 51 | "Verify this page" verifies in the chat itself: the page is read and checked in place, the verified values and the ones the page does not state are shown there, and the record can be saved to the catalog from the reply without opening the Scholarship Pages page | `[x]` |
-| G187 | 52 | Crawl discovery prefers scholarship pages: every same-site link is scored by scholarship/funding words (English plus common local-language terms), the highest scores are read first, links are capped per page, depth is capped per run, and obvious non-content (login, cart, news archives, calendars) is skipped | `[~]` |
-| G188 | 52 | The crawler reads PDFs published on the official domains it already walks (size-capped), extracts the text layer, and runs the same extract-and-word-for-word verify pipeline, storing the PDF's address and the hash of the PDF bytes | `[~]` |
+| G187 | 52 | Crawl discovery prefers scholarship pages: every same-site link is scored by scholarship/funding words (English plus common local-language terms), the highest scores are read first, links are capped per page, depth is capped per run, and obvious non-content (login, cart, news archives, calendars) is skipped | `[x]` |
+| G188 | 52 | The crawler reads PDFs published on the official domains it already walks (size-capped), extracts the text layer, and runs the same extract-and-word-for-word verify pipeline, storing the PDF's address and the hash of the PDF bytes | `[x]` |
 
 ---
 
@@ -1799,3 +1799,12 @@ snapshot) are **not** part of this one.
 **No new external dataset or service is used in STEP 1**: PDFs and links come
 from the portals already in the sources registry, so no third-party terms
 change what this step may do.
+
+**Done (2026-10-22).** 682 tests passed, no network. Commits: `ae24260`
+(requirement rows), then the code and tests, then this docs update. See
+`achievements.md` A45 (G187) and A46 (G188). Files: `discovery.py`
+(`score_link`, `is_noise`, `SCHOLARSHIP_TERMS`, `page_links(allow_pdf=...)`),
+`crawler.py` (`ranked_links`, priority queue, depth/link caps, PDF branch),
+`sources.py` (`pdf_from_resource`, `MAX_PDF_BYTES`), `catalog.py`
+(`MAX_PAGES_PER_RUN`), `ui/catalog_page.py` (page copy), tests
+`test_crawler_discovery.py`, `test_crawler.py`, `test_catalog.py`.

@@ -15,7 +15,7 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?style=flat-square&logo=windows&logoColor=white)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Qt](https://img.shields.io/badge/Qt-6.12-41CD52?style=flat-square&logo=qt&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-651%20passing-2ea043?style=flat-square&logo=pytest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-682%20passing-2ea043?style=flat-square&logo=pytest&logoColor=white)
 ![Local first](https://img.shields.io/badge/local--first-no%20cloud%20account-8B5CF6?style=flat-square)
 ![License](https://img.shields.io/badge/license-view--only%20%C2%B7%20all%20rights%20reserved-b3261e?style=flat-square)
 
@@ -257,8 +257,13 @@ flowchart LR
   your editable copy lives at `%APPDATA%\ScholarPath\sources_registry.toml`).
   Switch portals on, set how many pages each may contribute, and press
   **Start catalog run**: the app discovers scholarship pages from each portal's
-  sitemap, feed and same-site links, obeys its `robots.txt`, reads **at most one
-  page a second per host**, and only inside the paths the registry allows.
+  sitemap, feed and same-site links, ranks the links by scholarship/funding
+  words (English and common local languages) so the best pages are read first,
+  obeys its `robots.txt`, reads **at most one page a second per host**, and only
+  inside the paths the registry allows. Login forms, carts, news archives and
+  calendars are never queued, and a run stops at 40 pages in total. A PDF the
+  portal publishes is read through its text layer (a scan with none is reported
+  as unread, never guessed at).
   Every value is still verified **word-for-word** against the page; a record is
   recognised by its title plus the portal's domain, so a second page **fills
   empty fields and adds a source** instead of duplicating the record, and a
@@ -388,8 +393,9 @@ flowchart LR
   there is a documented, honest policy for them.
 - The catalog is a **starting set of eight official portals**, not a complete
   index: it finds pages through sitemaps, feeds and same-site links (no search
-  engine, no JavaScript menus), reads HTML only (PDF prospectuses are skipped),
-  and never goes faster than one request per second per host. Two portals were
+  engine, no JavaScript menus), reads HTML and PDFs (a PDF through its text
+  layer, size-capped; a scan with no text layer stays unread), and never goes
+  faster than one request per second per host. Two portals were
   checked and left out because they could not be read: CSC (`csc.edu.cn`, HTTP
   412) and Australia Awards (`australiaawards.gov.au`, connection reset).
 - Discover searches the **stored text**, so it is a reading aid, not a
@@ -438,7 +444,7 @@ scholarpath --init-config   # write the configuration template, then exit
 scholarpath --config path\to\config.toml
 scholarpath --version
 python -m scholarpath       # equivalent to the console script
-pytest                      # 651 tests, no network required (fake server on loopback)
+pytest                      # 682 tests, no network required (fake server on loopback)
 ```
 
 </details>
@@ -617,7 +623,7 @@ except the gateway and `sources.py` can be tested with no network at all.
 
 ```mermaid
 flowchart LR
-    reg["Sources registry<br/>8 official portals"] --> crawl["Crawler<br/>robots, sitemaps<br/>feeds, same-site"]
+    reg["Sources registry<br/>8 official portals"] --> crawl["Crawler<br/>robots, sitemaps<br/>feeds, scored links<br/>HTML + PDF"]
     crawl --> fetch["Guarded fetch<br/>conditional GET<br/>1 req/s per host"]
     fetch --> extract["Model proposes<br/>verbatim check<br/>then merge"]
     extract --> db[("Catalog<br/>SQLite<br/>plus versions")]
@@ -629,7 +635,9 @@ The steps in words, because the diagram is a summary:
 1. **Registry** — eight official portals, each with allowed path prefixes,
    crawl depth and a trust level. Nothing outside those prefixes is fetched.
 2. **Crawler** — discovers pages from `robots.txt`, sitemaps, RSS/Atom and
-   same-site links, one request per second per host, HTML only, page caps.
+   same-site links, ranks the links by scholarship/funding words and reads the
+   best first, one request per second per host, HTML and PDF (text layer),
+   depth and page caps.
 3. **Guarded fetch** — every page goes through `sources.py`: resolved-address
    check, size and type caps, every redirect re-checked, conditional GET with
    ETag / If-Modified-Since, sha256 recorded.
@@ -677,7 +685,7 @@ src/scholarpath/
 ├── websearch.py           keyless web search: results, official-domain rule, untrusted-data block, unverified-lead labels
 ├── discovery.py           scholarship links published by a page the student trusts, plus RSS/Atom helpers
 ├── registry.py            sources registry: shipped default, editable user copy, strict validation
-├── crawler.py             robots.txt, sitemaps, feeds, same-site links, per-host pacing, page cap, 304s
+├── crawler.py             robots.txt, sitemaps, feeds, scored same-site links, pacing, depth/page caps, PDF text layer, 304s
 ├── catalog.py             the run: crawl → extract → verify → dedup/merge → save, honest stats, cancel
 ├── search.py              search + filters over the catalog: folded text, whole-word levels, deadline states
 ├── official.py            which domains count as official: exact registrable-domain rules, country conventions, trusted list

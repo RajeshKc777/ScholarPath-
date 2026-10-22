@@ -37,7 +37,7 @@ is finished, not when it is started. Each entry names the goal it satisfies
   badges and eight real screenshots of the shipped pages (A30, re-captured in
   A34 and A35).
 - Licence: proprietary, source-available, view-only (`LICENSE`).
-- Tests: **651 passing** (`pytest`, ~56 s).
+- Tests: **682 passing** (`pytest`, ~62 s).
 - M7: packaged and bundle-audited (`dist\ScholarPathAI`,
   `packaging\build.ps1`), but **not clean-Windows verified**; there is no
   installer and no separate security/performance review. G138, G207 and G113
@@ -50,6 +50,49 @@ is finished, not when it is started. Each entry names the goal it satisfies
 ---
 
 ## Log (newest first)
+
+### 2026-10-22 - A46 - The crawler reads PDFs published by official portals (G188)
+
+**Satisfies:** G188.
+
+- A PDF inside the allowed paths of a portal is fetched with its own size cap
+  (`MAX_PDF_BYTES`, 8 MB), its text layer extracted with pypdf in memory, and
+  the **same** extract -> word-for-word verify -> merge pipeline runs on it.
+  The source URL and the sha256 of the PDF bytes are stored, and the record
+  says it was read from a document (`sources.pdf_from_resource`,
+  `crawler.crawl`).
+- A scan with no text layer is **refused with a reason** ("This PDF has no text
+  layer (it is a scan), so its words cannot be checked"), as is a PDF over the
+  size cap, an encrypted PDF and a file that is not really a PDF. Nothing is
+  invented for them.
+- PDF links are kept only for the crawler (`page_links(..., allow_pdf=True)`);
+  the Discover flow still opens pages only.
+
+**Evidence:** `tests/test_crawler_discovery.py` (a real PDF served from the
+loopback fake server, text and hash asserted, a blank PDF refused, size cap and
+non-PDF refused), `tests/test_crawler.py`, `tests/test_catalog.py` (a record
+from a PDF keeps its address and hash). Suite: **682 passing**, no network.
+
+### 2026-10-22 - A45 - Crawl discovery prefers scholarship pages and stops cleanly (G187)
+
+**Satisfies:** G187.
+
+- Every same-site link is scored by scholarship/funding words - the owner's
+  list plus common local-language terms (Nepali, Korean, Japanese, Chinese,
+  Indonesian/Malay, Vietnamese, Thai, German, French, Spanish, Portuguese,
+  Polish, Russian, Arabic) - and the queue is a priority queue, so the page cap
+  is spent on the best candidates (`discovery.score_link`,
+  `crawler.ranked_links`).
+- Login, sign-up, account, cart, checkout, calendar, archive, tag, author and
+  search pages are never queued (`discovery.is_noise`).
+- Caps: at most 60 links from one page, a depth no registry entry can raise
+  above 3 (`MAX_CRAWL_DEPTH`), and a whole-run page total (`MAX_PAGES_PER_RUN`,
+  40) that shrinks each portal's allowance as the run goes
+  (`catalog.CatalogRunner`).
+
+**Evidence:** `tests/test_crawler_discovery.py` (scoring, percent-encoded and
+local words, noise, best-first order, depth cap, link cap), `tests/test_catalog.py`
+(the run stops at its page cap and says so). Suite: **682 passing**, no network.
 
 ### 2026-10-22 - A44 - "Verify this page" verifies in the chat, not on another page (G186)
 
