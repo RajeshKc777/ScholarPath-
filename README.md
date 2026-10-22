@@ -15,7 +15,7 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?style=flat-square&logo=windows&logoColor=white)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Qt](https://img.shields.io/badge/Qt-6.12-41CD52?style=flat-square&logo=qt&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-682%20passing-2ea043?style=flat-square&logo=pytest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-701%20passing-2ea043?style=flat-square&logo=pytest&logoColor=white)
 ![Local first](https://img.shields.io/badge/local--first-no%20cloud%20account-8B5CF6?style=flat-square)
 ![License](https://img.shields.io/badge/license-view--only%20%C2%B7%20all%20rights%20reserved-b3261e?style=flat-square)
 
@@ -444,7 +444,7 @@ scholarpath --init-config   # write the configuration template, then exit
 scholarpath --config path\to\config.toml
 scholarpath --version
 python -m scholarpath       # equivalent to the console script
-pytest                      # 682 tests, no network required (fake server on loopback)
+pytest                      # 701 tests, no network required (fake server on loopback)
 ```
 
 </details>
@@ -480,6 +480,48 @@ Rules the build keeps:
   to be done (see the live-proof checklist).
 - Measured startup of the packaged build on this machine: **~1.6 s** to the
   first window.
+
+---
+
+## 🧰 Developer tools (not shipped in the app)
+
+`tools/` holds scripts for the developer. The packaged build bundles only
+`src/scholarpath`, so none of this reaches a student.
+
+### `tools/find_candidates.py` - candidate finder over the Common Crawl URL index
+
+Asks the Common Crawl **URL index** (metadata only, never the crawled page
+content) for addresses under the official portals whose path carries a
+scholarship word, and writes a **review file** - one candidate per line, with
+the score, the host, the status and the type the index recorded.
+
+```powershell
+python tools\find_candidates.py --registry --keyword scholarship
+python tools\find_candidates.py www.studyinkorea.go.kr --prefix scholarship
+python tools\find_candidates.py go.kr --keyword janghak --out review.txt
+python tools\find_candidates.py --list-collections
+```
+
+What it does and does not do:
+
+- **Nothing is stored in the catalog from it, and the app never reads the
+  review file.** Every candidate must still be fetched **live** from its
+  official site and pass the word-for-word pipeline before anything is stored.
+- A **host** query is a prefix lookup and answers quickly; a **suffix** query
+  asks for a whole country domain, which the index often refuses with a
+  timeout. `--registry` uses the eight official portals from the sources
+  registry, which is the cheap way to run it.
+- The shared index is busy at times and answers `504/503/429`; those are
+  retried, and a query that never answered is reported as **unknown** - the
+  review file then says `INCOMPLETE` rather than pretending there are no
+  candidates.
+- Politeness: one request per second, a cap on queries per run, a cap on
+  candidates collected.
+
+Common Crawl's Terms of Use (revised 7 March 2024) were read before this was
+built. Metadata lookups are permitted use; the tool keeps to their
+conditions - no personal data is harvested, no crawled content is downloaded
+or redistributed, and the shared index is asked politely.
 
 ---
 
@@ -738,7 +780,8 @@ src/scholarpath/
     ├── theme.py           light Reddit-orange palette and widget styles
     └── main_window.py     stacked pages, sidebar, transcript, status strip, voice mode
 tools/
-└── voice_probe.py        one Live voice cycle on the real mic: echo, levels, durations (owner tool)
+├── voice_probe.py        one Live voice cycle on the real mic: echo, levels, durations (owner tool)
+└── find_candidates.py    dev-side candidate finder over the Common Crawl URL index (review file only)
 ```
 
 </details>
@@ -753,7 +796,7 @@ the same discipline — business logic stays testable without a network or a mod
 
 | Gate | How it is enforced |
 | ---- | ------------------ |
-| Tests | `pytest` — config validation, gateway contract, model routing, adapter round-trips against a fake server, chat turns, failure paths, verbatim extraction checks, SQLite profile/document/scholarship round-trips, fetch guardrails (including SSRF blocking) against a fake HTTP server, privacy switches, UI privacy gates and status elision, re-check logic, sources registry validation, crawler (robots, sitemaps, feeds, redirects, 304, pacing, page cap), the catalog run (dedup, merge, conflicts, invented values, cancel, old-database migration), Discover (text folding, whole-word levels, five deadline states, filter isolation, ordering, empty states, the hand-off, navigation) and Phase 3 (unchanged / changed / failed re-check, version history, expiry only from a stored date, the stored difference, reminder schedule and no repeats, CSV + ICS content, every warning sign and lookalike domain, the never-a-verdict wording check) |
+| Tests | `pytest` — config validation, gateway contract, model routing, adapter round-trips against a fake server, chat turns, failure paths, verbatim extraction checks, SQLite profile/document/scholarship round-trips, fetch guardrails (including SSRF blocking) against a fake HTTP server, privacy switches, UI privacy gates and status elision, re-check logic, sources registry validation, crawler (robots, sitemaps, feeds, redirects, 304, pacing, page cap, keyword scoring, depth/link caps, non-content skipping, PDF text layer and refused scans), the catalog run (dedup, merge, conflicts, invented values, cancel, run page cap, old-database migration), the dev-side candidate finder (suffix and host rules, official-host filter, noise and tracking-parameter removal, query and candidate caps, busy-index retries, incomplete-list reporting, and that the app neither bundles nor reads it), Discover (text folding, whole-word levels, five deadline states, filter isolation, ordering, empty states, the hand-off, navigation) and Phase 3 (unchanged / changed / failed re-check, version history, expiry only from a stored date, the stored difference, reminder schedule and no repeats, CSV + ICS content, every warning sign and lookalike domain, the never-a-verdict wording check) |
 | Honesty | Extraction values must appear verbatim in the source (document or fetched page); unverified proposals are visibly flagged and never auto-applied |
 | Untrusted input | Fetched page content is data only, wrapped in markers with an explicit ignore-instructions instruction |
 | Secrets | Never in source or config templates; config is local + git-ignored |

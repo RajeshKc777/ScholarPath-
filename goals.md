@@ -109,7 +109,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G186 | 51 | "Verify this page" verifies in the chat itself: the page is read and checked in place, the verified values and the ones the page does not state are shown there, and the record can be saved to the catalog from the reply without opening the Scholarship Pages page | `[x]` |
 | G187 | 52 | Crawl discovery prefers scholarship pages: every same-site link is scored by scholarship/funding words (English plus common local-language terms), the highest scores are read first, links are capped per page, depth is capped per run, and obvious non-content (login, cart, news archives, calendars) is skipped | `[x]` |
 | G188 | 52 | The crawler reads PDFs published on the official domains it already walks (size-capped), extracts the text layer, and runs the same extract-and-word-for-word verify pipeline, storing the PDF's address and the hash of the PDF bytes | `[x]` |
-| G189 | 53 | A dev-side candidate finder, `tools/find_candidates.py` (never shipped in the app): it queries the Common Crawl *URL index* for pages under chosen official suffixes whose paths carry scholarship keywords, and writes a review file of candidates - the app never reads that file, nothing is saved to the catalog from it, and every candidate still has to be fetched live from its official site and verified word-for-word | `[~]` |
+| G189 | 53 | A dev-side candidate finder, `tools/find_candidates.py` (never shipped in the app): it queries the Common Crawl *URL index* for pages under chosen official suffixes whose paths carry scholarship keywords, and writes a review file of candidates - the app never reads that file, nothing is saved to the catalog from it, and every candidate still has to be fetched live from its official site and verified word-for-word | `[x]` |
 
 ---
 
@@ -1845,4 +1845,16 @@ the content, no use of the *Crawled Content* for AI/Generated Content
 (indemnity under their section 9), and politeness to the shared index. This
 tool's answer to all three: metadata only, no crawled content is stored or
 redistributed, and one polite request per second.
+
+**Done (2026-10-22, A47):** built and tested, 19 new tests, suite **701
+passing**. The tool grew two honest behaviours while being checked live:
+the index answers `404` when a query has *no rows under that prefix* (so it is
+not a failure), and it answers `504/503/429` when it is busy (so those are
+retried, and a query that never answered is reported as **unknown** with the
+review file marked `INCOMPLETE` - never as "there are no candidates"). A
+specific **host** (`www.studyinkorea.go.kr`) is asked with a fast prefix
+query; a bare **suffix** (`go.kr`) gets a wildcard-host query that the index
+often refuses, and `--registry` runs the eight official portals from the
+sources registry instead. Live check: 101 index rows -> **72 candidates**
+(Chevening, Commonwealth Startup Fellowship), review file only.
 

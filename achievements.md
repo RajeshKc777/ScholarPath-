@@ -37,7 +37,7 @@ is finished, not when it is started. Each entry names the goal it satisfies
   badges and eight real screenshots of the shipped pages (A30, re-captured in
   A34 and A35).
 - Licence: proprietary, source-available, view-only (`LICENSE`).
-- Tests: **682 passing** (`pytest`, ~62 s).
+- Tests: **701 passing** (`pytest`, ~74 s).
 - M7: packaged and bundle-audited (`dist\ScholarPathAI`,
   `packaging\build.ps1`), but **not clean-Windows verified**; there is no
   installer and no separate security/performance review. G138, G207 and G113
@@ -50,6 +50,45 @@ is finished, not when it is started. Each entry names the goal it satisfies
 ---
 
 ## Log (newest first)
+
+### 2026-10-22 - A47 - A dev-side candidate finder over the Common Crawl URL index (G189)
+
+**Satisfies:** G189.
+
+- `tools/find_candidates.py` asks the Common Crawl **URL index** (URL metadata
+  only - the crawled page content is never downloaded) for addresses under the
+  official portals whose path carries a scholarship word, filters them with the
+  app's own rules (registrable host match, non-content paths dropped, 2xx only,
+  HTML or PDF, the same scholarship score the crawler uses, tracking parameters
+  removed) and writes a **review file**: a header saying what was asked and
+  when, then one candidate per line.
+- **Nothing is stored in the catalog from it, and the app never reads the
+  file.** `packaging/scholarpath.spec` bundles only `src/scholarpath`, no app
+  module imports the tool, and the review file says so in its own header.
+  Every candidate must still be fetched live from its official site and pass
+  the word-for-word pipeline.
+- Honest about the index: a **host** query is a prefix lookup and answers
+  quickly; a **suffix** query asks for a whole country domain and the index
+  often refuses it with a timeout. `504/503/429` answers are retried, a query
+  that never answered is reported as **unknown** ("nothing is known here"), and
+  the review file is marked `INCOMPLETE` - a missing candidate is never shown
+  as "there are none". `404` from the index means "no rows under this prefix",
+  not a failure. `--registry` uses the eight official portals from the sources
+  registry, which is the cheap way to run it.
+- **Terms checked first:** Common Crawl's Terms of Use (revised 7 March 2024).
+  Metadata lookups are permitted use; the tool keeps to their conditions - no
+  personal data harvested, no crawled content stored or redistributed, one
+  polite request per second, and hard caps on queries and candidates.
+
+**Evidence:** `tests/test_find_candidates.py` - 19 tests, no network (every
+index answer is injected): the registrable host rule, host vs suffix query
+shapes, the official-host filter, noise and tracking-parameter removal,
+duplicates, ordering, the review file's contents, the query and candidate
+caps, busy-index retries, the incomplete marking, and that the app neither
+bundles the tool nor reads it. Live check on 2026-10-22: the eight registry
+hosts returned 101 index rows and **72 candidates** (Chevening, Commonwealth
+Startup Fellowship), with two queries still reported as unanswered.
+Suite: **701 passing**, no network.
 
 ### 2026-10-22 - A46 - The crawler reads PDFs published by official portals (G188)
 
