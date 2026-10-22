@@ -31,3 +31,6 @@ data/
 Thumbs.db
 .idea/
 .vscode/
+
+# Generated candidate lists from tools/find_candidates.py - dated artefacts
+tools/candidates/
