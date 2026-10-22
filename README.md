@@ -15,7 +15,7 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?style=flat-square&logo=windows&logoColor=white)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Qt](https://img.shields.io/badge/Qt-6.12-41CD52?style=flat-square&logo=qt&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-591%20passing-2ea043?style=flat-square&logo=pytest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-595%20passing-2ea043?style=flat-square&logo=pytest&logoColor=white)
 ![Local first](https://img.shields.io/badge/local--first-no%20cloud%20account-8B5CF6?style=flat-square)
 ![License](https://img.shields.io/badge/license-view--only%20%C2%B7%20all%20rights%20reserved-b3261e?style=flat-square)
 
@@ -317,6 +317,15 @@ flowchart LR
   reply stays in the chat, and the transcript follows the conversation as it
   grows. If a reply cannot be fetched, the app says so out loud and keeps
   listening instead of stopping.
+  **Diagnosing it:** every Live turn writes `voice event=...` lines to the log
+  with **numbers only** - how long the capture lasted, why it ended, whether a
+  reply was playing while the microphone was open, which engine answered and
+  the confidence when the service sends one. No audio and no words ever reach
+  the log. To measure the loop on your own machine, run
+  `.venv\Scripts\python.exe tools\voice_probe.py` and say the sentence it
+  prints: it records your voice, plays a canned reply, records the room while
+  and after it, and prints the heard text, the durations and how much of the
+  reply the microphone picked up. Nothing is stored.
 - **Privacy switches** — voice input, the spoken reply and web search are
   **on by default**, so the features work without editing a file, and each one
   is a **real toggle in Settings**: flip it and the running app obeys it at
@@ -402,7 +411,7 @@ scholarpath --init-config   # write the configuration template, then exit
 scholarpath --config path\to\config.toml
 scholarpath --version
 python -m scholarpath       # equivalent to the console script
-pytest                      # 591 tests, no network required (fake server on loopback)
+pytest                      # 595 tests, no network required (fake server on loopback)
 ```
 
 </details>
@@ -656,7 +665,7 @@ src/scholarpath/
 ├── chat_profile.py        chat-stated facts → verbatim-verified profile suggestions
 ├── prose.py               model markdown → plain prose for the bubble, the copy button and the voice
 ├── tts.py                 spoken replies: neural voice first, offline Windows voice as fallback
-├── voice.py               speech-to-text input: capture, transcription, honest errors
+├── voice.py               speech-to-text input: capture, transcription, honest errors, numbers-only diagnostics
 ├── mcp/
 │   ├── __init__.py        exports
 │   └── client.py          opt-in stdio MCP client: initialize/list/call, read-only guard
@@ -690,6 +699,8 @@ src/scholarpath/
     ├── mic_button.py      microphone button with the listening ripple
     ├── theme.py           light Reddit-orange palette and widget styles
     └── main_window.py     stacked pages, sidebar, transcript, status strip, voice mode
+tools/
+└── voice_probe.py        one Live voice cycle on the real mic: echo, levels, durations (owner tool)
 ```
 
 </details>

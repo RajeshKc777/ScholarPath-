@@ -37,7 +37,7 @@ is finished, not when it is started. Each entry names the goal it satisfies
   badges and eight real screenshots of the shipped pages (A30, re-captured in
   A34 and A35).
 - Licence: proprietary, source-available, view-only (`LICENSE`).
-- Tests: **591 passing** (`pytest`, ~50 s).
+- Tests: **595 passing** (`pytest`, ~55 s).
 - M7: packaged and bundle-audited (`dist\ScholarPathAI`,
   `packaging\build.ps1`), but **not clean-Windows verified**; there is no
   installer and no separate security/performance review. G138, G207 and G113
@@ -50,6 +50,49 @@ is finished, not when it is started. Each entry names the goal it satisfies
 ---
 
 ## Log (newest first)
+
+### 2026-10-22 - A36 - Live voice diagnosis: numbers in the log, a probe with the real mic (G174)
+
+**Satisfies:** G174 (phase 1 of G174-G176; the goal stays `[~]` until the owner
+runs the probe's human step).
+
+| Area | What changed |
+| ---- | ------------ |
+| The log | Every Live turn writes `voice event=...` lines with numbers only - no audio, no transcript text. `capture_start` (engine, language, max seconds, start timeout, TTS already playing), `capture_end` (wait duration, clip duration, why the wait ended: `silence` / `phrase_limit` / `start_timeout` / `stopped` / `error`, whether TTS was playing at the start, during and at the end, the ambient threshold), `transcribe_done` (engine, characters, confidence when the service sends one, elapsed), plus `turn_heard`, `speech_start`, `speech_end`, `tts_engine` and `listen_start` (the gap since the reply ended) in the window. |
+| The numbers | `voice.CaptureStats` carries the same numbers to the caller: duration, clip length, end reason, TTS overlap, energy threshold, confidence, character count. `voice._transcribe_google` reads the raw Google response, so a missing confidence stays **None** instead of the library's invented 0.5. `listen_once` takes `language`, `start_timeout`, `is_speaking` and `on_stats`; a small watcher samples the speaker every 100 ms so a reply that starts and ends inside one capture is still reported. |
+| The probe | `tools/voice_probe.py` runs one Live cycle on the real machine: the app's own capture of your voice, two seconds of raw audio for the noise floor, raw audio for the whole reply (the echo window), raw audio for the three seconds after it (the room tail), and the app's own capture the moment the reply ends. It prints the heard text, durations, end reasons, confidence, raw levels (peak and RMS) and how many reply words the microphone heard. Nothing is stored; the words go to the console, never to the log. |
+| The tests | Four new tests in `tests/test_voice.py` use a fake recogniser, a fake microphone and fake audio (no network): the stats are numbers, the log carries the events and **not the words**, confidence is kept when Google sends it and `None` when it does not, a start timeout reports `start_timeout`, and `listen_once` passes the diagnostic arguments through. The four older tests that stubbed `_record_and_transcribe` now accept the extra keyword arguments. |
+
+**Evidence:** **595 tests pass** (591 before plus 4), exit 0. The probe ran on
+the owner's laptop with the real microphone and the real Edge neural voice.
+
+**What the probe found (details and numbers in goals.md §48):**
+
+1. **Early cut-off, and it is the loudest problem.** The app's capture ended
+   after 1.44 s and 3.60 s of audio with reason `silence`; in one run the clip
+   was cut 0.53 s **into** the reply, after 2.1 s of room silence had already
+   been swallowed as speech. The library's ambient threshold was 193 while the
+   room's noise peaks reached 891 - 4.6x the threshold - so a noise transient
+   opens the speech window and the next 0.8 s pause closes it.
+2. **Echo is a mechanism, not yet a symptom here.** While the reply played the
+   microphone level rose from peak 891 to 3149 (RMS 76 to 257), so the mic
+   does hear the speaker, but too faintly for the service to turn it into
+   words (nothing intelligible in either `en-IN` or `en-US`). Three seconds
+   after the reply the room was back to peak 2 - no audible tail. The risk is
+   still real: the loop opens the microphone **0.000 s** after playback ends.
+3. **Room noise is not the complaint** (floor 0-76 RMS); the threshold is set
+   from that floor and is too close to the peaks.
+4. **Engine accuracy is still unmeasured** - nobody spoke during the run, so
+   only the app's own quiet reply was available to the service.
+
+**Known limit:** the free Google endpoint sends no confidence field; the app
+reports "not sent" rather than inventing a number. The accuracy half of the
+diagnosis needs one command from the owner: `tools\voice_probe.py` without
+`--skip-student`, and say the sentence it prints.
+
+**Not done on purpose:** no echo guard, no endpointing change, no language
+setting, no review step, no push-to-talk, no state machine, no new engine.
+Those are Phase 2 (G175) and Phase 3 (G176).
 
 ### 2026-10-22 - A35 - Scroll areas paint a light background on every page (G173)
 

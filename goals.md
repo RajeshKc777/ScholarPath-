@@ -94,6 +94,9 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G171 | 45 | Privacy switches are real toggles in Settings, on by default, and saved to `config.toml` from the app; no student edits the file to turn voice or web search on | `[x]` |
 | G172 | 46 | One name per page: the top bar names the page, the body no longer repeats it, and the one-line description under the name does not repeat it either | `[x]` |
 | G173 | 47 | Every scroll area paints the theme's light page background (view port and content widget), so no page shows black strips in Windows dark mode; My Profile's intro sits in a card; a pixel test guards all pages | `[x]` |
+| G174 | 48 | Live voice diagnosis: every Live turn logs event names and numbers only (capture duration, silence-end reason, TTS overlap, engine, confidence) and `tools/voice_probe.py` measures echo with the real mic; nothing is fixed in this phase | `[~]` |
+| G175 | 48 | Live voice loop: echo guard (no mic during playback, ~400 ms pause, overlap discard), configurable endpointing with noise calibration and min/max lengths, `voice.language` (en-IN default, en-GB/en-US selectable), a Send now / Edit / Cancel review step with auto-send off, push-to-talk, and a tested Listening/Heard/Thinking/Speaking state machine | `[ ]` |
+| G176 | 48 | Live voice engine and noise: STT behind a Protocol (google, whisper_local, fake), faster-whisper CPU int8 with a size-shown explicit download, Silero VAD and noise suppression switches, honest privacy copy, and `tools/stt_bench.py` reporting word error rate | `[ ]` |
 
 ---
 
@@ -1535,3 +1538,86 @@ re-captured, so the profile and saved screenshots no longer show the strips.
 Known limit: the native combo-box arrow still paints as a small grey block
 under the Windows dark palette. It is a glyph, not a background, and is left
 for a separate style pass.
+
+## 48. Live voice accuracy (G174-G176)
+
+Dictation in the composer already works and must not change: one click, one
+clip, the words land in the composer for review. This work is about **Live
+voice mode**, where the app listens, sends, speaks the reply and listens
+again with no clicks. The constraints for every phase:
+
+- **Privacy stays honest.** The Google clip and the Microsoft reply text are
+  each disclosed and each behind its own opt-in switch; nothing recorded is
+  stored, and the probe prints the words only to the owner's console, never
+  to the log.
+- **No network in tests.** Tests use a fake microphone, fake audio and a fake
+  recogniser. The probe is the only piece that touches the real microphone
+  and the real services, and it says so.
+- **Measure first.** Phase 1 adds instrumentation and a probe; it fixes
+  nothing. Phase 2 changes the loop, Phase 3 changes the engine. One commit
+  per phase.
+
+**Phase 1 (G174).** Each Live turn logs a small set of `voice event=...`
+lines with numbers only - no audio, no transcript text: capture start (engine,
+language, max seconds, whether TTS was already playing), capture end (wall
+duration, clip duration, how the wait ended: silence, phrase limit, start
+timeout, stopped, error), transcription (engine, characters, confidence when
+Google sends one, elapsed) and the speech/listen boundary in the window.
+`tools/voice_probe.py` replays one cycle with the real mic: it records the
+student, speaks a canned reply, records the reply-playback window and the
+window right after playback, then prints the heard text, the durations and how
+much of the reply the microphone heard (word overlap). The phase report says
+whether the evidence points at echo, an early cut-off, room noise or engine
+accuracy. No thresholds, guards or settings change in this phase.
+
+### Phase 1 findings (2026-10-22, this machine)
+
+Measured with `tools/voice_probe.py --skip-student` on the owner's laptop
+(mic and speakers both present, Edge neural voice playing 6.91 s of audio in
+7.1-7.4 s). Numbers, not impressions:
+
+| Measurement | Result |
+| ----------- | ------ |
+| Room noise, 2 s raw | peak 1-891, RMS 0-76 (of 32767) - a quiet room |
+| Mic level while the reply played, raw | peak 509-3149, RMS 40-257 - the microphone **does** hear the speaker, but faintly (-36 to -20 dBFS) |
+| Mic level in the 3 s after the reply | peak 2-620, RMS 0-71 - back to the noise floor, **no audible tail** |
+| Transcript of the playback window | "nothing intelligible" for both `en-IN` and `en-US` - the reply is too quiet for the service, so no echo words came back |
+| The app's own capture, 0.000 s after playback ended | wait 1.44-6.59 s, **clip 1.44-3.60 s**, ended with reason `silence` |
+| Ambient threshold the library chose | 193, while room noise peaks reached 891 - **4.6x the threshold** |
+| Confidence from the engine | never sent (the free Google endpoint omits it; the library's `with_confidence=True` would have invented 0.5, so this build reports "not sent" instead) |
+| Language tag | `en-IN` and `en-US` are both accepted (no request error), so the tag is not the problem |
+
+What the evidence says:
+
+1. **Early cut-off is real, and it is the loudest problem.** The capture ends
+   after 1.4-3.6 s with reason `silence` - the library stops at the first
+   0.8 s pause, and the ambient threshold (193) sits far below the room's
+   noise peaks (891), so a noise transient opens the "speech" window and the
+   next pause closes it. In the first run the clip was cut 0.53 s **into**
+   the reply, after 2.1 s of silence had already been swallowed as speech.
+   A real utterance loses its first and last words the same way.
+2. **Echo is a mechanism, not yet a symptom here.** The microphone picks up
+   the reply (peak 891 -> 3149, RMS 76 -> 257) but the level is too low for
+   the recogniser to turn it into words, and the room is dead quiet
+   afterwards (peak back to 2). On this machine, at this volume, the reply is
+   not heard as speech. The risk is real though: the loop opens the
+   microphone **0.000 s** after playback ends, with no pause at all, so any
+   room with a tail - or a louder system volume - would capture the reply.
+3. **Room noise is not the complaint.** The floor is 0-76 RMS. The noise
+   problem is that the threshold is set *from* that floor and is too close to
+   the peaks.
+4. **Engine accuracy could not be judged in this run** - nobody spoke, so the
+   only speech available was the app's own reply at -36 dBFS. The owner has
+   to run the probe's first step (`tools\voice_probe.py`, without
+   `--skip-student`) and say a sentence; that measures what the engine does
+   with a real Indian-English voice and gives the accuracy number the phase
+   report needs.
+
+Not changed in this phase, on purpose: no threshold, no pause, no language
+setting, no review step, no state machine, no new engine. Those are Phase 2
+and Phase 3.
+
+Phase 1 is done except for one command the owner has to run, because it needs
+a human voice: `.venv\Scripts\python.exe tools\voice_probe.py` (without
+`--skip-student`) and say the sentence it prints. That fills in the
+engine-accuracy row above.

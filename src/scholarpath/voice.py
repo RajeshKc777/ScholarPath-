@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
+from dataclasses import dataclass
 from typing import Callable
 
 logger = logging.getLogger("scholarpath.voice")
@@ -26,6 +28,8 @@ logger = logging.getLogger("scholarpath.voice")
 MAX_LISTEN_SECONDS = 45.0
 # How long to wait for the student to start speaking before giving up.
 START_TIMEOUT = 15.0
+# The language asked of the speech service. Phase 2 makes this a setting.
+DEFAULT_LANGUAGE = "en-US"
 
 try:  # optional at import time: the UI degrades honestly when missing
     import speech_recognition as _sr
@@ -55,6 +59,28 @@ LIBRARY_MISSING = (
     "Voice input stays off; typing still works."
 )
 STOPPED = "Voice input was stopped."
+
+
+@dataclass(frozen=True)
+class CaptureStats:
+    """Numbers about one capture and transcription - never audio or words.
+
+    Live voice diagnosis (G174) needs to know *how* a clip ended and whether
+    the reply was still playing, without putting the student's words into the
+    log. `chars` proves a transcript existed; the text itself never leaves the
+    caller.
+    """
+
+    engine: str = "google"
+    language: str = DEFAULT_LANGUAGE
+    duration_s: float = 0.0  # wall time spent inside Recognizer.listen()
+    audio_s: float = 0.0  # length of the recorded clip
+    reason: str = "unknown"  # silence / phrase_limit / start_timeout / stopped / error
+    tts_playing: bool = False
+    energy_threshold: float = 0.0
+    confidence: float | None = None
+    chars: int = 0
+
 
 
 def availability() -> tuple[bool, str]:
@@ -121,44 +147,220 @@ def cancel_active() -> None:
         _stop_source(source)
 
 
-def _record_and_transcribe(max_seconds: float) -> str:
-    recognizer = _sr.Recognizer()
-    with _sr.Microphone() as source:
-        _register_active(source)
-        try:
-            recognizer.adjust_for_ambient_noise(source, duration=0.25)
-            audio = recognizer.listen(
-                source,
-                timeout=START_TIMEOUT,
-                phrase_time_limit=min(max_seconds, MAX_LISTEN_SECONDS),
-            )
-        except _sr.WaitTimeoutError:
-            raise VoiceError(NOTHING_HEARD) from None
-        finally:
-            _unregister_active(source)
+def _clip_seconds(audio: object) -> float:
+    """Length of a recorded clip, from its frames (0 when not measurable)."""
     try:
-        return recognizer.recognize_google(audio, language="en-US")
+        rate = float(getattr(audio, "sample_rate", 0) or 0)
+        width = float(getattr(audio, "sample_width", 0) or 0)
+        frames = float(len(getattr(audio, "frame_data", b"")))
+    except Exception:  # noqa: BLE001 - measuring is diagnostics, not a duty
+        return 0.0
+    if rate <= 0 or width <= 0:
+        return 0.0
+    return frames / (rate * width)
+
+
+def _transcribe_google(
+    recognizer: object, audio: object, language: str
+) -> tuple[str, float | None]:
+    """(text, confidence). Confidence stays None when Google does not send one.
+
+    `show_all=True` is deliberate: `with_confidence=True` invents a 0.5 when
+    the service omits the field, and a made-up confidence is worse than none.
+    """
+    started = time.monotonic()
+    try:
+        result = recognizer.recognize_google(  # type: ignore[attr-defined]
+            audio, language=language, show_all=True
+        )
     except _sr.UnknownValueError:
+        logger.info(
+            "voice event=transcribe_error engine=google language=%s detail=unknown_value",
+            language,
+        )
         raise VoiceError(NOTHING_HEARD) from None
-    except _sr.RequestError as exc:
-        logger.info("speech service error: %s", exc)
+    except _sr.RequestError:
+        logger.info(
+            "voice event=transcribe_error engine=google language=%s detail=request_error",
+            language,
+        )
         raise VoiceError(SERVICE_UNREACHABLE) from None
+
+    text = ""
+    confidence: float | None = None
+    if isinstance(result, dict):
+        alternatives = result.get("alternative") or []
+        if alternatives and isinstance(alternatives[0], dict):
+            text = str(alternatives[0].get("transcript") or "").strip()
+            raw = alternatives[0].get("confidence")
+            if isinstance(raw, (int, float)):
+                confidence = float(raw)
+    elif isinstance(result, str):
+        text = result.strip()
+
+    if not text:
+        logger.info(
+            "voice event=transcribe_error engine=google language=%s detail=empty",
+            language,
+        )
+        raise VoiceError(NOTHING_HEARD)
+    logger.info(
+        "voice event=transcribe_done engine=google language=%s chars=%d "
+        "confidence=%s elapsed_s=%.2f",
+        language,
+        len(text),
+        "none" if confidence is None else f"{confidence:.2f}",
+        time.monotonic() - started,
+    )
+    return text, confidence
+
+
+def _record_and_transcribe(
+    max_seconds: float,
+    *,
+    language: str = DEFAULT_LANGUAGE,
+    start_timeout: float = START_TIMEOUT,
+    is_speaking: Callable[[], bool] | None = None,
+    on_stats: Callable[[CaptureStats], None] | None = None,
+) -> str:
+    recognizer = _sr.Recognizer()
+    limit = min(max_seconds, MAX_LISTEN_SECONDS)
+    playing_at_start = bool(is_speaking()) if is_speaking else False
+    logger.info(
+        "voice event=capture_start engine=google language=%s max_seconds=%.1f "
+        "start_timeout_s=%.1f tts_playing=%s",
+        language,
+        limit,
+        start_timeout,
+        playing_at_start,
+    )
+
+    stats: dict[str, object] = {
+        "engine": "google",
+        "language": language,
+        "duration_s": 0.0,
+        "audio_s": 0.0,
+        "reason": "error",
+        "tts_playing": playing_at_start,
+        "energy_threshold": 0.0,
+        "confidence": None,
+        "chars": 0,
+    }
+    # A reply can start and end *inside* one capture, so sampling only the
+    # boundaries would miss it. A tiny watcher records whether TTS was alive
+    # at any point while the microphone was open (G174).
+    playing_during = {"value": playing_at_start}
+    stop_watching = threading.Event()
+
+    def watch_speech() -> None:
+        while not stop_watching.wait(0.1):
+            try:
+                if is_speaking is not None and is_speaking():
+                    playing_during["value"] = True
+            except Exception:  # noqa: BLE001 - a probe must not break a capture
+                return
+
+    watcher = (
+        threading.Thread(target=watch_speech, daemon=True)
+        if is_speaking is not None
+        else None
+    )
+    if watcher is not None:
+        watcher.start()
+    try:
+        with _sr.Microphone() as source:
+            _register_active(source)
+            try:
+                recognizer.adjust_for_ambient_noise(source, duration=0.25)
+                stats["energy_threshold"] = float(
+                    getattr(recognizer, "energy_threshold", 0.0) or 0.0
+                )
+                started = time.monotonic()
+                try:
+                    audio = recognizer.listen(
+                        source,
+                        timeout=start_timeout,
+                        phrase_time_limit=limit,
+                    )
+                finally:
+                    stats["duration_s"] = time.monotonic() - started
+                stats["audio_s"] = _clip_seconds(audio)
+                stats["reason"] = (
+                    "phrase_limit"
+                    if float(stats["audio_s"]) >= limit - 0.05
+                    else "silence"
+                )
+            except _sr.WaitTimeoutError:
+                stats["reason"] = "start_timeout"
+                raise VoiceError(NOTHING_HEARD) from None
+            except Exception:
+                stats["reason"] = "stopped" if _cancel_event.is_set() else "error"
+                raise
+            finally:
+                _unregister_active(source)
+                stop_watching.set()
+                playing_at_end = bool(is_speaking()) if is_speaking else False
+                stats["tts_playing"] = (
+                    playing_at_start
+                    or playing_during["value"]
+                    or playing_at_end
+                )
+                logger.info(
+                    "voice event=capture_end duration_s=%.2f audio_s=%.2f "
+                    "reason=%s tts_playing_start=%s tts_playing_during=%s "
+                    "tts_playing_end=%s energy_threshold=%.0f",
+                    float(stats["duration_s"]),
+                    float(stats["audio_s"]),
+                    stats["reason"],
+                    playing_at_start,
+                    playing_during["value"],
+                    playing_at_end,
+                    float(stats["energy_threshold"]),
+                )
+        text, confidence = _transcribe_google(recognizer, audio, language)
+        stats["confidence"] = confidence
+        stats["chars"] = len(text)
+        return text
+    finally:
+        stop_watching.set()
+        if watcher is not None:
+            watcher.join(0.5)
+        if on_stats is not None:
+            try:
+                on_stats(CaptureStats(**stats))  # type: ignore[arg-type]
+            except Exception:  # noqa: BLE001 - diagnostics must not break voice
+                logger.info("voice event=stats_callback_failed")
 
 
 def listen_once(
     on_done: Callable[[str], None],
     on_error: Callable[[str], None],
     max_seconds: float = MAX_LISTEN_SECONDS,
+    *,
+    language: str = DEFAULT_LANGUAGE,
+    start_timeout: float = START_TIMEOUT,
+    is_speaking: Callable[[], bool] | None = None,
+    on_stats: Callable[[CaptureStats], None] | None = None,
 ) -> None:
     """Run one capture + transcription synchronously on the calling thread.
 
     Designed to be called from a `QThread.run()`: the UI stays live while the
     microphone blocks here. `cancel_active()` ends the wait early and reports
     the stop through `on_error`.
+
+    `is_speaking` is read at the start and at the end of the capture so the
+    log can say whether a reply was playing during it (G174). `on_stats`
+    receives the same numbers, never the words.
     """
     _cancel_event.clear()
     try:
-        text = _record_and_transcribe(max_seconds)
+        text = _record_and_transcribe(
+            max_seconds,
+            language=language,
+            start_timeout=start_timeout,
+            is_speaking=is_speaking,
+            on_stats=on_stats,
+        )
     except VoiceError as exc:
         on_error(exc.student_message)
         return

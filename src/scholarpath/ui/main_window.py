@@ -10,9 +10,11 @@ the config.
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timezone
 from datetime import timedelta
 from pathlib import Path
+from typing import Callable
 
 from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import (
@@ -1975,8 +1977,12 @@ class MainWindow(QMainWindow):
     def _voice_mode_listen(self) -> None:
         if not self._voice_mode_active():
             return
-        logger.info("voice mode: listening")
-        worker = _VoiceWorker()
+        ended = getattr(self, "_speech_ended_at", None)
+        gap = time.monotonic() - ended if ended is not None else -1.0
+        logger.info("voice event=listen_start gap_since_speech_s=%.3f", gap)
+        # The capture reads this at its start and end, so the log can say
+        # whether a reply was playing while the microphone was open (G174).
+        worker = _VoiceWorker(is_speaking=lambda: self._speaker.speaking)
         self._voice_worker = worker
         # Hold a reference until the thread really ends, so Qt never destroys
         # a QThread that is still running.
@@ -1989,7 +1995,7 @@ class MainWindow(QMainWindow):
     def _on_voice_mode_heard(self, text: str) -> None:
         if not self._voice_mode_active():
             return
-        logger.info("voice mode: heard %d characters", len(text.strip()))
+        logger.info("voice event=turn_heard chars=%d", len(text.strip()))
         if not text.strip():
             self._on_voice_mode_miss()
             return
@@ -2036,7 +2042,8 @@ class MainWindow(QMainWindow):
 
     def _on_speech_finished(self) -> None:
         if self._voice_mode_active():
-            logger.info("voice mode: speech finished; listening again")
+            self._speech_ended_at = time.monotonic()
+            logger.info("voice event=speech_end")
             self._set_voice_state("Listening \u2014 speak now", "Click End to stop.")
             self._voice_mode_listen()
 
@@ -2048,28 +2055,30 @@ class MainWindow(QMainWindow):
         if not self._voice_tts_allowed():
             return  # speaking is switched off: the reply stays in the chat
         speech, truncated = to_speech(turn.text)
-        logger.info(
-            "voice mode: speaking reply (%d characters, truncated=%s)",
-            len(speech),
-            truncated,
-        )
         detail = "Click End to stop."
         if truncated:
             detail = "Full reply is in the chat. Click End to stop."
         self._set_voice_state("Speaking\u2026", detail)
+        self._speech_started_at = time.monotonic()
+        logger.info(
+            "voice event=speech_start chars=%d truncated=%s",
+            len(speech),
+            truncated,
+        )
         self._speaker.say(speech)
 
     def _speak_notice(self, text: str) -> None:
         """Say something short (a failure note) and keep the loop alive."""
         if not self._voice_tts_allowed():
             return
-        logger.info("voice mode: speaking a notice (%d characters)", len(text))
+        logger.info("voice event=speech_start chars=%d truncated=false", len(text))
         self._set_voice_state("Speaking\u2026", "Click End to stop.")
+        self._speech_started_at = time.monotonic()
         self._speaker.say(text)
 
     def _on_voice_engine(self, engine: str) -> None:
         """Name the voice that is really speaking (G130)."""
-        logger.info("voice mode: speaking with the %s engine", engine)
+        logger.info("voice event=tts_engine engine=%s", engine)
         if not self._voice_mode_active():
             return
         self.voice_detail.setText(
@@ -2268,6 +2277,14 @@ class _VoiceWorker(QThread):
     heard = Signal(str)
     failed = Signal(str)
 
+    def __init__(self, is_speaking: Callable[[], bool] | None = None, parent=None) -> None:
+        super().__init__(parent)
+        self._is_speaking = is_speaking
+
     def run(self) -> None:
-        listen_once(self.heard.emit, self.failed.emit)
+        listen_once(
+            self.heard.emit,
+            self.failed.emit,
+            is_speaking=self._is_speaking,
+        )
 
