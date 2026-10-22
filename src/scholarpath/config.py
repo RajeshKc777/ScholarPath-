@@ -126,8 +126,12 @@ class PrivacyConfig(BaseModel):
       be turned into audio.
     - ``web_search``: the search question is sent to the web-search service,
       and the pages it returns are fetched.
+    - ``chat_profile``: a short summary of the saved profile (degree level,
+      GPA and scale, nationality, preferred countries, funding need, language
+      scores - never the name, never the documents) is sent with each chat
+      message, so the chat does not ask for facts the app already holds.
 
-    All three default to on so the features work without a config-file edit.
+    All four default to on so the features work without a config-file edit.
     The Settings page states exactly what each one sends and to whom, and its
     toggles save the student's choice back to ``config.toml``.
     """
@@ -137,6 +141,7 @@ class PrivacyConfig(BaseModel):
     voice_stt: bool = True
     voice_tts: bool = True
     web_search: bool = True
+    chat_profile: bool = True
 
 
 class SearchConfig(BaseModel):
@@ -266,7 +271,7 @@ def init_config(path: Path | None = None, overwrite: bool = False) -> Path:
     return target
 
 
-_PRIVACY_KEYS = ("voice_stt", "voice_tts", "web_search")
+_PRIVACY_KEYS = ("voice_stt", "voice_tts", "web_search", "chat_profile")
 _PRIVACY_HEADER_RE = re.compile(r"^[ \t]*\[privacy\][ \t]*(?:#.*)?$", re.MULTILINE)
 
 

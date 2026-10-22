@@ -462,6 +462,16 @@ class SettingsPage(QWidget):
                 "the search question, and the pages it returns, which are "
                 "fetched and shown to the model",
             ),
+            (
+                "chat_profile",
+                switches.chat_profile,
+                "Profile context in the chat",
+                "the model service that answers your chat",
+                "a short summary of your saved profile - degree level, GPA and "
+                "its scale, nationality, preferred countries, funding need and "
+                "language scores - so the chat does not ask you again. Never "
+                "your name, never your documents",
+            ),
         )
         for name, enabled, feature, party, data in disclosures:
             row = PrivacySwitchRow(name, feature, enabled, party, data, self)
@@ -475,7 +485,7 @@ class SettingsPage(QWidget):
         privacy_layout.addWidget(self._privacy_saved)
 
         always = QLabel(
-            "Always local, never sent anywhere: your profile, your documents, "
+            "Always local, never sent anywhere: your name, your documents, "
             "the chat history, the saved opportunities and the logs.",
             self,
         )

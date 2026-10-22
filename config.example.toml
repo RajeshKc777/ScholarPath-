@@ -100,6 +100,11 @@ voice_stt = true
 voice_tts = true
 # Search question -> the web-search service (and the pages it returns).
 web_search = true
+# Profile summary -> the model service that answers your chat (a short summary
+# of your saved profile: degree level, GPA and scale, nationality, preferred
+# countries, funding need and language scores - never your name, never your
+# documents). Turn it off and the chat is given nothing about your profile.
+chat_profile = true
 
 # --- Web search ---------------------------------------------------------------
 # Domains you trust for scholarship information. They are matched exactly, on

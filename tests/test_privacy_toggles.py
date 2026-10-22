@@ -113,7 +113,14 @@ def test_the_settings_page_names_the_third_party_for_every_switch(app) -> None:
     assert "voice input" in text
     assert "spoken replies" in text
     assert "web search" in text
-    assert set(page._privacy_rows) == {"voice_stt", "voice_tts", "web_search"}
+    assert "profile context" in text
+    assert "never your name" in text
+    assert set(page._privacy_rows) == {
+        "voice_stt",
+        "voice_tts",
+        "web_search",
+        "chat_profile",
+    }
     assert all(row.toggle.isChecked() for row in page._privacy_rows.values())
 
 

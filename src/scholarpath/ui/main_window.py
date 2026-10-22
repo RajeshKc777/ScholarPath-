@@ -640,6 +640,10 @@ class MainWindow(QMainWindow):
         self._turns = 0
         self._page_name = "chat"
         self._database = Database(database_path())
+        # The chat may be told what the profile already holds - unless the
+        # student turned that off (G181).
+        self._controller.profile_provider = self._profile_for_chat
+        self._controller.context_enabled = self._privacy_flag("chat_profile")
         self._scroll_timer = QTimer(self)  # deferred auto-scroll (G130)
         self._scroll_timer.setSingleShot(True)
         self._scroll_timer.timeout.connect(self._apply_scroll_to_bottom)
@@ -1852,7 +1856,20 @@ class MainWindow(QMainWindow):
     def _on_privacy_changed(self) -> None:
         """A Settings toggle saved; make the running app obey it immediately."""
         self._controller.search_enabled = self._privacy_flag("web_search")
+        self._controller.context_enabled = self._privacy_flag("chat_profile")
         self._refresh_status()
+
+    def _profile_for_chat(self) -> dict | None:
+        """The saved profile, for the chat's summary (G181).
+
+        Only the fields the summary may use are read; the name and the
+        documents never leave the device (see `chat_context.profile_summary`).
+        """
+        stored = self._database.load_profile()
+        if not stored:
+            return None
+        data = stored.get("data")
+        return dict(data) if isinstance(data, dict) else None
 
     def _apply_privacy_gates(self) -> None:
         """Grey out what privacy keeps off, and keep it clickable to Settings."""

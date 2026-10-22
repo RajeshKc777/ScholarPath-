@@ -205,3 +205,70 @@ def test_canonical_reply_leaks_nothing() -> None:
     tokens = forbidden_tokens("opencode", "zai-org/glm-4.5")
     scrubbed = scrub_reply(CANONICAL_REPLY, tokens)
     assert scrubbed == CANONICAL_REPLY
+
+
+# -- G181: the chat knows what the profile already holds ------------------------
+
+
+PROFILE = {
+    "student_name": "Rajesh Katuwal",
+    "degree_level": "bachelor",
+    "gpa": "3.6",
+    "gpa_scale": "4.0",
+    "nationality": "Nepal",
+    "preferred_countries": "Germany",
+    "funding_need": "full funding",
+    "ielts": "7.0",
+}
+
+
+def _summary_of(requests: list[ChatRequest]) -> str:
+    """The profile summary the app sent, or "" when it sent none."""
+    for message in requests[0].messages:
+        if "Saved profile facts" in message.content:
+            return message.content
+    return ""
+
+
+def test_the_profile_summary_is_sent_with_the_message() -> None:
+    gateway = RecordingGateway()
+    controller = make_controller(gateway, profile=lambda: dict(PROFILE))
+    controller.send("what scholarships can I get?")
+
+    summary = _summary_of(gateway.requests)
+    assert "3.6" in summary
+    assert "Nepal" in summary
+
+
+def test_no_summary_is_sent_while_the_switch_is_off() -> None:
+    gateway = RecordingGateway()
+    controller = make_controller(
+        gateway, profile=lambda: dict(PROFILE), context_enabled=False
+    )
+    controller.send("what scholarships can I get?")
+
+    assert _summary_of(gateway.requests) == ""
+    sent = " ".join(message.content for message in gateway.requests[0].messages)
+    assert "Saved profile facts" not in sent
+
+
+def test_the_name_never_leaves_the_device_with_the_summary() -> None:
+    gateway = RecordingGateway()
+    controller = make_controller(gateway, profile=lambda: dict(PROFILE))
+    controller.send("hello")
+
+    summary = _summary_of(gateway.requests)
+    assert summary, "the summary was sent"
+    assert "Rajesh" not in summary
+    assert "Katuwal" not in summary
+
+
+def test_a_broken_profile_never_breaks_the_chat() -> None:
+    def broken() -> dict:
+        raise RuntimeError("the database is locked")
+
+    gateway = RecordingGateway()
+    controller = make_controller(gateway, profile=broken)
+    controller.send("hello")
+
+    assert controller.history[-1].text == "noted"

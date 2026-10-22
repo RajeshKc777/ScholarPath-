@@ -15,6 +15,7 @@ from datetime import datetime
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 
+from scholarpath.chat_context import profile_summary
 from scholarpath.gateway.base import (
     ChatRequest,
     ChatResponse,
@@ -40,6 +41,7 @@ logger = logging.getLogger("scholarpath.chat")
 
 Dispatcher = Callable[[Callable[[], None]], None]
 Searcher = Callable[[str], list[SearchResult]]
+ProfileProvider = Callable[[], dict | None]
 
 _JSON_BLOCK_RE = re.compile(r"\{.*\}", re.DOTALL)
 
@@ -174,6 +176,8 @@ class ChatController(QObject):
         dispatch: Dispatcher | None = None,
         searcher: Searcher | None = None,
         search_enabled: bool = True,
+        profile: ProfileProvider | None = None,
+        context_enabled: bool = True,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -182,6 +186,8 @@ class ChatController(QObject):
         self._dispatch = dispatch or threadpool_dispatcher
         self._searcher = searcher or search
         self._search_enabled = search_enabled
+        self._profile = profile
+        self._context_enabled = bool(context_enabled)
         self._last_search: str | None = None
         self._history: list[Turn] = []
         self._busy = False
@@ -200,6 +206,27 @@ class ChatController(QObject):
     def search_enabled(self, enabled: bool) -> None:
         self._search_enabled = bool(enabled)
         logger.info("web search %s", "enabled" if self._search_enabled else "disabled")
+
+    @property
+    def context_enabled(self) -> bool:
+        """Whether the chat may be given the saved profile's summary."""
+        return self._context_enabled
+
+    @context_enabled.setter
+    def context_enabled(self, enabled: bool) -> None:
+        self._context_enabled = bool(enabled)
+        logger.info(
+            "profile context %s", "on" if self._context_enabled else "off"
+        )
+
+    @property
+    def profile_provider(self) -> ProfileProvider | None:
+        """Where the saved profile comes from (set by the window)."""
+        return self._profile
+
+    @profile_provider.setter
+    def profile_provider(self, provider: ProfileProvider | None) -> None:
+        self._profile = provider
 
     @property
     def gateway_name(self) -> str:
@@ -246,6 +273,20 @@ class ChatController(QObject):
         self._history.clear()
 
     # -- internals ---------------------------------------------------------
+    def _context_messages(self) -> list[Message]:
+        """The profile summary, when the switch allows it (G181)."""
+        if not self._context_enabled or self._profile is None:
+            return []
+        try:
+            profile = self._profile()
+        except Exception:  # noqa: BLE001 - a profile problem must not break chat
+            logger.exception("the profile could not be read for the chat")
+            return []
+        summary = profile_summary(profile)
+        if not summary:
+            return []
+        return [Message(role="system", content=summary)]
+
     def _run_turn(self) -> None:
         latest_user = next(
             (turn.text for turn in reversed(self._history) if turn.role == "user"),
@@ -261,6 +302,7 @@ class ChatController(QObject):
         request = ChatRequest(
             messages=[
                 Message(role="system", content=SYSTEM_PROMPT),
+                *self._context_messages(),
                 *(
                     [Message(role="system", content=SEARCH_OFF_NOTE)]
                     if not self._search_enabled
