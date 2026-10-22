@@ -37,7 +37,7 @@ is finished, not when it is started. Each entry names the goal it satisfies
   badges and eight real screenshots of the shipped pages (A30, re-captured in
   A34 and A35).
 - Licence: proprietary, source-available, view-only (`LICENSE`).
-- Tests: **610 passing** (`pytest`, ~56 s).
+- Tests: **642 passing** (`pytest`, ~56 s).
 - M7: packaged and bundle-audited (`dist\ScholarPathAI`,
   `packaging\build.ps1`), but **not clean-Windows verified**; there is no
   installer and no separate security/performance review. G138, G207 and G113
@@ -50,6 +50,83 @@ is finished, not when it is started. Each entry names the goal it satisfies
 ---
 
 ## Log (newest first)
+
+### 2026-10-22 - A42 - "Verify this page" on the official links the chat gives (G184)
+
+**Satisfies:** G184.
+
+| Area | What changed |
+| ---- | ------------ |
+| The button | Every official-looking address in a reply now gets a **Verify this page** button under the bubble (at most three per reply). `chat_context.official_links` picks the addresses out of the text and keeps only the ones on an official domain, so a blog link is never offered as a page to verify. |
+| The flow | The button opens the Scholarship Pages page with that address and runs the **existing** read-and-verify flow: fetch the page, ask the model to propose fields, check every value against the page text, and show the card that can be saved to the catalog (`ResearchPage.open_url`, `MainWindow._verify_from_chat`). Nothing new was invented for it and nothing is saved without the student pressing Save. |
+| The tests | `tests/test_verify_page_button.py`: only official addresses are offered; the button exists, is labelled and calls back with the right address; a reply with only third-party links has no button; the read-and-verify flow runs with a **fake fetch** and shows the draft card; a real window lands on the Scholarship Pages page with the address filled in. No network. |
+
+**Evidence:** **642 tests pass** (610 before plus 32 across G180-G184), exit 0.
+
+### 2026-10-22 - A41 - The chat knows the level, and says when a result is for another one (G183)
+
+**Satisfies:** G183.
+
+- A profile that says a bachelor's degree is **completed** now sends the model a
+  one-line level rule: prefer graduate-level programmes, say why in one line,
+  and say plainly when a programme or record is for another level.
+- A catalog record whose own page states a level the student is already past
+  (an undergraduate scholarship for a bachelor graduate) is flagged in the
+  catalog block: "this one is for bachelor's study, not for this student". A
+  record that states no level is never flagged - nothing is guessed.
+- The rule is per profile value: a bachelor graduate is not pointed at
+  bachelor's study, a master's graduate is not pointed at bachelor's study
+  either, and a PhD scholar is not pointed at master's study.
+
+### 2026-10-22 - A40 - The verified catalog answers first, web results are only leads (G182)
+
+**Satisfies:** G182.
+
+- The chat now searches the **local verified catalog** on every turn, with the
+  same `search_records` the Discover page runs, one content word at a time so
+  a whole sentence still finds the record that mentions it. Records that
+  match more words come first.
+- Each matching record is sent to the model **before** any web result, with
+  its title, provider, level, deadline, **source address** and **last-verified
+  date**, and the model is told to say that these come from the verified
+  catalog.
+- Every web result is now labelled **unverified lead**, in the block the model
+  reads and in the instruction with it: a search result is a page nobody
+  checked, and the model must never call it verified.
+
+### 2026-10-22 - A39 - The chat knows what the profile already holds (G181)
+
+**Satisfies:** G181.
+
+- A compact summary of the saved profile is sent with the chat message:
+  degree level, GPA and its scale, nationality, preferred countries, funding
+  need and language scores. **The name and the documents are never part of
+  it** - only the listed fields are read (`chat_context.profile_summary`).
+- Settings has a new switch, **Profile context in the chat**, which states
+  what is sent and to whom (the model service that answers the chat). With
+  the switch off the chat is given nothing about the profile, and the running
+  app obeys the change at once. The "always local" line now says your name
+  and your documents, which is exactly what stays.
+- `config.example.toml` and the privacy block in `config.toml` carry the new
+  `chat_profile` key.
+
+### 2026-10-22 - A38 - The official-domain rule learns the other countries' conventions (G180)
+
+**Satisfies:** G180.
+
+- The rule now accepts `edu.<cc>` (kathmandu.edu.np, harvard.edu.au,
+  tsinghua.edu.cn, nus.edu.sg, um.edu.my, iitb.edu.in), `go.<cc>`
+  (scholarships.go.kr, mofa.go.jp), `gov.<cc>`, `ac.<cc>` and `nic.in`, next
+  to the ones it knew (`.gc.ca`, `.gouv.fr`, `.gob.<cc>`, `.admin.ch`,
+  `.gv.at`, `.govt.nz`).
+- The match is still **exact on the registrable domain**: `go.kr.fake.com`,
+  `kaist.ac.kr.evil.com`, `fake-edu.np.net`, `edu.np.example.com` and
+  `nic.in.example.net` stay outside, and a second-level label only counts
+  under a two-letter country code (`edu.com`, `gov.app` and `nic.de` are not
+  official).
+- The registry's own portals and the student's `trusted_domains` are
+  unchanged - nothing in this item touches how a portal is crawled or how a
+  trusted domain is matched.
 
 ### 2026-10-22 - A37 - Clickable links, honest domain labels, no false "I cannot search" (G177-G179)
 

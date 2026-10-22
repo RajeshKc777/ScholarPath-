@@ -15,7 +15,7 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?style=flat-square&logo=windows&logoColor=white)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Qt](https://img.shields.io/badge/Qt-6.12-41CD52?style=flat-square&logo=qt&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-610%20passing-2ea043?style=flat-square&logo=pytest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-642%20passing-2ea043?style=flat-square&logo=pytest&logoColor=white)
 ![Local first](https://img.shields.io/badge/local--first-no%20cloud%20account-8B5CF6?style=flat-square)
 ![License](https://img.shields.io/badge/license-view--only%20%C2%B7%20all%20rights%20reserved-b3261e?style=flat-square)
 
@@ -199,10 +199,26 @@ flowchart LR
 - **Every address in a reply is a clickable link** — the answer stays plain
   prose, but each web address opens in the browser when you click it.
 - **"Official" means the real thing** — the rule knows the government and
-  university conventions of other countries too (`.go.kr`, `.go.jp`, `.gc.ca`,
-  `.gouv.fr`, `.gob.<cc>`, `.admin.ch`, `.gv.at`, `.govt.nz`), and it matches
-  the registrable domain exactly, so a lookalike such as
-  `university.edu.example.com` is never mistaken for the real one.
+  university conventions of other countries too (`.edu.<cc>`, `.go.<cc>`,
+  `.gov.<cc>`, `.ac.<cc>`, `.nic.in`, `.gc.ca`, `.gouv.fr`, `.gob.<cc>`,
+  `.admin.ch`, `.gv.at`, `.govt.nz`), and it matches the registrable domain
+  exactly, so a lookalike such as `university.edu.example.com` is never
+  mistaken for the real one.
+- **The chat uses what you already saved** — your profile is sent to the model
+  as a short summary (degree level, GPA and scale, nationality, preferred
+  countries, funding need, language scores) so the chat never asks you again.
+  Your name and your documents are never part of it, and the switch in
+  Settings turns it off.
+- **Your verified catalog answers first** — before any web result, the chat
+  searches the records you already stored (the same search as Discover) and
+  cites each one with its source address and the date it was last verified.
+  A web search result is only ever an **unverified lead**, and says so.
+- **The chat knows your level** — if your profile says a bachelor's degree is
+  completed, it prefers graduate-level programmes and says why in one line,
+  and it tells you when a result is for another level.
+- **"Verify this page"** — every official link in a reply gets a button that
+  reads that page, checks every value against the page itself and offers to
+  save it to your catalog.
 - **Tools (MCP) are opt-in and read-only** — off by default; configured in
   `config.toml` per server. With `read_only = true`, only tools advertising
   `readOnlyHint` may run; tool output is size-capped data, never instructions.
@@ -333,7 +349,8 @@ flowchart LR
   prints: it records your voice, plays a canned reply, records the room while
   and after it, and prints the heard text, the durations and how much of the
   reply the microphone picked up. Nothing is stored.
-- **Privacy switches** — voice input, the spoken reply and web search are
+- **Privacy switches** — voice input, the spoken reply, web search and the
+  profile context in the chat are
   **on by default**, so the features work without editing a file, and each one
   is a **real toggle in Settings**: flip it and the running app obeys it at
   once, and the choice is saved back to `config.toml` (comments and your other
@@ -418,7 +435,7 @@ scholarpath --init-config   # write the configuration template, then exit
 scholarpath --config path\to\config.toml
 scholarpath --version
 python -m scholarpath       # equivalent to the console script
-pytest                      # 610 tests, no network required (fake server on loopback)
+pytest                      # 642 tests, no network required (fake server on loopback)
 ```
 
 </details>
@@ -654,13 +671,13 @@ src/scholarpath/
 ├── documents.py           PDF text layer (pypdf), plain text, Windows OCR images
 ├── extraction.py          prompt, JSON parsing, verbatim-verification against source
 ├── sources.py             guarded http(s) fetch: SSRF-safe resolution, caps, content-type, conditional GET, sha256, redirects
-├── websearch.py           keyless web search: results, official-domain rule, untrusted-data block
+├── websearch.py           keyless web search: results, official-domain rule, untrusted-data block, unverified-lead labels
 ├── discovery.py           scholarship links published by a page the student trusts, plus RSS/Atom helpers
 ├── registry.py            sources registry: shipped default, editable user copy, strict validation
 ├── crawler.py             robots.txt, sitemaps, feeds, same-site links, per-host pacing, page cap, 304s
 ├── catalog.py             the run: crawl → extract → verify → dedup/merge → save, honest stats, cancel
 ├── search.py              search + filters over the catalog: folded text, whole-word levels, deadline states
-├── official.py            which domains count as official: exact registrable-domain rules, trusted list
+├── official.py            which domains count as official: exact registrable-domain rules, country conventions, trusted list
 ├── scam_flags.py          warning signs: payment wording, lookalike domain, missing source, missing deadline
 ├── freshness.py           the re-check job: saved first, hash compare, re-read + verify, versions, expiry
 ├── reminders.py           the reminder schedule (30/14/7/1 days) and its wording
@@ -671,6 +688,7 @@ src/scholarpath/
 ├── identity.py            provider anonymity: probe interception + reply withholding
 ├── chat_profile.py        chat-stated facts → verbatim-verified profile suggestions
 ├── prose.py               model markdown → plain prose for the bubble, the copy button and the voice, plus clickable links
+├── chat_context.py        what the chat may know: profile summary, verified-catalog block, level rule, official links
 ├── tts.py                 spoken replies: neural voice first, offline Windows voice as fallback
 ├── voice.py               speech-to-text input: capture, transcription, honest errors, numbers-only diagnostics
 ├── mcp/

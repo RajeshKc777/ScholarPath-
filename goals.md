@@ -1732,3 +1732,7 @@ app already has instead of asking the student again:
 Honesty rules that stay: nothing is called verified unless the page said it;
 the catalog block says which records were verified and when; web results are
 never called verified; the profile summary is exactly the listed fields.
+
+**Done (2026-10-22).** 642 tests pass. One commit per item: `e2ff477`
+(G180), `4273866` (G181), `650ab77` (G182), `d798371` (G183), `fe68bfb`
+(G184).
