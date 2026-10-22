@@ -110,6 +110,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G187 | 52 | Crawl discovery prefers scholarship pages: every same-site link is scored by scholarship/funding words (English plus common local-language terms), the highest scores are read first, links are capped per page, depth is capped per run, and obvious non-content (login, cart, news archives, calendars) is skipped | `[x]` |
 | G188 | 52 | The crawler reads PDFs published on the official domains it already walks (size-capped), extracts the text layer, and runs the same extract-and-word-for-word verify pipeline, storing the PDF's address and the hash of the PDF bytes | `[x]` |
 | G189 | 53 | A dev-side candidate finder, `tools/find_candidates.py` (never shipped in the app): it queries the Common Crawl *URL index* for pages under chosen official suffixes whose paths carry scholarship keywords, and writes a review file of candidates - the app never reads that file, nothing is saved to the catalog from it, and every candidate still has to be fetched live from its official site and verified word-for-word | `[x]` |
+| G190 | 54 | Bring-your-own model key in one click: a helper (dev-side first, `tools/openrouter_key.py`) runs OpenRouter's official **OAuth PKCE** flow so the user connects their own OpenRouter account in a browser click and the helper stores the returned key in the *user's own config* - the app never sees the OpenRouter login, no key is pasted into chat or the repo, and a headless mode (no callback, paste the shown code - the documented "SSH server" route) covers machines without a browser. Chat itself keeps going through the existing OpenAI-compatible adapter (`https://openrouter.ai/api/v1`); free models stay free and the failover chain never spends money silently | `[ ]` |
 
 ---
 
@@ -1857,4 +1858,41 @@ query; a bare **suffix** (`go.kr`) gets a wildcard-host query that the index
 often refuses, and `--registry` runs the eight official portals from the
 sources registry instead. Live check: 101 index rows -> **72 candidates**
 (Chevening, Commonwealth Startup Fellowship), review file only.
+
+## 54. Bring-your-own model key in one click (G190)
+
+**Why:** the packaged exe works everywhere, but real chat needs a model
+service. OpenRouter is the zero-install route (the model runs in their cloud;
+the app only speaks OpenAI-compatible HTTP), and OpenRouter's OAuth PKCE flow
+removes the one thing that is clumsy today: pasting an API key by hand.
+
+**The user is with us:**
+
+1. the helper opens `https://openrouter.ai/auth?callback_url=http://localhost:<port>/callback&code_challenge=<S256 challenge>&code_challenge_method=S256&key_label=ScholarPath`;
+2. the user signs **in their own browser** to their own OpenRouter account and
+   clicks Connect - the helper never sees that login;
+3. OpenRouter redirects back with a `code` (single-use, 10-minute expiry,
+   useless without our `code_verifier` - PKCE);
+4. the helper exchanges it at `https://openrouter.ai/api/v1/auth/keys` and
+   writes the returned key into the **user's config file only** (never the
+   repo, never chat output, never a log);
+5. chat then runs entirely through the existing `openai_compat` adapter
+   (`api_base_url = https://openrouter.ai/api/v1`), so no new adapter and no
+   change to the failover rules.
+
+**Headless mode (the documented "SSH server" route):** with no browser on the
+machine, omit `callback_url`; OpenRouter shows the authorization code on
+screen, the user pastes that one code into the helper, and the exchange is the
+same. SSH does not authenticate model APIs by itself - this is OpenRouter's
+official answer to headless boxes.
+
+**Honest limits:** the user pays for their own usage (free models have
+rate limits set by OpenRouter); the helper is developer-side first
+(`tools/openrouter_key.py`, not shipped) - an in-app Connect button can come
+later if it earns its place.
+
+**Terms check (2026-10-22):** OpenRouter documents this exact use (the PKCE
+guide is written for apps that "let users bring their own key"); the user's
+key, their receipts, no key escrow by us; politeness = the same one-request
+cadence the rest of the app uses; no batching of users' traffic.
 
