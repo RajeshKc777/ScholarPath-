@@ -241,6 +241,8 @@ QLabel#UserLabel {{
 }}
 QLabel#AsstBody {{ color: #1F2A3C; font-size: 13px; }}
 QLabel#UserBody {{ color: #FFFFFF; font-size: 13px; }}
+QLabel#AsstBody a {{ color: #1D4ED8; text-decoration: underline; }}
+QLabel#UserBody a {{ color: #FFFFFF; text-decoration: underline; }}
 QLabel#TurnAvatar {{
     background: {GRADIENT_SEND};
     color: #FFFFFF;

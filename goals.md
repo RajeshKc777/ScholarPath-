@@ -97,6 +97,9 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G174 | 48 | Live voice diagnosis: every Live turn logs event names and numbers only (capture duration, silence-end reason, TTS overlap, engine, confidence) and `tools/voice_probe.py` measures echo with the real mic; nothing is fixed in this phase | `[~]` |
 | G175 | 48 | Live voice loop: echo guard (no mic during playback, ~400 ms pause, overlap discard), configurable endpointing with noise calibration and min/max lengths, `voice.language` (en-IN default, en-GB/en-US selectable), a Send now / Edit / Cancel review step with auto-send off, push-to-talk, and a tested Listening/Heard/Thinking/Speaking state machine | `[ ]` |
 | G176 | 48 | Live voice engine and noise: STT behind a Protocol (google, whisper_local, fake), faster-whisper CPU int8 with a size-shown explicit download, Silero VAD and noise suppression switches, honest privacy copy, and `tools/stt_bench.py` reporting word error rate | `[ ]` |
+| G177 | 49 | Every web address in a chat reply is a real clickable link that opens in the browser, with the text left as plain prose (no markdown) and the spoken reply unaffected | `[x]` |
+| G178 | 49 | Government and university domains outside the `.gov`/`.edu` convention (`.go.kr`, `.go.jp`, `.gc.ca`, `.gouv.fr`, `.gob.<cc>`, `.admin.ch`, `.gv.at`, `.govt.nz`) count as official, so a real government portal is never labelled third-party | `[x]` |
+| G179 | 49 | While web search is on, the assistant never tells the student it cannot search: it asks for the search, and if the model refuses, the app asks once more in the exact search-request form | `[x]` |
 
 ---
 
@@ -1621,3 +1624,67 @@ Phase 1 is done except for one command the owner has to run, because it needs
 a human voice: `.venv\Scripts\python.exe tools\voice_probe.py` (without
 `--skip-student`) and say the sentence it prints. That fills in the
 engine-accuracy row above.
+
+## 49. Search answers: clickable links, honest labels, no false refusals (G177-G179)
+
+The owner asked three things after a live answer about Korean scholarships:
+
+1. the web addresses in a reply must be **clickable links**, not plain text;
+2. the app kept saying it "can't search" / "can't confirm";
+3. were results **barred** because the site was not an official `.edu`/`.gov`
+   domain?
+
+**What the code actually does (checked, not guessed).**
+
+- Nothing is barred. `websearch.search` returns every result it parses (cap 6,
+  duplicates dropped). Official-looking domains are **ranked first**; every
+   result is **labelled** for the model: "official-looking domain", "a domain
+   you marked as trusted" or "not an official domain".
+- The label was **wrong** for the Korean government portal. `official.py` knew
+  only `.edu`, `.ac.<cc>`, `.gov`, `.gov.<cc>`, `.int`, `.mil` and `europa.eu`.
+  Korea's government uses `.go.kr`, so `www.studyinkorea.go.kr` - the portal
+  run by the Korean government - was labelled third-party, and the model
+  repeated that label as "I can't confirm that".
+  Live check (this machine, 2026-10-22, query "study in korea scholarship
+  undergraduate 2027"): all 6 results came back labelled third-party, twice
+  for `www.studyinkorea.go.kr`.
+- The app **does** search. The log shows the searches running (6 results each,
+  at 11:34, 11:35, 11:37 and 12:09). The "I can't search" wording came from
+  the model, which sometimes answers "I can't browse the web" instead of
+  sending the search request, and from the "not an official domain" label
+  spread over every result.
+- Links were plain text by design: the model is told to write plain prose
+  with no markdown, and the assistant bubble is a `QLabel` with plain text and
+  mouse selection only. Nothing turned a bare URL into a link.
+
+**What must be true after this section.**
+
+- **G177 - clickable links.** Every `http(s)` address in a chat reply is
+  rendered as a link that opens in the browser. The reply stays plain prose
+  (no markdown, no asterisks), the URL text stays visible, and the spoken
+  reply is unchanged (links are spoken as "link in the chat").
+- **G178 - honest official labels.** The official-domain rule covers the
+  government and university conventions used outside the US: `.go.kr`,
+  `.go.jp`, `.gc.ca`, `.gouv.fr`, `.gob.<cc>`, `.admin.ch`, `.gv.at`,
+  `.govt.nz`, next to the ones it already knew. Matching stays exact on the
+  registrable domain - a lookalike such as `studyinkorea.go.kr.example.com`
+  is still not official. The student's own `trusted_domains` still count.
+- **G179 - no false refusals.** While web search is on, the assistant never
+  says it cannot search: it asks the app for the search. If the model answers
+  with a "I can't browse the web" refusal, the app asks once more in the
+  exact search-request form and, if the model complies, the search runs. One
+  retry only, and the retry is logged.
+
+**Out of scope.** The search service itself (still the keyless DuckDuckGo
+lite endpoint), the six-result cap, the ranking, the privacy switch, and the
+"confirm on the official page" advice - that advice stays, because a
+third-party page is still not proof.
+
+**Done (2026-10-22).** 610 tests pass. The links in a reply are anchors that
+open in the browser (the reply stays plain prose, the spoken reply is
+unchanged); the government conventions are in the one rule that decides what
+is official, with the lookalike guard still exact; and a model that refuses
+to search is asked once more in the exact form the app reads. Verified live:
+the same Korea query that returned six third-party results now returns the
+Korean government portal first, marked official, with the blogs behind it.
+

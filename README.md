@@ -15,7 +15,7 @@ opportunities and explains, requirement by requirement, why they do or do not fi
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?style=flat-square&logo=windows&logoColor=white)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Qt](https://img.shields.io/badge/Qt-6.12-41CD52?style=flat-square&logo=qt&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-595%20passing-2ea043?style=flat-square&logo=pytest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-610%20passing-2ea043?style=flat-square&logo=pytest&logoColor=white)
 ![Local first](https://img.shields.io/badge/local--first-no%20cloud%20account-8B5CF6?style=flat-square)
 ![License](https://img.shields.io/badge/license-view--only%20%C2%B7%20all%20rights%20reserved-b3261e?style=flat-square)
 
@@ -196,6 +196,13 @@ flowchart LR
   official-looking or not — so you always know which page to trust and
   confirm on. If the search cannot run, the app says so instead of answering
   from memory.
+- **Every address in a reply is a clickable link** — the answer stays plain
+  prose, but each web address opens in the browser when you click it.
+- **"Official" means the real thing** — the rule knows the government and
+  university conventions of other countries too (`.go.kr`, `.go.jp`, `.gc.ca`,
+  `.gouv.fr`, `.gob.<cc>`, `.admin.ch`, `.gv.at`, `.govt.nz`), and it matches
+  the registrable domain exactly, so a lookalike such as
+  `university.edu.example.com` is never mistaken for the real one.
 - **Tools (MCP) are opt-in and read-only** — off by default; configured in
   `config.toml` per server. With `read_only = true`, only tools advertising
   `readOnlyHint` may run; tool output is size-capped data, never instructions.
@@ -411,7 +418,7 @@ scholarpath --init-config   # write the configuration template, then exit
 scholarpath --config path\to\config.toml
 scholarpath --version
 python -m scholarpath       # equivalent to the console script
-pytest                      # 595 tests, no network required (fake server on loopback)
+pytest                      # 610 tests, no network required (fake server on loopback)
 ```
 
 </details>
@@ -663,7 +670,7 @@ src/scholarpath/
 ├── eligibility.py         rule-based checks, honest verdicts, deterministic ranking
 ├── identity.py            provider anonymity: probe interception + reply withholding
 ├── chat_profile.py        chat-stated facts → verbatim-verified profile suggestions
-├── prose.py               model markdown → plain prose for the bubble, the copy button and the voice
+├── prose.py               model markdown → plain prose for the bubble, the copy button and the voice, plus clickable links
 ├── tts.py                 spoken replies: neural voice first, offline Windows voice as fallback
 ├── voice.py               speech-to-text input: capture, transcription, honest errors, numbers-only diagnostics
 ├── mcp/

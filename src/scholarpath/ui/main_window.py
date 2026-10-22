@@ -47,7 +47,7 @@ from PySide6.QtWidgets import (
 from scholarpath.chat_profile import merge_selected
 from scholarpath.config import AppConfig, config_path
 from scholarpath.profiles import Profile
-from scholarpath.prose import humanize_reply
+from scholarpath.prose import humanize_reply, linkify_html
 from scholarpath.recheck import RecheckStore
 from scholarpath.storage import Database, database_path
 from scholarpath.ui import theme
@@ -335,6 +335,22 @@ class TurnWidget(QWidget):
         else:
             self._build_assistant()
 
+    @staticmethod
+    def _linkable_body(text: str, parent: QWidget, name: str) -> QLabel:
+        """A body label whose web addresses are clickable links (G177).
+
+        The reply stays plain prose; only the addresses become anchors, and a
+        click opens the browser. The text can still be selected and copied.
+        """
+        body = QLabel(parent)
+        body.setObjectName(name)
+        body.setTextFormat(Qt.RichText)
+        body.setWordWrap(True)
+        body.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.LinksAccessibleByMouse)
+        body.setOpenExternalLinks(True)
+        body.setText(linkify_html(text))
+        return body
+
     def _natural_width(self) -> int:
         assert self._metrics is not None
         return self._metrics.horizontalAdvance(self._turn.text) + 38
@@ -365,10 +381,7 @@ class TurnWidget(QWidget):
         label.setObjectName("UserLabel")
         inner.addWidget(label)
 
-        body = QLabel(self._turn.text, bubble)
-        body.setObjectName("UserBody")
-        body.setWordWrap(True)
-        body.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        body = self._linkable_body(self._turn.text, bubble, "UserBody")
         self._metrics = QFontMetrics(body.font())
         inner.addWidget(body)
 
@@ -430,11 +443,10 @@ class TurnWidget(QWidget):
             inner = QVBoxLayout(block)
             inner.setContentsMargins(14, 10, 14, 11)
             # The bubble reads like a person wrote it: markdown symbols never
-            # reach the student (G131).
-            body = QLabel(humanize_reply(self._turn.text), block)
-            body.setObjectName("AsstBody")
-            body.setWordWrap(True)
-            body.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            # reach the student (G131). Web addresses stay clickable (G177).
+            body = self._linkable_body(
+                humanize_reply(self._turn.text), block, "AsstBody"
+            )
             inner.addWidget(body)
             column.addWidget(block)
 

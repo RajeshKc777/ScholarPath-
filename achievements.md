@@ -37,7 +37,7 @@ is finished, not when it is started. Each entry names the goal it satisfies
   badges and eight real screenshots of the shipped pages (A30, re-captured in
   A34 and A35).
 - Licence: proprietary, source-available, view-only (`LICENSE`).
-- Tests: **595 passing** (`pytest`, ~55 s).
+- Tests: **610 passing** (`pytest`, ~56 s).
 - M7: packaged and bundle-audited (`dist\ScholarPathAI`,
   `packaging\build.ps1`), but **not clean-Windows verified**; there is no
   installer and no separate security/performance review. G138, G207 and G113
@@ -50,6 +50,60 @@ is finished, not when it is started. Each entry names the goal it satisfies
 ---
 
 ## Log (newest first)
+
+### 2026-10-22 - A37 - Clickable links, honest domain labels, no false "I cannot search" (G177-G179)
+
+**Satisfies:** G177, G178, G179.
+
+The owner asked three things after a live answer about Korean scholarships:
+the web addresses must be **clickable links**, not plain text; the app kept
+saying it "can't search" / "can't confirm"; and were results **barred** because
+the site was not an official `.edu`/`.gov` domain?
+
+**What the code actually did (checked, not guessed).**
+
+- **Nothing was barred.** Every result the search parses is returned (cap 6,
+  duplicates dropped). Official-looking domains are ranked first and every
+  result is labelled for the model.
+- **The label was wrong.** `official.py` knew only `.edu`, `.ac.<cc>`, `.gov`,
+  `.gov.<cc>`, `.int`, `.mil` and `europa.eu`. Korea's government uses
+  `.go.kr`, so `www.studyinkorea.go.kr` - the portal run by the Korean
+  government - was labelled third-party, and the model repeated that as "I
+  can't confirm that". A live check of the same query returned **six**
+  third-party results, two of them the government portal.
+- **The app does search.** The log shows the searches running (6 results each
+  at 11:34, 11:35, 11:37 and 12:09). The "I can't search" wording came from
+  the model refusing to send the search request, and from the label spread
+  over every result.
+- **Links were plain text by design.** The model writes plain prose with no
+  markdown, and the assistant bubble was a `QLabel` with plain text and mouse
+  selection only.
+
+| Area | What changed |
+| ---- | ------------ |
+| Clickable links (G177) | `prose.linkify_html` turns every `http(s)` address in a reply into an anchor; the sentence punctuation stays outside the link and the words are HTML-escaped. The chat bubble and the user bubble now use it (`TurnWidget._linkable_body`): rich text, links open in the browser, the text can still be selected and copied. The reply stays plain prose - no markdown is added - and the spoken reply is unchanged ("link in the chat"). |
+| Honest domain labels (G178) | `official.py` now also knows the government conventions that are not `gov.<cc>`: `.go.kr`, `.go.jp`, `.go.id`, `.gc.ca`, `.gouv.fr`, `.gob.<cc>`, `.admin.ch`, `.gv.at`, `.govt.nz`. The match is still exact on the registrable domain, so `studyinkorea.go.kr.example.com` is not official. `websearch.format_results` now says "official government or university domain", "a domain you marked as trusted" or "third-party site, not an official domain", and tells the model that a third-party page is a lead, not proof - and never to say it cannot search. |
+| No false refusals (G179) | The app can search, so a "I cannot browse the web" reply is the model refusing, not a limit of the app. `chat_controller.is_search_refusal` spots that reply and the app asks **once** more, in the exact search-request form, then runs the search if the model complies. The retry never happens while the search switch is off, and never more than once. Both system prompts now say the app can search. |
+
+**Evidence:** **610 tests pass** (595 before plus 15), exit 0. New tests: the
+links become anchors and the punctuation stays outside them, ordinary words
+and email addresses do not, the reply is escaped, the spoken reply is
+unchanged, the government conventions are official, their lookalikes are not,
+a government portal is ranked and labelled first, a refusal is retried once
+and the search then runs, a refusal is not retried while the switch is off,
+an ordinary reply is not retried, and the bubble really renders an anchor
+with external links open.
+
+**Live check on the owner's machine** (same query, after the change):
+`www.studyinkorea.go.kr` is now marked **official** and comes first -
+"Scholarships | Plan your studies | Study in Korea" and "Study in Korea |
+Run by Korean Government" - with the three blogs behind it.
+
+**Known limits.** The official rule still does not know every country's
+convention (a `.ac.at` university is covered, a `uni-*.de` one is not), and a
+`.org` foundation is only official if the student trusts it. The advice to
+confirm details on the official page stays: a third-party page is still not
+proof. The search service, the six-result cap and the ranking are unchanged.
 
 ### 2026-10-22 - A36 - Live voice diagnosis: numbers in the log, a probe with the real mic (G174)
 

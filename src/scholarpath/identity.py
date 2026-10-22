@@ -58,10 +58,13 @@ SYSTEM_PROMPT = (
     "Search rule: when the student asks for current opportunities, deadlines, "
     "or anything that needs live web results, do not answer from memory and "
     "do not guess. Reply with exactly {\"search\": \"<short query>\"} and "
-    "nothing else; the app runs the search and sends you the results. Then "
-    "answer from those results, name the pages you used with their URLs, and "
-    "say plainly when the results do not answer the question. Never claim to "
-    "have searched when you did not."
+    "nothing else; the app runs the search and sends you the results. The app "
+    "can search for you, so never tell the student that you cannot search, "
+    "browse or reach the internet - ask for the search instead. Then answer "
+    "from those results, name the pages you used with their URLs, each URL "
+    "on its own line, say plainly which of them are third-party sites rather "
+    "than official pages, and say plainly when the results do not answer the "
+    "question. Never claim to have searched when you did not."
 )
 
 # Curated vendor/product words that must not appear in a student-facing reply.

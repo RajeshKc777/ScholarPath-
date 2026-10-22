@@ -184,3 +184,76 @@ def test_search_can_be_switched_off() -> None:
     assert len(gateway.requests) == 2, "the model is asked again without results"
     assert "switched off" in gateway.requests[1].messages[-1].content.casefold()
     assert controller.history[-1].error is False
+
+
+# -- G179: the app can search, so the model must not say it cannot ---------------
+
+
+def test_a_refusal_to_search_is_asked_once_more() -> None:
+    """A "I cannot browse the web" reply is the model refusing, not the app."""
+    gateway = FakeGateway(
+        [
+            "I can't browse the web, so I cannot check the current deadlines.",
+            '{"search": "korea scholarship 2027"}',
+            "The government portal is studyinkorea.go.kr.",
+        ]
+    )
+    calls: list[str] = []
+    controller = ChatController(
+        gateway,
+        "fake-model",
+        dispatch=lambda work: work(),
+        searcher=lambda query: (
+            calls.append(query)
+            or [SearchResult(title="T", url="https://www.studyinkorea.go.kr/x")]
+        ),
+    )
+    controller.send("what scholarships are open in korea?")
+
+    assert calls == ["korea scholarship 2027"], "the search ran after the retry"
+    assert len(gateway.requests) == 3, "one refusal, one retry, one answer"
+    retry = gateway.requests[1].messages[-1].content
+    assert "never say that you cannot search" in retry.casefold()
+    assert controller.history[-1].text.startswith("The government portal")
+
+
+def test_the_refusal_is_not_retried_when_the_search_is_off() -> None:
+    gateway = FakeGateway(["I can't browse the web, sorry."])
+    calls: list[str] = []
+    controller = ChatController(
+        gateway,
+        "fake-model",
+        dispatch=lambda work: work(),
+        searcher=lambda query: calls.append(query) or [],
+        search_enabled=False,
+    )
+    controller.send("what scholarships are open in korea?")
+
+    assert calls == []
+    assert len(gateway.requests) == 1, "no retry while the switch is off"
+
+
+def test_a_refusal_is_retried_only_once() -> None:
+    gateway = FakeGateway(["I can't browse the web."])
+    controller = ChatController(
+        gateway,
+        "fake-model",
+        dispatch=lambda work: work(),
+        searcher=lambda query: [],
+    )
+    controller.send("what is open in korea?")
+
+    assert len(gateway.requests) == 2, "one retry, no more"
+
+
+def test_an_ordinary_reply_is_not_retried() -> None:
+    gateway = FakeGateway(["The web results say the deadline is in March."])
+    controller = ChatController(
+        gateway,
+        "fake-model",
+        dispatch=lambda work: work(),
+        searcher=lambda query: [],
+    )
+    controller.send("what is open in korea?")
+
+    assert len(gateway.requests) == 1

@@ -9,7 +9,7 @@ from __future__ import annotations
 from scholarpath.gateway.base import ChatRequest, Message
 from scholarpath.gateway.opencode import OpenCodeGateway
 from scholarpath.identity import SYSTEM_PROMPT
-from scholarpath.prose import humanize_reply, speech_text
+from scholarpath.prose import humanize_reply, linkify_html, speech_text
 
 
 def test_bold_and_italic_markers_disappear() -> None:
@@ -64,6 +64,37 @@ def test_speech_reads_clean_and_replaces_links() -> None:
 def test_empty_text_stays_empty() -> None:
     assert humanize_reply("") == ""
     assert speech_text("") == ""
+    assert linkify_html("") == ""
+
+
+# -- G177: every web address in a reply is a clickable link ----------------------
+
+
+def test_a_web_address_becomes_a_clickable_link() -> None:
+    html = linkify_html("Check https://example.org/x for the deadline.")
+    assert '<a href="https://example.org/x">https://example.org/x</a>' in html
+
+
+def test_the_punctuation_after_an_address_stays_outside_the_link() -> None:
+    html = linkify_html("See https://example.org/x.")
+    assert '<a href="https://example.org/x">https://example.org/x</a>.' in html
+
+
+def test_the_words_are_escaped_and_the_line_breaks_survive() -> None:
+    html = linkify_html("a < b & c\n\nnext line")
+    assert "a &lt; b &amp; c" in html
+    assert "<br>" in html
+
+
+def test_ordinary_words_are_not_turned_into_links() -> None:
+    assert "<a " not in linkify_html("No address in this sentence.")
+    assert "<a " not in linkify_html("Write to info@example.org for it.")
+
+
+def test_the_spoken_reply_still_says_link_in_the_chat() -> None:
+    spoken = speech_text("See https://example.org/x for the details.")
+    assert "https://" not in spoken
+    assert "link in the chat" in spoken
 
 
 def test_system_prompt_forbids_markdown() -> None:

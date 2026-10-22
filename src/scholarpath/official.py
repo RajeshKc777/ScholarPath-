@@ -7,6 +7,10 @@ A domain is official when its **registrable** domain matches exactly:
 - ``.gov`` / ``.gov.<cc>``
 - ``.int``, ``.mil``  - public bodies
 - ``europa.eu``       - the European Union's own domains
+- the country-specific government conventions: ``.go.kr`` (Korea),
+  ``.go.jp`` (Japan), ``.gc.ca`` (Canada), ``.gouv.fr`` (France),
+  ``.gob.<cc>`` (Mexico, Spain, Peru, ...), ``.admin.ch`` (Switzerland),
+  ``.gv.at`` (Austria), ``.govt.nz`` (New Zealand)
 
 The student's own ``search.trusted_domains`` are added on top (a scholarship
 body such as a foundation is not a university, and only the student can say
@@ -28,6 +32,40 @@ OFFICIAL_TLDS = ("edu", "gov", "int", "mil")
 #: Second-level labels that make a country domain an academic or government
 #: one: "university.ac.uk", "agency.gov.jp".
 OFFICIAL_SECOND_LEVEL = ("ac", "gov", "edu")
+
+#: Government conventions that are not "gov.<cc>". The country is named, so
+#: nothing is matched by a label alone: "studyinkorea.go.kr" is Korea's
+#: government portal, "foo.go.kr.example.com" is not government at all.
+OFFICIAL_SECOND_LEVEL_PAIRS = frozenset(
+    {
+        ("go", "kr"),
+        ("go", "jp"),
+        ("go", "id"),
+        ("gob", "mx"),
+        ("gob", "es"),
+        ("gob", "ar"),
+        ("gob", "cl"),
+        ("gob", "pe"),
+        ("gob", "ec"),
+        ("gob", "uy"),
+        ("gob", "bo"),
+        ("gob", "cr"),
+        ("gob", "gt"),
+        ("gob", "pa"),
+        ("gob", "do"),
+        ("gob", "ve"),
+        ("gob", "sv"),
+        ("gob", "hn"),
+        ("gob", "co"),
+        ("gob", "py"),
+        ("gob", "ni"),
+        ("gouv", "fr"),
+        ("gc", "ca"),
+        ("admin", "ch"),
+        ("gv", "at"),
+        ("govt", "nz"),
+    }
+)
 
 #: The European Union's own domain family.
 EUROPA_SUFFIX = "europa.eu"
@@ -67,8 +105,11 @@ def is_official_domain(host: str) -> bool:
     second = labels[-2]
     if top in OFFICIAL_TLDS:
         return True
-    if second in OFFICIAL_SECOND_LEVEL and len(top) == 2 and top.isalpha():
-        return True
+    if len(top) == 2 and top.isalpha():
+        if second in OFFICIAL_SECOND_LEVEL:
+            return True
+        if (second, top) in OFFICIAL_SECOND_LEVEL_PAIRS:
+            return True
     return False
 
 

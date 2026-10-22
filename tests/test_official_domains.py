@@ -41,6 +41,29 @@ def test_other_domains_are_not_official() -> None:
     assert not is_official_domain("example.co.uk")
 
 
+def test_government_conventions_outside_gov_count_as_official() -> None:
+    """Governments do not all use "gov": Korea says "go.kr" (G178)."""
+    assert is_official_domain("www.studyinkorea.go.kr")
+    assert is_official_domain("studyinkorea.go.kr")
+    assert is_official_domain("www.mofa.go.jp")
+    assert is_official_domain("www.gov.go.id")
+    assert is_official_domain("www.gc.ca")
+    assert is_official_domain("www.gouv.fr")
+    assert is_official_domain("www.gob.mx")
+    assert is_official_domain("www.gob.pe")
+    assert is_official_domain("www.admin.ch")
+    assert is_official_domain("www.gv.at")
+    assert is_official_domain("www.govt.nz")
+
+
+def test_a_lookalike_of_a_government_domain_is_not_official() -> None:
+    assert not is_official_domain("studyinkorea.go.kr.example.com")
+    assert not is_official_domain("www.studyinkorea.go.kr.fake.net")
+    assert not is_official_domain("go.kr.example.com")
+    assert not is_official_domain("notgo.kr")
+    assert not is_official_domain("www.gc.ca.example.org")
+
+
 def test_the_match_is_on_the_registrable_domain_only() -> None:
     """A host that merely contains an official-looking part is not official."""
     assert not is_official_domain("university.edu.example.com")
@@ -84,5 +107,19 @@ def test_the_block_says_which_kind_of_domain_it_is() -> None:
         "<a class='result-link' href='https://blog.example.com/x'>Blog</a>"
     )
     block = format_results("uk scholarship", results)
-    assert "official-looking domain" in block
-    assert "not an official domain" in block
+    assert "official government or university domain" in block
+    assert "third-party site, not an official domain" in block
+
+
+def test_a_government_portal_is_not_called_third_party() -> None:
+    """The Korean government portal is official, whatever the label says."""
+    results = parse_results(
+        "<a class='result-link' href='https://www.studyinkorea.go.kr/plan/scholarship.do'>"
+        "Study in Korea</a>"
+        "<a class='result-link' href='https://koreaadmit.com/x'>Admit</a>"
+    )
+    assert results[0].official_looking is True
+    assert results[0].url.startswith("https://www.studyinkorea.go.kr")
+    block = format_results("korea scholarship", results)
+    assert "third-party site" in block
+    assert "Study in Korea - https://www.studyinkorea.go.kr" in block

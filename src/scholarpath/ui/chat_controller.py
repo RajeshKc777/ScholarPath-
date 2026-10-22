@@ -55,6 +55,51 @@ SEARCH_OFF_ANSWER = (
     "and never claim to have searched. Plain prose, no markdown."
 )
 
+SEARCH_REQUEST_RETRY = (
+    "The app can run the web search for you - never say that you cannot "
+    "search, browse or reach the internet. If the student's last message "
+    'needs live results, reply with exactly {"search": "<short query>"} and '
+    "nothing else, and the app will send you the results. If it needs no "
+    "live results, answer it normally."
+)
+
+#: Words that mark a refusal, and words that mark the web. A reply that has
+#: both is the model saying it cannot look anything up (G179).
+_REFUSAL_WORDS = (
+    "can't",
+    "cannot",
+    "can not",
+    "unable to",
+    "not able to",
+    "don't have",
+    "do not have",
+    "no access",
+    "not available",
+    "isn't available",
+    "is not available",
+)
+
+_WEB_WORDS = (
+    "web",
+    "internet",
+    "online",
+    "website",
+    "webpage",
+    "browser",
+    "live page",
+    "live information",
+)
+
+
+def is_search_refusal(text: str) -> bool:
+    """True when a reply says it cannot look anything up on the web."""
+    lowered = " ".join((text or "").casefold().split())
+    if not lowered:
+        return False
+    if not any(word in lowered for word in _WEB_WORDS):
+        return False
+    return any(word in lowered for word in _REFUSAL_WORDS)
+
 
 def parse_search_request(text: str) -> str | None:
     """The query in a model reply of the form {"search": "..."} (else None)."""
@@ -232,6 +277,11 @@ class ChatController(QObject):
         response = self._complete(request)
         if response is not None:
             query = parse_search_request(response.text)
+            if query is None and self._search_enabled and is_search_refusal(response.text):
+                # The model said it cannot search while the app can: ask it
+                # once more in the exact form the app understands (G179).
+                response = self._ask_for_search_again(request)
+                query = parse_search_request(response.text) if response is not None else None
             if query and self._search_enabled:
                 response = self._search_and_answer(request, query)
             elif query:
@@ -277,6 +327,23 @@ class ChatController(QObject):
             messages=[
                 *request.messages,
                 Message(role="user", content=SEARCH_OFF_ANSWER),
+            ],
+            model=self._model,
+        )
+        return self._complete(follow_up)
+
+    def _ask_for_search_again(self, request: ChatRequest) -> ChatResponse | None:
+        """One retry when the model refused to ask for a search (G179).
+
+        The app can search, so a "I cannot browse the web" reply is the
+        model refusing, not a limit of the app. The retry asks for the
+        search request in the exact form the app reads. One retry only.
+        """
+        logger.info("the model refused to ask for a search; asking once more")
+        follow_up = ChatRequest(
+            messages=[
+                *request.messages,
+                Message(role="user", content=SEARCH_REQUEST_RETRY),
             ],
             model=self._model,
         )
