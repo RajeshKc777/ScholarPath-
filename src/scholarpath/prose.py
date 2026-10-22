@@ -38,6 +38,16 @@ _BLANKS_RE = re.compile(r"\n{3,}")
 #: Punctuation that ends a sentence, not the address that came before it.
 _TRAILING_PUNCTUATION = ".,;:!?)]}'\"»…"
 
+#: The colour of a link in a reply (G185). Qt paints an anchor inside a
+#: rich-text label with the palette's link colour, and the stylesheet rule
+#: for `QLabel#AsstBody a` does not reach it, which is why the address looked
+#: faded. The colour is therefore written into the anchor itself: a strong
+#: blue that is legible on white and on the pale-blue assistant bubble.
+LINK_COLOUR = "#0B57D0"
+
+#: On the user's orange bubble a link is drawn white, like the rest of it.
+USER_LINK_COLOUR = "#FFFFFF"
+
 _HTML_ESCAPES = (("&", "&amp;"), ("<", "&lt;"), (">", "&gt;"))
 
 
@@ -99,7 +109,7 @@ def _escape_html(text: str) -> str:
     return text
 
 
-def _link_anchor(match: re.Match[str]) -> str:
+def _link_anchor(match: re.Match[str], colour: str = LINK_COLOUR) -> str:
     """One URL as a link, with the sentence punctuation left outside it."""
     url = match.group(0)
     trailing = ""
@@ -108,20 +118,27 @@ def _link_anchor(match: re.Match[str]) -> str:
         url = url[:-1]
     if not url:
         return match.group(0)
-    return f'<a href="{url}">{url}</a>{trailing}'
+    # The colour travels with the anchor, and with the text inside it, because
+    # Qt ignores a stylesheet rule for anchors in rich text (G185).
+    return (
+        f'<a href="{url}" style="color:{colour};text-decoration:underline;">'
+        f'<span style="color:{colour};text-decoration:underline;">{url}</span>'
+        f"</a>{trailing}"
+    )
 
 
-def linkify_html(text: str) -> str:
+def linkify_html(text: str, colour: str = LINK_COLOUR) -> str:
     """The reply as rich text, with every web address turned into a link.
 
     The words stay exactly as written - no markdown is added - so a student
     can read the address in the sentence and click it. Only `http` and
     `https` addresses become links, and the punctuation that ends the
-    sentence stays outside the link.
+    sentence stays outside the link. `colour` is the link colour: strong blue
+    on the assistant bubble, white on the user's orange one (G185).
     """
     if not text:
         return ""
     escaped = _escape_html(text)
-    linked = _URL_RE.sub(_link_anchor, escaped)
+    linked = _URL_RE.sub(lambda match: _link_anchor(match, colour), escaped)
     return linked.replace("\n", "<br>")
 

@@ -25,6 +25,7 @@ from PySide6.QtGui import (
     QKeyEvent,
     QLinearGradient,
     QPainter,
+    QPalette,
 )
 from PySide6.QtWidgets import (
     QApplication,
@@ -48,7 +49,12 @@ from scholarpath.chat_context import catalog_hits, official_links
 from scholarpath.chat_profile import merge_selected
 from scholarpath.config import AppConfig, config_path
 from scholarpath.profiles import Profile
-from scholarpath.prose import humanize_reply, linkify_html
+from scholarpath.prose import (
+    LINK_COLOUR,
+    USER_LINK_COLOUR,
+    humanize_reply,
+    linkify_html,
+)
 from scholarpath.recheck import RecheckStore
 from scholarpath.search import SearchHit
 from scholarpath.storage import Database, database_path
@@ -346,11 +352,17 @@ class TurnWidget(QWidget):
             self._build_assistant(on_verify)
 
     @staticmethod
-    def _linkable_body(text: str, parent: QWidget, name: str) -> QLabel:
+    def _linkable_body(
+        text: str, parent: QWidget, name: str, colour: str = LINK_COLOUR
+    ) -> QLabel:
         """A body label whose web addresses are clickable links (G177).
 
         The reply stays plain prose; only the addresses become anchors, and a
         click opens the browser. The text can still be selected and copied.
+
+        The link colour travels with the anchor and with the palette, because
+        a stylesheet rule for anchors inside rich text is ignored by Qt - that
+        is what made the address look faded (G185).
         """
         body = QLabel(parent)
         body.setObjectName(name)
@@ -358,7 +370,11 @@ class TurnWidget(QWidget):
         body.setWordWrap(True)
         body.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.LinksAccessibleByMouse)
         body.setOpenExternalLinks(True)
-        body.setText(linkify_html(text))
+        palette = body.palette()
+        palette.setColor(QPalette.Link, QColor(colour))
+        palette.setColor(QPalette.LinkVisited, QColor(colour))
+        body.setPalette(palette)
+        body.setText(linkify_html(text, colour))
         return body
 
     def _natural_width(self) -> int:
@@ -391,7 +407,9 @@ class TurnWidget(QWidget):
         label.setObjectName("UserLabel")
         inner.addWidget(label)
 
-        body = self._linkable_body(self._turn.text, bubble, "UserBody")
+        body = self._linkable_body(
+            self._turn.text, bubble, "UserBody", USER_LINK_COLOUR
+        )
         self._metrics = QFontMetrics(body.font())
         inner.addWidget(body)
 

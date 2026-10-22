@@ -51,6 +51,21 @@ is finished, not when it is started. Each entry names the goal it satisfies
 
 ## Log (newest first)
 
+### 2026-10-22 - A43 - The links in a reply are a strong blue, not a faded one (G185)
+
+**Satisfies:** G185.
+
+- The owner read a reply and said the link colour was "a little faded". It
+  was: Qt paints an anchor inside a rich-text label with the palette's link
+  colour, and the `QLabel#AsstBody a` rule in the theme never reaches it.
+- The colour now travels **with the anchor**: `prose.linkify_html` writes
+  `color` and `text-decoration:underline` into the `<a>` and into the text
+  inside it, in a strong blue (`#0B57D0`) that reads on white and on the
+  pale-blue assistant bubble. The palette's link colour is set to the same
+  value, so any anchor Qt still paints itself matches.
+- On the student's orange bubble a link is white, like the rest of the bubble.
+- The theme's rule uses the same constant, so there is one place to change it.
+
 ### 2026-10-22 - A42 - "Verify this page" on the official links the chat gives (G184)
 
 **Satisfies:** G184.

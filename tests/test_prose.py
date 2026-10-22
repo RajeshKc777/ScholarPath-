@@ -72,12 +72,14 @@ def test_empty_text_stays_empty() -> None:
 
 def test_a_web_address_becomes_a_clickable_link() -> None:
     html = linkify_html("Check https://example.org/x for the deadline.")
-    assert '<a href="https://example.org/x">https://example.org/x</a>' in html
+    assert '<a href="https://example.org/x"' in html
+    assert ">https://example.org/x</" in html
 
 
 def test_the_punctuation_after_an_address_stays_outside_the_link() -> None:
     html = linkify_html("See https://example.org/x.")
-    assert '<a href="https://example.org/x">https://example.org/x</a>.' in html
+    assert html.endswith("</a>.")
+    assert '<a href="https://example.org/x"' in html
 
 
 def test_the_words_are_escaped_and_the_line_breaks_survive() -> None:

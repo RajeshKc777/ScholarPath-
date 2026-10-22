@@ -8,6 +8,8 @@ shared colour lives here.
 
 from __future__ import annotations
 
+from scholarpath.prose import LINK_COLOUR
+
 # Reddit-style light palette.
 # Orange accents on white; assistant bubbles stay light blue.
 PALETTE: dict[str, str] = {
@@ -241,7 +243,7 @@ QLabel#UserLabel {{
 }}
 QLabel#AsstBody {{ color: #1F2A3C; font-size: 13px; }}
 QLabel#UserBody {{ color: #FFFFFF; font-size: 13px; }}
-QLabel#AsstBody a {{ color: #1D4ED8; text-decoration: underline; }}
+QLabel#AsstBody a {{ color: {LINK_COLOUR}; text-decoration: underline; }}
 QLabel#UserBody a {{ color: #FFFFFF; text-decoration: underline; }}
 QLabel#TurnAvatar {{
     background: {GRADIENT_SEND};

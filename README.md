@@ -197,7 +197,8 @@ flowchart LR
   confirm on. If the search cannot run, the app says so instead of answering
   from memory.
 - **Every address in a reply is a clickable link** — the answer stays plain
-  prose, but each web address opens in the browser when you click it.
+  prose, but each web address opens in the browser when you click it, in a
+  strong blue that is easy to spot.
 - **"Official" means the real thing** — the rule knows the government and
   university conventions of other countries too (`.edu.<cc>`, `.go.<cc>`,
   `.gov.<cc>`, `.ac.<cc>`, `.nic.in`, `.gc.ca`, `.gouv.fr`, `.gob.<cc>`,

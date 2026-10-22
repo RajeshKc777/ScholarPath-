@@ -105,6 +105,8 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G182 | 50 | The chat checks the local verified catalog first, using the same search as Discover, and cites each record with its source address and last-verified date; web results are marked "unverified lead" | `[x]` |
 | G183 | 50 | Level awareness: when the profile says a bachelor's is completed, the chat prefers graduate-level programmes, says why in one line, and says when a result is for another level | `[x]` |
 | G184 | 50 | A "Verify this page" button on each official-looking link the chat lists, which runs the existing read-and-verify flow and offers to save the page to the catalog | `[x]` |
+| G185 | 51 | Links in a chat reply are a strong, clearly visible blue (not the faded shade Qt paints anchors with), underlined, on both the assistant and the user bubble | `[x]` |
+| G186 | 51 | "Verify this page" verifies in the chat itself: the page is read and checked in place, the verified values and the ones the page does not state are shown there, and the record can be saved to the catalog from the reply without opening the Scholarship Pages page | `[ ]` |
 
 ---
 
@@ -1733,6 +1735,33 @@ Honesty rules that stay: nothing is called verified unless the page said it;
 the catalog block says which records were verified and when; web results are
 never called verified; the profile summary is exactly the listed fields.
 
-**Done (2026-10-22).** 642 tests pass. One commit per item: `e2ff477`
+**Done (2026-10-22).** 642 tests passed. One commit per item: `e2ff477`
 (G180), `4273866` (G181), `650ab77` (G182), `d798371` (G183), `fe68bfb`
 (G184).
+
+
+## 51. The links read, and the verify button stays in the chat (G185-G186)
+
+The owner read a reply and reported two things about the chat bubble:
+
+1. **The link is faded.** Qt does not honour the `QLabel#AsstBody a` rule for
+   anchors inside a rich-text label - the address is painted with the palette's
+   link colour, which reads washed out on the light-blue bubble. The colour has
+   to travel **with the anchor itself**, as an inline style, and it must be a
+   strong blue that is legible on white, on the pale-blue assistant bubble and
+   on the orange user bubble.
+2. **The verify button left the chat.** It used to switch to Scholarship Pages
+   and start the flow there, so the student lost the conversation to answer a
+   question the conversation had just raised. It must verify **in place**: read
+   the page, check every value against it, show what the page states and what
+   it does not, and offer to save the record to the catalog, all inside the
+   reply. Nothing is saved without the student pressing Save.
+
+Honesty rules that stay: the panel says how many proposed values appear
+word-for-word on the page and names the ones that do not; a fetch failure or a
+model failure is stated plainly and nothing is invented; the save keeps the
+source URL, the retrieval time and the page hash, exactly like the Scholarship
+Pages page.
+
+**Done (2026-10-22).** See `achievements.md` A43-A44.
+
