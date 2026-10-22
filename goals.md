@@ -103,7 +103,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G180 | 50 | The official-domain rule also accepts the country conventions `edu.<cc>`, `go.<cc>`, `gov.<cc>`, `ac.<cc>` and `nic.in`, still matched exactly on the registrable domain, so lookalikes (`go.kr.fake.com`, `kaist.ac.kr.evil.com`, `fake-edu.np.net`) stay outside | `[x]` |
 | G181 | 50 | The chat receives a compact profile summary (degree level, GPA and scale, nationality, preferred countries, funding need, language scores - never the name and never document text) so it stops asking for facts already stored; disclosed in Settings with a switch to turn it off | `[x]` |
 | G182 | 50 | The chat checks the local verified catalog first, using the same search as Discover, and cites each record with its source address and last-verified date; web results are marked "unverified lead" | `[x]` |
-| G183 | 50 | Level awareness: when the profile says a bachelor's is completed, the chat prefers graduate-level programmes, says why in one line, and says when a result is for another level | `[ ]` |
+| G183 | 50 | Level awareness: when the profile says a bachelor's is completed, the chat prefers graduate-level programmes, says why in one line, and says when a result is for another level | `[x]` |
 | G184 | 50 | A "Verify this page" button on each official-looking link the chat lists, which runs the existing read-and-verify flow and offers to save the page to the catalog | `[ ]` |
 
 ---

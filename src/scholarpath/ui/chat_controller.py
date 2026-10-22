@@ -15,7 +15,7 @@ from datetime import datetime
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 
-from scholarpath.chat_context import catalog_message, profile_summary
+from scholarpath.chat_context import catalog_message, level_note, profile_summary
 from scholarpath.gateway.base import (
     ChatRequest,
     ChatResponse,
@@ -287,10 +287,11 @@ class ChatController(QObject):
 
     # -- internals ---------------------------------------------------------
     def _context_messages(self, question: str) -> list[Message]:
-        """The profile summary and the verified catalog (G181, G182)."""
+        """The profile summary, the level rule and the verified catalog."""
         if not self._context_enabled:
             return []
         messages: list[Message] = []
+        profile: dict | None = None
         if self._profile is not None:
             try:
                 profile = self._profile()
@@ -300,13 +301,16 @@ class ChatController(QObject):
             summary = profile_summary(profile)
             if summary:
                 messages.append(Message(role="system", content=summary))
+            note = level_note(profile)
+            if note:
+                messages.append(Message(role="system", content=note))
         if self._catalog is not None:
             try:
                 hits = self._catalog(question) or []
             except Exception:  # noqa: BLE001 - a catalog problem must not break chat
                 logger.exception("the catalog could not be searched for the chat")
                 hits = []
-            block = catalog_message(hits)
+            block = catalog_message(hits, profile)
             if block:
                 messages.append(Message(role="system", content=block))
         return messages

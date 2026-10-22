@@ -272,3 +272,13 @@ def test_a_broken_profile_never_breaks_the_chat() -> None:
     controller.send("hello")
 
     assert controller.history[-1].text == "noted"
+
+
+def test_the_level_rule_reaches_the_model() -> None:
+    gateway = RecordingGateway()
+    controller = make_controller(gateway, profile=lambda: {"degree_level": "bachelor"})
+    controller.send("which programmes should I apply to?")
+
+    sent = " ".join(message.content for message in gateway.requests[0].messages)
+    assert "Level rule" in sent
+    assert "graduate-level" in sent

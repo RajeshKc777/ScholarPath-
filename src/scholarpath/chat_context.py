@@ -22,7 +22,15 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from scholarpath.search import SearchFilters, SearchHit, search_records
+from scholarpath.search import (
+    LEVEL_BACHELOR,
+    LEVEL_MASTER,
+    LEVEL_PHD,
+    SearchFilters,
+    SearchHit,
+    level_matches,
+    search_records,
+)
 
 #: How each degree level in the profile is worded for the model.
 DEGREE_WORDS = {
@@ -96,6 +104,74 @@ def profile_summary(profile: dict | None) -> str:
         "Saved profile facts (already on this device, so never ask for them "
         "again): " + "; ".join(parts) + "."
     )
+
+
+# -- levels (G183) ---------------------------------------------------------------
+
+#: The level words, in the order they are checked.
+_RECORD_LEVELS = (LEVEL_BACHELOR, LEVEL_MASTER, LEVEL_PHD)
+
+#: The study levels that are already behind a student, per profile value. A
+#: "bachelor" in the profile means the degree is **completed**, so a
+#: scholarship for bachelor's study is not for that student.
+_BEHIND = {
+    "bachelor": (LEVEL_BACHELOR,),
+    "master": (LEVEL_BACHELOR,),
+    "phd": (LEVEL_BACHELOR, LEVEL_MASTER),
+    "postdoc": (LEVEL_BACHELOR, LEVEL_MASTER, LEVEL_PHD),
+}
+
+_LEVEL_NAMES = {
+    LEVEL_BACHELOR: "bachelor's study",
+    LEVEL_MASTER: "master's study",
+    LEVEL_PHD: "doctoral study",
+}
+
+
+def level_note(profile: dict | None) -> str:
+    """The one-line level rule for this student ("" when the level is unknown)."""
+    level = _text(profile.get("degree_level")) if profile else ""
+    if level == "bachelor":
+        return (
+            "Level rule: the student's profile says a bachelor's degree is "
+            "completed, so prefer graduate-level programmes (master's, PhD) "
+            "and say in one line why you prefer them. If a programme or a "
+            "record is for another level, say so plainly."
+        )
+    if level == "master":
+        return (
+            "Level rule: the student's profile says a master's degree is "
+            "completed, so prefer doctoral and research programmes, and say "
+            "in one line why you prefer them. If a programme or a record is "
+            "for another level, say so plainly."
+        )
+    if level in ("phd", "postdoc"):
+        return (
+            "Level rule: the student's profile says they are already at "
+            "doctoral or postdoctoral level, so prefer postdoctoral and "
+            "research funding, and say in one line why. If a programme or a "
+            "record is for another level, say so plainly."
+        )
+    return ""
+
+
+def record_levels(record: dict) -> set[str]:
+    """The levels the record's own page states."""
+    return {
+        level for level in _RECORD_LEVELS if level_matches(record, level)
+    }
+
+
+def level_flag(record: dict, profile: dict | None) -> str:
+    """A note when the record is for a level the student is already past ("")."""
+    level = _text(profile.get("degree_level")) if profile else ""
+    behind = _BEHIND.get(level)
+    if not behind:
+        return ""
+    for stated in record_levels(record):
+        if stated in behind:
+            return f"this one is for {_LEVEL_NAMES[stated]}, not for this student"
+    return ""
 
 
 # -- the verified catalog (G182) -------------------------------------------------
@@ -181,7 +257,7 @@ def source_of(record: dict) -> str:
     return ""
 
 
-def catalog_message(hits: list[SearchHit], limit: int = 3) -> str:
+def catalog_message(hits: list[SearchHit], profile: dict | None = None, limit: int = 3) -> str:
     """The verified records, ready for the model, with their provenance."""
     if not hits:
         return ""
@@ -207,6 +283,9 @@ def catalog_message(hits: list[SearchHit], limit: int = 3) -> str:
             parts.append(f"source: {source}")
         if verified:
             parts.append(f"last verified: {verified}")
+        flag = level_flag(record, profile)
+        if flag:
+            parts.append(flag)
         lines.append(f"{index}. " + " | ".join(parts))
     lines += [
         "",

@@ -11,6 +11,8 @@ from scholarpath.chat_context import (
     catalog_hits,
     catalog_message,
     content_words,
+    level_flag,
+    level_note,
     profile_summary,
 )
 
@@ -123,3 +125,41 @@ def test_records_that_match_more_words_come_first() -> None:
     other = dict(RECORD, id=2, title="Korea Scholarship", countries="Korea")
     hits = catalog_hits([RECORD, other], "germany scholarship")
     assert hits[0].record["id"] == 1
+
+
+# -- levels (G183) ---------------------------------------------------------------
+
+BACHELOR = {"degree_level": "bachelor"}
+
+
+def test_a_bachelor_graduate_is_asked_for_graduate_programmes() -> None:
+    note = level_note(BACHELOR)
+    assert "bachelor's degree is completed" in note
+    assert "graduate-level" in note
+    assert "one line" in note
+
+
+def test_an_unknown_level_gives_no_rule() -> None:
+    assert level_note(None) == ""
+    assert level_note({}) == ""
+    assert level_note({"degree_level": ""}) == ""
+
+
+def test_a_record_for_another_level_is_flagged() -> None:
+    undergraduate = dict(RECORD, level="Undergraduate")
+    assert "bachelor's study" in level_flag(undergraduate, BACHELOR)
+
+
+def test_a_record_at_the_right_level_is_not_flagged() -> None:
+    assert level_flag(RECORD, BACHELOR) == ""
+    assert level_flag(RECORD, {"degree_level": "master"}) == ""
+
+
+def test_a_record_without_a_level_is_not_flagged() -> None:
+    assert level_flag(dict(RECORD, level=""), BACHELOR) == ""
+
+
+def test_the_catalog_block_says_when_a_record_is_for_another_level() -> None:
+    undergraduate = dict(RECORD, level="Undergraduate")
+    block = catalog_message(catalog_hits([undergraduate], "daad germany"), BACHELOR)
+    assert "bachelor's study" in block
