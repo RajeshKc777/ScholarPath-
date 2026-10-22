@@ -35,9 +35,9 @@ is finished, not when it is started. Each entry names the goal it satisfies
   the system map, the record pipeline, the re-check decision and the device
   trust boundary (A29). The README now also carries a banner, seven
   badges and eight real screenshots of the shipped pages (A30, re-captured in
-  A34).
+  A34 and A35).
 - Licence: proprietary, source-available, view-only (`LICENSE`).
-- Tests: **582 passing** (`pytest`, ~52 s).
+- Tests: **591 passing** (`pytest`, ~50 s).
 - M7: packaged and bundle-audited (`dist\ScholarPathAI`,
   `packaging\build.ps1`), but **not clean-Windows verified**; there is no
   installer and no separate security/performance review. G138, G207 and G113
@@ -50,6 +50,28 @@ is finished, not when it is started. Each entry names the goal it satisfies
 ---
 
 ## Log (newest first)
+
+### 2026-10-22 - A35 - Scroll areas paint a light background on every page (G173)
+
+**Satisfies:** G173.
+
+| Area | What changed |
+| ---- | ------------ |
+| The cause | Windows dark mode makes Qt's default window colour near-black. The cards had a stylesheet background; the `QScrollArea`'s viewport and the widget set as its content are plain `QWidget`s and had none. Only some pages had a named rule, so Profile, Saved and the unknown viewports fell back to the system colour. |
+| The fix | `ui/theme.py` now sets the page colour on `QScrollArea`, on its viewport (`QWidget#qt_scrollarea_viewport`) and on the content widget (`QScrollArea > QWidget > QWidget`). One block covers all eight page scroll areas, the chat transcript, the right-hand profile panel and the eligibility dialog; no page-local styles. |
+| My Profile intro | The intro sentence moved into a `PanelCard` above the form (`profile_page.py`), so it is a readable note rather than text loose on the page. |
+| The guard | `tests/test_ui_page_backgrounds.py` builds the window off-screen (`WA_DontShowOnScreen`), selects each of the nine pages, samples every fourth pixel of a grab and fails when more than 1% is near-black (all channels below 48), naming the darkest 80px blocks. |
+| The gallery | Profile, saved and saved-diff (and the rest of the gallery) were re-captured; no screenshot shows the black strips. |
+
+**Evidence:** **591 tests pass** (582 before plus 9 in
+`tests/test_ui_page_backgrounds.py`), exit 0. Measured near-black share:
+Profile 6.8% before the fix, 0.11% after; Saved 1.6% with records and 56%
+empty before, 0.13% after; every gallery image is now at most 0.26%. Removing
+the theme block makes exactly the Profile and Saved cases fail again.
+
+**Known limit:** the native combo-box arrow still paints as a small grey block
+under the Windows dark palette. That is a glyph, not a page background, and is
+left for a separate style pass.
 
 ### 2026-10-22 - A34 - One name per page (G172)
 

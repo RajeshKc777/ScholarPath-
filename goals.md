@@ -93,6 +93,7 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (has an `An` en
 | G170 | 44 | A live-proofs checklist in `docs/live_checks.md` for forced-429 failover, neural-voice audibility and clean-Windows packaging; the goals stay open until the owner runs it and reports back | `[ ]` |
 | G171 | 45 | Privacy switches are real toggles in Settings, on by default, and saved to `config.toml` from the app; no student edits the file to turn voice or web search on | `[x]` |
 | G172 | 46 | One name per page: the top bar names the page, the body no longer repeats it, and the one-line description under the name does not repeat it either | `[x]` |
+| G173 | 47 | Every scroll area paints the theme's light page background (view port and content widget), so no page shows black strips in Windows dark mode; My Profile's intro sits in a card; a pixel test guards all pages | `[x]` |
 
 ---
 
@@ -1497,3 +1498,40 @@ appeared twice on every page. The shell header is the single name:
   the chat line.
 - The README gallery is re-captured from the real window, so every screenshot
   shows the shipped page.
+
+## 47. Scroll areas paint the page colour (G173)
+
+Every page shows black strips around its cards when Windows runs in dark
+mode: the text on the My Profile page sat on black, and the Saved page's list
+body was black from top to bottom. The culprit is not the cards. A
+`QScrollArea` is made of plain `QWidget`s: the viewport Qt creates inside it
+and the widget set with `setWidget`. None of them had a background in
+`theme.py`, so Qt fell back to the system window colour, which is near-black
+under the dark palette. The named rules (`DocScroll`/`DocBody`,
+`RightScroll`/`RightBody`, `ProfileScroll`, `Transcript`) only covered the
+scroll area itself, and only for some pages.
+
+The fix is one block in `ui/theme.py`, so every page, the right-hand panel,
+the chat transcript and the eligibility dialog get it at once:
+
+- `QScrollArea` (the frame) is the page colour with no border;
+- `QScrollArea > QWidget#qt_scrollarea_viewport` is the page colour;
+- `QScrollArea > QWidget > QWidget` (the content widget) is the page colour.
+
+There are no per-page styles. On My Profile the intro sentence moved into a
+`PanelCard` of its own (`profile_page.py`), so it reads as a note above the
+form instead of loose text. The page, the viewport and the content widget all
+paint `#FBFCFE` now; the cards stay white.
+
+`tests/test_ui_page_backgrounds.py` guards the result: it builds the real
+window off-screen (`WA_DontShowOnScreen`), selects each of the nine pages,
+grabs it, samples every fourth pixel, and fails when more than 1% of the
+samples are near-black (every RGB channel below 48). The failure message
+names the darkest 80px blocks. With the fix the densest page (Settings) is
+0.26% dark, which is text; without it the test fails on Profile (6.8%) and
+Saved, exactly the pages that looked broken. The README gallery was
+re-captured, so the profile and saved screenshots no longer show the strips.
+
+Known limit: the native combo-box arrow still paints as a small grey block
+under the Windows dark palette. It is a glyph, not a background, and is left
+for a separate style pass.
